@@ -1,0 +1,19 @@
+component LogicOnly {
+    int x = 0;
+}
+
+component ViewComp {
+    view { <div>Hi</div> }
+}
+
+component Main {
+    LogicOnly logic;
+    
+    view {
+        <ViewComp />
+    }
+}
+
+app {
+    root = Main
+}

@@ -1,0 +1,537 @@
+component Button {
+    prop string label = "Button";
+    prop string type = "primary"; // primary or secondary
+
+    style {
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .primary {
+            background-color: #a29bfe;
+            color: white;
+        }
+        .secondary {
+            background-color: #dfe6e9;
+            color: #2d3436;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+        button:active {
+            transform: translateY(0);
+        }
+    }
+
+    view {
+        <button class={type} onclick={onclick}>{label}</button>
+    }
+}
+
+component Counter {
+    int count = 0;
+
+    def increment() : void {
+        count++;
+    }
+
+    def decrement() : void {
+        count--;
+    }
+
+    style {
+        .counter {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            padding: 40px;
+            background: #f8f9fa;
+            border-radius: 16px;
+            width: 300px;
+        }
+        .count-text {
+            font-size: 64px;
+            font-weight: 800;
+            color: #2d3436;
+        }
+        .buttons {
+            display: flex;
+            gap: 16px;
+        }
+    }
+
+    view {
+        <div class="counter">
+            <div style="font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #636e72;">Counter</div>
+            <div class="count-text">{count}</div>
+            <div class="buttons">
+                <Button label="-" type="secondary" onclick={decrement} />
+                <Button label="+" type="primary" onclick={increment} />
+            </div>
+        </div>
+    }
+}
+
+component AnimatedBox {
+    float x = 0;
+    int direction = 1;
+
+    tick(float dt) {
+        x += direction * dt * 200;
+    
+        if (x > 300) direction = -1;
+        if (x < 0) direction = 1;
+    }
+
+    style {
+        .container {
+            width: 350px;
+            height: 60px;
+            background: #dfe6e9;
+            border-radius: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        .box {
+            width: 50px;
+            height: 50px;
+            background-color: #a29bfe;
+            border-radius: 50%;
+            position: absolute;
+            top: 5px;
+        }
+    }
+
+    view {
+        <div class="container">
+            <div class="box" style="left: {x}px;"></div>
+        </div>
+    }
+}
+
+component NavBar {
+    style {
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: #2d3436;
+        }
+        ul {
+            list-style: none;
+            display: flex;
+            gap: 32px;
+            margin: 0;
+            padding: 0;
+        }
+        li {
+            cursor: pointer;
+            color: #636e72;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        li:hover {
+            color: #a29bfe;
+        }
+    }
+
+    view {
+        <nav>
+            <div class="logo">.coi</div>
+            <ul>
+                <li>Home</li>
+                <li>Features</li>
+                <li>Docs</li>
+                <li>GitHub</li>
+            </ul>
+        </nav>
+    }
+}
+
+component Hero {
+    style {
+        .hero {
+            text-align: center;
+            padding: 140px 20px 100px;
+            max-width: 900px;
+            margin: 0 auto;
+            background-image: radial-gradient(circle at 50% 0%, rgba(162, 155, 254, 0.15) 0%, rgba(255, 255, 255, 0) 60%);
+        }
+        h1 {
+            font-size: 72px;
+            font-weight: 900;
+            color: #2d3436;
+            margin: 0 auto 32px;
+            line-height: 1.1;
+            letter-spacing: -2px;
+            text-align: center;
+        }
+        p {
+            font-size: 22px;
+            color: #636e72;
+            margin: 0 auto 48px;
+            line-height: 1.6;
+            max-width: 640px;
+            text-align: center;
+        }
+        .buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+    }
+
+    view {
+        <div class="hero">
+            <h1>coi</h1>
+            <p>A component-based language for high-performance web apps. Fast, minimal, and type-safe.</p>
+            <div class="buttons">
+                <Button label="Get Started" type="primary" />
+                <Button label="View on GitHub" type="secondary" />
+            </div>
+        </div>
+    }
+}
+
+component FeatureCard {
+    prop string title;
+    prop string description;
+
+    style {
+        .card {
+            padding: 32px;
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #f1f2f6;
+            transition: transform 0.2s;
+            text-align: center;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: #a29bfe;
+        }
+        h3 {
+            margin: 0 0 12px 0;
+            color: #2d3436;
+            font-size: 20px;
+        }
+        p {
+            color: #636e72;
+            line-height: 1.5;
+            margin: 0;
+        }
+    }
+
+    view {
+        <div class="card">
+            <h3>{title}</h3>
+            <p>{description}</p>
+        </div>
+    }
+}
+
+component Features {
+    style {
+        .features {
+            padding: 80px 20px;
+            background-color: #ffffff;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+        }
+        h2 {
+            text-align: center;
+            font-size: 32px;
+            margin-bottom: 60px;
+            color: #2d3436;
+        }
+    }
+
+    view {
+        <div class="features">
+            <h2>Why coi?</h2>
+            <div class="grid">
+                <FeatureCard title="WebAssembly & WebCC" description="Compiles to raw WebAssembly using WebCC. No heavy runtime, just native speed." />
+                <FeatureCard title="Incremental DOM" description="Smart updates that only touch what changed, avoiding the overhead of a full Virtual DOM." />
+                <FeatureCard title="Type-Safe Components" description="Catch errors at compile time. Props and state are strictly typed." />
+            </div>
+        </div>
+    }
+}
+
+component CodeExample {
+    style {
+        .code-window {
+            background: #2d3436;
+            border-radius: 12px;
+            padding: 32px;
+            width: 450px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
+            color: #dfe6e9;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+            text-align: left;
+            font-size: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .row { display: flex; align-items: center; height: 24px; }
+        .indent-1 { padding-left: 32px; }
+        .indent-2 { padding-left: 64px; }
+        .indent-3 { padding-left: 96px; }
+        
+        .kwd { color: #a29bfe; font-weight: bold; margin-right: 10px; }
+        .type { color: #74b9ff; }
+        .type-sp { color: #74b9ff; margin-right: 10px; }
+        .tag { color: #ff7675; }
+        .tag-sp { color: #ff7675; margin-right: 10px; }
+        .attr { color: #fab1a0; }
+        .op { margin: 0 10px; }
+    }
+
+    view {
+        <div class="code-window">
+            <div class="row">
+                <span class="kwd">component</span>
+                <span class="type-sp">Counter</span>
+                <span>{"\\{"}</span>
+            </div>
+            <div class="row indent-1">
+                <span class="kwd">int</span>
+                <span>{"count"}</span>
+                <span class="op">{"="}</span>
+                <span>{"0;"}</span>
+            </div>
+            <div class="row"></div>
+            <div class="row indent-1">
+                <span class="kwd">def</span>
+                <span class="type">increment</span>
+                <span>()</span>
+                <span class="op">:</span>
+                <span class="type-sp">void</span>
+                <span>{"\\{"}</span>
+            </div>
+            <div class="row indent-2">
+                <span>count++;</span>
+            </div>
+            <div class="row indent-1">
+                <span>{"\\}"}</span>
+            </div>
+            <div class="row"></div>
+            <div class="row indent-1">
+                <span class="kwd">view</span>
+                <span>{"\\{"}</span>
+            </div>
+            <div class="row indent-2">
+                <span>{"<"}</span>
+                <span class="tag-sp">button</span>
+                <span class="attr">onclick</span>
+                <span>{"=\\{increment\\}"}</span>
+                <span>{">"}</span>
+            </div>
+            <div class="row indent-3">
+                <span>{"\\{"}count{"\\}"}</span>
+            </div>
+            <div class="row indent-2">
+                <span>{"</"}</span>
+                <span class="tag">button</span>
+                <span>{">"}</span>
+            </div>
+            <div class="row indent-1">
+                <span>{"\\}"}</span>
+            </div>
+            <div class="row">
+                <span>{"\\}"}</span>
+            </div>
+        </div>
+    }
+}
+
+component AnimatedBallCodeExample {
+    style {
+        .code-window {
+            background: #2d3436;
+            border-radius: 12px;
+            padding: 32px;
+            width: 450px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
+            color: #dfe6e9;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+            text-align: left;
+            font-size: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .row { display: flex; align-items: center; height: 24px; }
+        .indent-1 { padding-left: 32px; }
+        .indent-2 { padding-left: 64px; }
+        .indent-3 { padding-left: 96px; }
+        
+        .kwd { color: #a29bfe; font-weight: bold; margin-right: 10px; }
+        .type { color: #74b9ff; }
+        .type-sp { color: #74b9ff; margin-right: 10px; }
+        .tag { color: #ff7675; }
+        .tag-sp { color: #ff7675; margin-right: 10px; }
+        .attr { color: #fab1a0; }
+        .op { margin: 0 10px; }
+    }
+
+    view {
+        <div class="code-window">
+            <div class="row">
+                <span class="kwd">component</span>
+                <span class="type-sp">AnimatedBox</span>
+                <span>{"\\{"}</span>
+            </div>
+            <div class="row indent-1">
+                <span class="kwd">float</span>
+                <span>{"x"}</span>
+                <span class="op">{"="}</span>
+                <span>{"0;"}</span>
+            </div>
+            <div class="row"></div>
+            <div class="row indent-1">
+                <span class="kwd">tick</span>
+                <span>(</span>
+                <span class="kwd">float</span>
+                <span>dt)</span>
+                <span>{"\\{"}</span>
+            </div>
+            <div class="row indent-2">
+                <span>x += dt * 200;</span>
+            </div>
+            <div class="row indent-1">
+                <span>{"\\}"}</span>
+            </div>
+            <div class="row"></div>
+            <div class="row indent-1">
+                <span class="kwd">view</span>
+                <span>{"\\{"}</span>
+            </div>
+            <div class="row indent-2">
+                <span>{"<"}</span>
+                <span class="tag-sp">div</span>
+                <span class="attr">style</span>
+                <span>{"=\\{left: \\{x\\}px\\}"}</span>
+                <span>{">"}</span>
+            </div>
+            <div class="row indent-2">
+                <span>{"</"}</span>
+                <span class="tag">div</span>
+                <span>{">"}</span>
+            </div>
+            <div class="row indent-1">
+                <span>{"\\}"}</span>
+            </div>
+            <div class="row">
+                <span>{"\\}"}</span>
+            </div>
+        </div>
+    }
+}
+
+component DemoSection {
+    style {
+        .demo-section {
+            padding: 100px 20px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 80px;
+            border-top: 1px solid #f1f2f6;
+        }
+        .demo-row {
+            display: flex;
+            gap: 60px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        h2 {
+            font-size: 42px;
+            color: #2d3436;
+            margin: 0;
+            font-weight: 800;
+            letter-spacing: -1px;
+        }
+    }
+
+    view {
+        <div class="demo-section">
+            <h2>Experience the Difference</h2>
+            <div class="demo-row">
+                <Counter />
+                <CodeExample />
+            </div>
+            <div class="demo-row">
+                <AnimatedBallCodeExample />
+                <AnimatedBox />
+            </div>
+        </div>
+    }
+}
+
+component Footer {
+    style {
+        footer {
+            padding: 40px;
+            text-align: center;
+            color: #b2bec3;
+            font-size: 14px;
+            border-top: 1px solid #f1f2f6;
+            margin-top: 40px;
+        }
+    }
+
+    view {
+        <footer>
+            <p>&copy; 2025 coi Framework. Open Source.</p>
+        </footer>
+    }
+}
+
+component Main {
+    style global {
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff;
+            color: #2d3436;
+        }
+    }
+
+    view {
+        <div>
+            <NavBar />
+            <Hero />
+            <Features />
+            <DemoSection />
+            <Footer />
+        </div>
+    }
+}
+
+app {
+    root = Main
+}

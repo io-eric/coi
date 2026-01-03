@@ -1,0 +1,25 @@
+{
+  "name": "coi-language",
+  "displayName": "Coi Language",
+  "description": "Syntax highlighting for Coi",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "coi",
+      "aliases": ["Coi", "coi"],
+      "extensions": [".coi"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "coi",
+      "scopeName": "source.coi",
+      "path": "./syntaxes/coi.tmLanguage.json"
+    }]
+  }
+}

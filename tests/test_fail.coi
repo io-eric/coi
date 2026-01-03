@@ -1,0 +1,13 @@
+component LogicOnly {
+    int x = 0;
+}
+
+component Main {
+    view {
+        <LogicOnly />
+    }
+}
+
+app {
+    root = Main
+}

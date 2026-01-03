@@ -1,0 +1,30 @@
+component StyledButton {
+    style {
+        button {
+            background-color: blue;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: darkblue;
+        }
+    }
+    view {
+        <button>Styled Button</button>
+    }
+}
+
+component Main {
+    view {
+        <div>
+            <h1>CSS Test</h1>
+            <StyledButton />
+        </div>
+    }
+}
+
+app {
+    root = Main
+}

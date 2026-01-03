@@ -1,0 +1,221 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Cio",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#app-definition"
+    },
+    {
+      "include": "#component-definition"
+    },
+    {
+      "include": "#function-definition"
+    },
+    {
+      "include": "#prop-definition"
+    },
+    {
+      "include": "#tick-definition"
+    },
+    {
+      "include": "#view-block"
+    },
+    {
+      "include": "#component-reference"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#types"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.coi",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.coi",
+          "match": "\\b(component|def|view|return|if|else|computed|prop|tick|app)\\b"
+        }
+      ]
+    },
+    "directives": {
+      "patterns": [
+        {
+          "name": "keyword.control.coi",
+          "match": "\\b(view|tick|prop|app)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arithmetic.coi",
+          "match": "\\+\\+|--|\\+|-|\\*|/|%"
+        },
+        {
+          "name": "keyword.operator.assignment.coi",
+          "match": "=|\\+=|-=|\\*=|/=|%="
+        },
+        {
+          "name": "keyword.operator.comparison.coi",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.logical.coi",
+          "match": "&&|\\|\\||!"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.coi",
+          "match": "\\b(int|void|string|bool|float)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.coi",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.coi",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "component-definition": {
+      "match": "\\b(component)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.control.coi" },
+        "2": { "name": "entity.name.type.class.coi" }
+      }
+    },
+    "component-reference": {
+      "match": "\\b([A-Z][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": { "name": "support.class.component.coi" }
+      }
+    },
+    "prop-definition": {
+      "match": "\\b(prop)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.coi" }
+      }
+    },
+    "tick-definition": {
+      "match": "\\b(tick)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.coi" }
+      }
+    },
+    "function-definition": {
+      "match": "\\b(def)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\(",
+      "captures": {
+        "1": { "name": "storage.type.function.coi" },
+        "2": { "name": "entity.name.function.coi" }
+      }
+    },
+    "view-block": {
+      "begin": "\\b(view)\\s*\\{",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.coi" }
+      },
+      "end": "\\}",
+      "patterns": [
+        { "include": "#jsx-tags" },
+        { "include": "#expression-interpolation" },
+        { "include": "#comments" }
+      ]
+    },
+    "jsx-tags": {
+      "patterns": [
+        {
+          "match": "(</?)([A-Za-z0-9:-]+)",
+          "captures": {
+            "1": { "name": "punctuation.definition.tag" },
+            "2": { "name": "entity.name.tag" }
+          }
+        },
+        {
+          "match": "/?>",
+          "name": "punctuation.definition.tag"
+        },
+        {
+          "name": "entity.other.attribute-name",
+          "match": "\\b([A-Za-z0-9-:]+)="
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#expression-interpolation"
+        },
+        {
+          "name": "entity.other.attribute-name.event",
+          "match": "\\b(on[a-zA-Z]+)\\s*=",
+          "captures": {
+            "1": { "name": "support.function.event-handler" }
+          }
+        }
+      ]
+    },
+    "expression-interpolation": {
+      "begin": "\\{",
+      "end": "\\}",
+      "patterns": [
+        { "include": "$self" },
+        {
+          "name": "keyword.operator.ternary.coi",
+          "match": "\\?"
+        },
+        {
+          "name": "keyword.operator.ternary.coi",
+          "match": ":"
+        }
+      ]
+    },
+    "app-definition": {
+      "begin": "\\b(app)\\s*\\{",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.coi" }
+      },
+      "end": "\\}",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#component-reference" },
+        { "include": "#strings" },
+        { "include": "#expression-interpolation" },
+        { "include": "#types" }
+      ]
+    },
+    "computed-property": {
+      "match": "\\b(computed)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\(\\s*\\)\\s*:\\s*([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.control.coi" },
+        "2": { "name": "entity.name.function.coi" },
+        "3": { "name": "storage.type.coi" }
+      }
+    }
+  },
+  "scopeName": "source.coi"
+}
