@@ -409,7 +409,7 @@ void ComponentInstantiation::generate_code(std::stringstream& ss, const std::str
     
     // For reference props, set up the onChange callback to call _update_<varname>()
     for(auto& prop : props) {
-        if(prop.is_reference) {
+        if(prop.is_reference && prop.is_mutable_def) {
             std::string callback_name = "on" + std::string(1, std::toupper(prop.name[0])) + prop.name.substr(1) + "Change";
             
             // Collect dependencies from the prop value to know which variable is being passed
@@ -569,6 +569,27 @@ void Component::collect_child_components(ASTNode* node, std::map<std::string, in
     }
 }
 
+void Component::collect_child_updates(ASTNode* node, std::map<std::string, std::vector<std::string>>& updates, std::map<std::string, int>& counters) {
+    if(auto comp = dynamic_cast<ComponentInstantiation*>(node)) {
+        std::string instance_name = comp->component_name + "_" + std::to_string(counters[comp->component_name]++);
+        
+        for(const auto& prop : comp->props) {
+            if(prop.is_reference) {
+                std::set<std::string> deps;
+                prop.value->collect_dependencies(deps);
+                for(const auto& dep : deps) {
+                    updates[dep].push_back("        " + instance_name + "._update_" + prop.name + "();\n");
+                }
+            }
+        }
+    }
+    if(auto el = dynamic_cast<HTMLElement*>(node)) {
+        for(auto& child : el->children) {
+            collect_child_updates(child.get(), updates, counters);
+        }
+    }
+}
+
 std::string Component::to_webcc() {
     std::stringstream ss;
     std::vector<std::tuple<int, std::string, bool>> click_handlers;
@@ -586,8 +607,8 @@ std::string Component::to_webcc() {
     }
     
     // Collect child components to declare members
-    if(render_root) {
-        collect_child_components(render_root.get(), component_members);
+    for(auto& root : render_roots) {
+        collect_child_components(root.get(), component_members);
     }
 
     // Collect method names
@@ -595,21 +616,10 @@ std::string Component::to_webcc() {
     for(auto& m : methods) method_names.insert(m.name);
 
     std::stringstream ss_render;
-    if(render_root){
-        if(auto el = dynamic_cast<HTMLElement*>(render_root.get())){
-            // Auto-bind onclick if not present
-            bool has_onclick_attr = false;
-            for(auto& attr : el->attributes) if(attr.name == "onclick") has_onclick_attr = true;
-            
-            if(!has_onclick_attr) {
-                HTMLAttribute attr;
-                attr.name = "onclick";
-                attr.value = std::make_unique<Identifier>("onclick");
-                el->attributes.push_back(std::move(attr));
-            }
-
+    for(auto& root : render_roots){
+        if(auto el = dynamic_cast<HTMLElement*>(root.get())){
             el->generate_code(ss_render, "parent", element_count, click_handlers, bindings, component_counters, method_names, name);
-        } else if(auto comp = dynamic_cast<ComponentInstantiation*>(render_root.get())){
+        } else if(auto comp = dynamic_cast<ComponentInstantiation*>(root.get())){
             comp->generate_code(ss_render, "parent", element_count, click_handlers, bindings, component_counters, method_names, name);
         }
     }
@@ -639,19 +649,12 @@ std::string Component::to_webcc() {
             ss << ";\n";
             
             // For reference props, also declare an onChange callback
-            if(prop->is_reference) {
+            if(prop->is_reference && prop->is_mutable) {
                 std::string callback_name = "on" + std::string(1, std::toupper(prop->name[0])) + prop->name.substr(1) + "Change";
                 ss << "    webcc::function<void()> " << callback_name << ";\n";
             }
     }
     
-    // Special prop for onclick if not present
-    bool has_onclick = false;
-    for(auto& prop : props) if(prop->name == "onclick") has_onclick = true;
-    if(!has_onclick) {
-        ss << "    webcc::function<void()> onclick;\n";
-    }
-
     // State variables
     for(auto& var : state){
         ss << "    " << (var->is_mutable ? "" : "const ") << convert_type(var->type);
@@ -733,6 +736,21 @@ std::string Component::to_webcc() {
         }
     }
 
+    // Ensure all reference props have an update method, even if empty, so parents can call them safely
+    for(const auto& prop : props) {
+        if(prop->is_reference && generated_updaters.find(prop->name) == generated_updaters.end()) {
+             ss << "    void _update_" << prop->name << "() {}\n";
+             generated_updaters.insert(prop->name);
+        }
+    }
+
+    // Build a map of state variable -> child component updates
+    std::map<std::string, std::vector<std::string>> child_updates;
+    std::map<std::string, int> update_counters;
+    for(auto& root : render_roots) {
+        collect_child_updates(root.get(), child_updates, update_counters);
+    }
+
     // Methods
     for(auto& method : methods){
         std::set<std::string> modified_vars;
@@ -744,11 +762,23 @@ std::string Component::to_webcc() {
             if(generated_updaters.count(mod)) {
                 updates += "        _update_" + mod + "();\n";
             }
+            // Add child updates
+            if(child_updates.count(mod)) {
+                for(const auto& call : child_updates[mod]) {
+                    updates += call;
+                }
+            }
         }
         
         // For any modified reference props, call their onChange callback
         for(const auto& mod : modified_vars) {
             if(g_ref_props.count(mod)) {
+                // Only call if mutable (we can check this by seeing if the callback member exists, 
+                // but here we are in the component definition, so we should check the prop definition.
+                // However, g_ref_props only stores names.
+                // But wait, if the prop is NOT mutable, the compiler would have thrown an error 
+                // in validate_mutability if we tried to modify it.
+                // So if we are here, and it is modified, it MUST be mutable.
                 std::string callback_name = "on" + std::string(1, std::toupper(mod[0])) + mod.substr(1) + "Change";
                 updates += "        if(" + callback_name + ") " + callback_name + "();\n";
             }
@@ -777,7 +807,7 @@ std::string Component::to_webcc() {
 
     // View method (Initialization only)
     ss << "    void view(webcc::handle parent = webcc::dom::get_body()) {\n";
-    if(render_root){
+    if(!render_roots.empty()){
         ss << ss_render.str();
     }
     // Register handlers

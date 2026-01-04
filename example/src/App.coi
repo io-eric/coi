@@ -27,5 +27,5 @@ component App {
 }
 
 app {
-    root = App
+    root = App;
 }

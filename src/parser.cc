@@ -771,7 +771,9 @@ Component Parser::parse_component(){
     // Parse render block
     if(match(TokenType::VIEW)){
         expect(TokenType::LBRACE, "Expected '{'");
-        comp.render_root = parse_html_element();
+        while(current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
+            comp.render_roots.push_back(parse_html_element());
+        }
         expect(TokenType::RBRACE, "Expected '}'");
     }
 
@@ -803,6 +805,7 @@ void Parser::parse_app() {
                 }
                 expect(TokenType::RBRACE, "Expected '}'");
             }
+            expect(TokenType::SEMICOLON, "Expected ';'");
         }
         expect(TokenType::RBRACE, "Expected '}'");
 }

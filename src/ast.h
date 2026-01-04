@@ -218,6 +218,7 @@ struct ComponentProp {
     std::string name;
     std::unique_ptr<Expression> value;
     bool is_reference = false;
+    bool is_mutable_def = false;
 };
 
 struct ComponentInstantiation : ASTNode {
@@ -260,9 +261,10 @@ struct Component : ASTNode {
     std::vector<std::unique_ptr<VarDeclaration>> state;
     std::vector<std::unique_ptr<PropDeclaration>> props;
     std::vector<FunctionDef> methods;
-    std::unique_ptr<ASTNode> render_root;
+    std::vector<std::unique_ptr<ASTNode>> render_roots;
 
     void collect_child_components(ASTNode* node, std::map<std::string, int>& counts);
+    void collect_child_updates(ASTNode* node, std::map<std::string, std::vector<std::string>>& updates, std::map<std::string, int>& counters);
     std::string to_webcc() override;
 };
 

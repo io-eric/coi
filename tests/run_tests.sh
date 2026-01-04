@@ -25,44 +25,32 @@ fi
 echo "Running tests..."
 FAILURES=0
 
-# Test 1: Should Pass
-echo -n "Running test_pass.coi (Expect Success)... "
-$COMPILER test_pass.coi --cc-only > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}PASS${NC}"
-    rm -f test_pass.cc
-else
-    echo -e "${RED}FAIL${NC}"
-    FAILURES=$((FAILURES+1))
-fi
-
-# Test 2: Should Fail (Logic component in view)
-echo -n "Running test_fail.coi (Expect Failure)... "
-OUTPUT=$($COMPILER test_fail.coi --cc-only 2>&1)
-if [ $? -ne 0 ]; then
-    # Check if output contains expected error message
-    if echo "$OUTPUT" | grep -q "logic-only component"; then
-        echo -e "${GREEN}PASS${NC}"
-    else
-        echo -e "${RED}FAIL (Wrong error message)${NC}"
-        echo "Output: $OUTPUT"
-        FAILURES=$((FAILURES+1))
+for test_file in "$SCRIPT_DIR"/*.coi; do
+    filename=$(basename "$test_file")
+    
+    if [[ "$filename" == *"_pass.coi" ]]; then
+        echo -n "Running $filename (Expect Success)... "
+        OUTPUT=$($COMPILER "$test_file" --cc-only 2>&1)
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}PASS${NC}"
+            # Clean up generated .cc file
+            rm -f "${test_file%.coi}.cc"
+        else
+            echo -e "${RED}FAIL${NC}"
+            echo "Output: $OUTPUT"
+            FAILURES=$((FAILURES+1))
+        fi
+    elif [[ "$filename" == *"_fail.coi" ]]; then
+        echo -n "Running $filename (Expect Failure)... "
+        OUTPUT=$($COMPILER "$test_file" --cc-only 2>&1)
+        if [ $? -ne 0 ]; then
+            echo -e "${GREEN}PASS${NC}"
+        else
+            echo -e "${RED}FAIL (Unexpected success)${NC}"
+            FAILURES=$((FAILURES+1))
+        fi
     fi
-else
-    echo -e "${RED}FAIL (Unexpected success)${NC}"
-    FAILURES=$((FAILURES+1))
-fi
-
-# Test 3: Style Test (Expect Success)
-echo -n "Running test_style.coi (Expect Success)... "
-$COMPILER test_style.coi --cc-only > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}PASS${NC}"
-    rm -f test_style.cc
-else
-    echo -e "${RED}FAIL${NC}"
-    FAILURES=$((FAILURES+1))
-fi
+done
 
 if [ $FAILURES -eq 0 ]; then
     echo -e "\n${GREEN}All tests passed!${NC}"

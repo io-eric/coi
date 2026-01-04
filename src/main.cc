@@ -25,6 +25,11 @@ void validate_mutability(const std::vector<Component>& components) {
                 mutable_vars.insert(var->name);
             }
         }
+        for (const auto& prop : comp.props) {
+            if (prop->is_mutable) {
+                mutable_vars.insert(prop->name);
+            }
+        }
 
         // Check all methods for modifications to non-mutable variables
         for (const auto& method : comp.methods) {
@@ -33,19 +38,37 @@ void validate_mutability(const std::vector<Component>& components) {
             
             for (const auto& var_name : modified_vars) {
                 // Check if this variable exists in state and is not mutable
-                bool is_state_var = false;
+                bool is_known_var = false;
                 bool is_mutable = false;
+                bool is_prop = false;
+
                 for (const auto& var : comp.state) {
                     if (var->name == var_name) {
-                        is_state_var = true;
+                        is_known_var = true;
                         is_mutable = var->is_mutable;
                         break;
                     }
                 }
                 
-                if (is_state_var && !is_mutable) {
-                    throw std::runtime_error("Cannot modify '" + var_name + "' in component '" + comp.name + 
-                        "': variable is not mutable. Add 'mut' keyword to make it mutable: mut " + var_name);
+                if (!is_known_var) {
+                    for (const auto& prop : comp.props) {
+                        if (prop->name == var_name) {
+                            is_known_var = true;
+                            is_prop = true;
+                            is_mutable = prop->is_mutable;
+                            break;
+                        }
+                    }
+                }
+                
+                if (is_known_var && !is_mutable) {
+                    if (is_prop) {
+                        throw std::runtime_error("Cannot modify prop '" + var_name + "' in component '" + comp.name + 
+                            "': prop is not mutable. Add 'mut' keyword to prop declaration: prop mut " + var_name);
+                    } else {
+                        throw std::runtime_error("Cannot modify '" + var_name + "' in component '" + comp.name + 
+                            "': variable is not mutable. Add 'mut' keyword to make it mutable: mut " + var_name);
+                    }
                 }
             }
         }
@@ -64,16 +87,17 @@ void validate_view_hierarchy(const std::vector<Component>& components) {
         if (auto* comp_inst = dynamic_cast<ComponentInstantiation*>(node)) {
             auto it = component_map.find(comp_inst->component_name);
             if (it != component_map.end()) {
-                if (!it->second->render_root) {
+                if (it->second->render_roots.empty()) {
                      throw std::runtime_error("Component '" + comp_inst->component_name + "' is used in a view but has no view definition (logic-only component) at line " + std::to_string(comp_inst->line));
                 }
                 
                 // Validate reference props
                 const Component* target_comp = it->second;
-                for (const auto& passed_prop : comp_inst->props) {
+                for (auto& passed_prop : comp_inst->props) {
                     // Find the prop declaration in the target component
                     for (const auto& declared_prop : target_comp->props) {
                         if (declared_prop->name == passed_prop.name) {
+                            passed_prop.is_mutable_def = declared_prop->is_mutable;
                             if (declared_prop->is_reference && !passed_prop.is_reference) {
                                 throw std::runtime_error(
                                     "Prop '" + passed_prop.name + "' in component '" + comp_inst->component_name + 
@@ -99,8 +123,8 @@ void validate_view_hierarchy(const std::vector<Component>& components) {
     };
 
     for (const auto& comp : components) {
-        if (comp.render_root) {
-            validate_node(comp.render_root.get(), comp.name);
+        for (const auto& root : comp.render_roots) {
+            validate_node(root.get(), comp.name);
         }
     }
 }
@@ -131,7 +155,9 @@ std::vector<Component*> topological_sort_components(std::vector<Component>& comp
     // Build dependency graph
     for (auto& comp : components) {
         std::set<std::string> deps;
-        collect_component_deps(comp.render_root.get(), deps);
+        for (const auto& root : comp.render_roots) {
+            collect_component_deps(root.get(), deps);
+        }
         dependencies[comp.name] = deps;
     }
     

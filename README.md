@@ -79,7 +79,7 @@ component App {
 }
 
 app {
-    root = App
+    root = App;
 }
 ```
 
@@ -98,10 +98,11 @@ int fixed = 10;    // Constant state (cannot be modified)
 ### Reference Props (`&`)
 You can pass state to child components by reference using the `&` operator. This allows the child component to modify the parent's state directly.
 
-1. **Declaration**: In the child component, declare the prop with `mut` and `&`.
+1. **Declaration**: In the child component, declare the prop with `&`. Use `mut` if the component modifies the value.
    ```tsx
    prop mut int& count;
    ```
+
 2. **Passing**: In the parent component, pass the variable with `&`.
    ```tsx
    <StepButton &count={score} />
