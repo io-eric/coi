@@ -9,10 +9,48 @@
 #include <filesystem>
 #include <cstdlib>
 #include <cstdio>
+#include <queue>
+#include <algorithm>
 
 // =========================================================
 // MAIN COMPILER
 // =========================================================
+
+void validate_mutability(const std::vector<Component>& components) {
+    for (const auto& comp : components) {
+        // Build set of mutable state variables
+        std::set<std::string> mutable_vars;
+        for (const auto& var : comp.state) {
+            if (var->is_mutable) {
+                mutable_vars.insert(var->name);
+            }
+        }
+
+        // Check all methods for modifications to non-mutable variables
+        for (const auto& method : comp.methods) {
+            std::set<std::string> modified_vars;
+            method.collect_modifications(modified_vars);
+            
+            for (const auto& var_name : modified_vars) {
+                // Check if this variable exists in state and is not mutable
+                bool is_state_var = false;
+                bool is_mutable = false;
+                for (const auto& var : comp.state) {
+                    if (var->name == var_name) {
+                        is_state_var = true;
+                        is_mutable = var->is_mutable;
+                        break;
+                    }
+                }
+                
+                if (is_state_var && !is_mutable) {
+                    throw std::runtime_error("Cannot modify '" + var_name + "' in component '" + comp.name + 
+                        "': variable is not mutable. Add 'mut' keyword to make it mutable: mut " + var_name);
+                }
+            }
+        }
+    }
+}
 
 void validate_view_hierarchy(const std::vector<Component>& components) {
     std::map<std::string, const Component*> component_map;
@@ -20,7 +58,7 @@ void validate_view_hierarchy(const std::vector<Component>& components) {
         component_map[comp.name] = &comp;
     }
 
-    std::function<void(ASTNode*)> validate_node = [&](ASTNode* node) {
+    std::function<void(ASTNode*, const std::string&)> validate_node = [&](ASTNode* node, const std::string& parent_comp_name) {
         if (!node) return;
 
         if (auto* comp_inst = dynamic_cast<ComponentInstantiation*>(node)) {
@@ -29,19 +67,114 @@ void validate_view_hierarchy(const std::vector<Component>& components) {
                 if (!it->second->render_root) {
                      throw std::runtime_error("Component '" + comp_inst->component_name + "' is used in a view but has no view definition (logic-only component) at line " + std::to_string(comp_inst->line));
                 }
+                
+                // Validate reference props
+                const Component* target_comp = it->second;
+                for (const auto& passed_prop : comp_inst->props) {
+                    // Find the prop declaration in the target component
+                    for (const auto& declared_prop : target_comp->props) {
+                        if (declared_prop->name == passed_prop.name) {
+                            if (declared_prop->is_reference && !passed_prop.is_reference) {
+                                throw std::runtime_error(
+                                    "Prop '" + passed_prop.name + "' in component '" + comp_inst->component_name + 
+                                    "' expects a reference. Use '&" + passed_prop.name + "={...}' syntax at line " + 
+                                    std::to_string(comp_inst->line));
+                            }
+                            if (!declared_prop->is_reference && passed_prop.is_reference) {
+                                throw std::runtime_error(
+                                    "Prop '" + passed_prop.name + "' in component '" + comp_inst->component_name + 
+                                    "' does not expect a reference. Remove '&' prefix at line " + 
+                                    std::to_string(comp_inst->line));
+                            }
+                            break;
+                        }
+                    }
+                }
             }
         } else if (auto* el = dynamic_cast<HTMLElement*>(node)) {
             for (const auto& child : el->children) {
-                validate_node(child.get());
+                validate_node(child.get(), parent_comp_name);
             }
         }
     };
 
     for (const auto& comp : components) {
         if (comp.render_root) {
-            validate_node(comp.render_root.get());
+            validate_node(comp.render_root.get(), comp.name);
         }
     }
+}
+
+// Collect child component names from a node
+void collect_component_deps(ASTNode* node, std::set<std::string>& deps) {
+    if (!node) return;
+    if (auto* comp_inst = dynamic_cast<ComponentInstantiation*>(node)) {
+        deps.insert(comp_inst->component_name);
+    } else if (auto* el = dynamic_cast<HTMLElement*>(node)) {
+        for (const auto& child : el->children) {
+            collect_component_deps(child.get(), deps);
+        }
+    }
+}
+
+// Topologically sort components so dependencies come first
+std::vector<Component*> topological_sort_components(std::vector<Component>& components) {
+    std::map<std::string, Component*> comp_map;
+    std::map<std::string, std::set<std::string>> dependencies;
+    std::map<std::string, int> in_degree;
+    
+    for (auto& comp : components) {
+        comp_map[comp.name] = &comp;
+        in_degree[comp.name] = 0;
+    }
+    
+    // Build dependency graph
+    for (auto& comp : components) {
+        std::set<std::string> deps;
+        collect_component_deps(comp.render_root.get(), deps);
+        dependencies[comp.name] = deps;
+    }
+    
+    // Calculate in-degrees
+    for (auto& [name, deps] : dependencies) {
+        for (auto& dep : deps) {
+            if (comp_map.count(dep)) {
+                in_degree[name]++;
+            }
+        }
+    }
+    
+    // Kahn's algorithm
+    std::queue<std::string> queue;
+    for (auto& [name, degree] : in_degree) {
+        if (degree == 0) {
+            queue.push(name);
+        }
+    }
+    
+    std::vector<Component*> sorted;
+    while (!queue.empty()) {
+        std::string curr = queue.front();
+        queue.pop();
+        sorted.push_back(comp_map[curr]);
+        
+        // For each component that depends on curr, decrease in-degree
+        for (auto& [name, deps] : dependencies) {
+            if (deps.count(curr)) {
+                in_degree[name]--;
+                if (in_degree[name] == 0) {
+                    queue.push(name);
+                }
+            }
+        }
+    }
+    
+    // Check for cycles
+    if (sorted.size() != components.size()) {
+        throw std::runtime_error("Circular dependency detected among components");
+    }
+    
+    return sorted;
 }
 
 int main(int argc, char** argv){
@@ -79,29 +212,71 @@ int main(int argc, char** argv){
         return 1;
     }
 
-    // Read source file
-    std::ifstream file(input_file);
-    if(!file){
-        std::cerr << "Error: Could not open file " << input_file << std::endl;
+    std::vector<Component> all_components;
+    AppConfig final_app_config;
+    std::set<std::string> processed_files;
+    std::queue<std::string> file_queue;
+
+    namespace fs = std::filesystem;
+    try {
+        file_queue.push(fs::canonical(input_file).string());
+    } catch (const std::exception& e) {
+        std::cerr << "Error resolving input file path: " << e.what() << std::endl;
         return 1;
     }
 
-    std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
     try {
-        // Lexical analysis
-        std::cerr << "Lexing..." << std::endl;
-        Lexer lexer(source);
-        auto tokens = lexer.tokenize();
-        std::cerr << "Lexing done. Tokens: " << tokens.size() << std::endl;
+        while(!file_queue.empty()){
+            std::string current_file_path = file_queue.front();
+            file_queue.pop();
 
-        // Parsing
-        std::cerr << "Parsing..." << std::endl;
-        Parser parser(tokens);
-        parser.parse_file();
-        std::cerr << "Parsing done. Components: " << parser.components.size() << std::endl;
+            if(processed_files.count(current_file_path)) continue;
+            processed_files.insert(current_file_path);
 
-        validate_view_hierarchy(parser.components);
+            std::cerr << "Processing " << current_file_path << "..." << std::endl;
+
+            std::ifstream file(current_file_path);
+            if(!file){
+                std::cerr << "Error: Could not open file " << current_file_path << std::endl;
+                return 1;
+            }
+            std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+
+            // Lexical analysis
+            Lexer lexer(source);
+            auto tokens = lexer.tokenize();
+
+            // Parsing
+            Parser parser(tokens);
+            parser.parse_file();
+            
+            all_components.insert(all_components.end(), std::make_move_iterator(parser.components.begin()), std::make_move_iterator(parser.components.end()));
+            
+            if(!parser.app_config.root_component.empty()){
+                 final_app_config = parser.app_config;
+            }
+            
+            fs::path current_path(current_file_path);
+            fs::path parent_path = current_path.parent_path();
+
+            for(const auto& import_path_str : parser.imports){
+                fs::path import_path = parent_path / import_path_str;
+                try {
+                    std::string abs_path = fs::canonical(import_path).string();
+                    if(processed_files.find(abs_path) == processed_files.end()){
+                        file_queue.push(abs_path);
+                    }
+                } catch (const std::exception& e) {
+                    std::cerr << "Error resolving import path " << import_path_str << ": " << e.what() << std::endl;
+                    return 1;
+                }
+            }
+        }
+
+        std::cerr << "All files processed. Total components: " << all_components.size() << std::endl;
+
+        validate_view_hierarchy(all_components);
+        validate_mutability(all_components);
 
         // Determine output filename
         namespace fs = std::filesystem;
@@ -176,22 +351,25 @@ int main(int argc, char** argv){
         out << "};\n";
         out << "EventDispatcher g_dispatcher;\n\n";
 
+        // Sort components topologically so dependencies come first
+        auto sorted_components = topological_sort_components(all_components);
+
         // Forward declarations
-        for(auto& comp : parser.components) {
-            out << "class " << comp.name << ";\n";
+        for(auto* comp : sorted_components) {
+            out << "class " << comp->name << ";\n";
         }
         out << "\n";
 
-        for(auto& comp : parser.components) {
-            out << comp.to_webcc();
+        for(auto* comp : sorted_components) {
+            out << comp->to_webcc();
         }
 
-        if(parser.app_config.root_component.empty()) {
+        if(final_app_config.root_component.empty()) {
              std::cerr << "Error: No root component defined. Use 'app { root = ComponentName }' to define the entry point." << std::endl;
              return 1;
         }
 
-        out << "\n" << parser.app_config.root_component << "* app = nullptr;\n";
+        out << "\n" << final_app_config.root_component << "* app = nullptr;\n";
         out << "void update_wrapper(float time) {\n";
             out << "    static float last_time = 0;\n";
             out << "    float dt = (time - last_time) / 1000.0f;\n";
@@ -212,12 +390,12 @@ int main(int argc, char** argv){
             out << "    // We allocate the app on the heap because the stack is destroyed when main() returns.\n";
             out << "    // The app needs to persist for the event loop (update_wrapper).\n";
             out << "    // We use webcc::malloc to ensure memory is tracked by the framework.\n";
-            out << "    void* app_mem = webcc::malloc(sizeof(" << parser.app_config.root_component << "));\n";
-            out << "    app = new (app_mem) " << parser.app_config.root_component << "();\n";
+            out << "    void* app_mem = webcc::malloc(sizeof(" << final_app_config.root_component << "));\n";
+            out << "    app = new (app_mem) " << final_app_config.root_component << "();\n";
             
             // Inject CSS
             std::string all_css;
-            for(const auto& comp : parser.components) {
+            for(const auto& comp : all_components) {
                 if(!comp.global_css.empty()) {
                     all_css += comp.global_css + "\\n";
                 }

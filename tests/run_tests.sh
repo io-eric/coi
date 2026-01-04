@@ -1,17 +1,21 @@
 #!/bin/bash
 
+# Get the directory where the script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
 # Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-COMPILER="../coi"
-SRC="../src/main.cc"
+COMPILER="$PROJECT_ROOT/coi"
+SRC="$PROJECT_ROOT/src/main.cc"
 
 # Ensure compiler exists or rebuild
 if [ ! -f "$COMPILER" ]; then
     echo "Compiler not found. Building..."
-    (cd .. && ./build.sh)
+    (cd "$PROJECT_ROOT" && ./build.sh)
     if [ $? -ne 0 ]; then
         echo -e "${RED}Failed to build compiler.${NC}"
         exit 1

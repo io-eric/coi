@@ -34,6 +34,7 @@ class Parser{
 
     public:
         std::vector<Component> components;
+        std::vector<std::string> imports;
         AppConfig app_config;
         Parser(const std::vector<Token>& toks);
         void parse_file();

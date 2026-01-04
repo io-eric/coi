@@ -7,6 +7,7 @@
 #include <map>
 #include <sstream>
 #include <functional>
+#include <tuple>
 
 std::string convert_type(const std::string& type);
 
@@ -112,6 +113,8 @@ struct VarDeclaration : Statement {
     std::string type;
     std::string name;
     std::unique_ptr<Expression> initializer;
+    bool is_mutable = false;
+    bool is_reference = false;
 
     std::string to_webcc() override;
 };
@@ -120,6 +123,8 @@ struct PropDeclaration : Statement {
     std::string type;
     std::string name;
     std::unique_ptr<Expression> default_value;
+    bool is_mutable = false;
+    bool is_reference = false;
 
     std::string to_webcc() override;
 };
@@ -164,11 +169,17 @@ void collect_mods_recursive(Statement* stmt, std::set<std::string>& mods);
 struct FunctionDef {
     std::string name;
     std::string return_type;
-    std::vector<std::pair<std::string, std::string>> params;
+    struct Param {
+        std::string type;
+        std::string name;
+        bool is_mutable = false;
+        bool is_reference = false;
+    };
+    std::vector<Param> params;
     std::vector<std::unique_ptr<Statement>> body;
 
     std::string to_webcc(const std::string& injected_code = "");
-    void collect_modifications(std::set<std::string>& mods);
+    void collect_modifications(std::set<std::string>& mods) const;
 };
 
 struct StructField {
@@ -203,14 +214,20 @@ struct Binding {
     Expression* expr = nullptr;
 };
 
+struct ComponentProp {
+    std::string name;
+    std::unique_ptr<Expression> value;
+    bool is_reference = false;
+};
+
 struct ComponentInstantiation : ASTNode {
     std::string component_name;
-    std::vector<std::pair<std::string, std::unique_ptr<Expression>>> props;
+    std::vector<ComponentProp> props;
     
     std::string to_webcc() override;
 
     void generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
-                      std::vector<std::pair<int, std::string>>& click_handlers,
+                      std::vector<std::tuple<int, std::string, bool>>& click_handlers,
                       std::vector<Binding>& bindings,
                       std::map<std::string, int>& component_counters,
                       const std::set<std::string>& method_names,
@@ -227,7 +244,7 @@ struct HTMLElement : ASTNode {
     std::string to_webcc() override;
 
     void generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
-                      std::vector<std::pair<int, std::string>>& click_handlers,
+                      std::vector<std::tuple<int, std::string, bool>>& click_handlers,
                       std::vector<Binding>& bindings,
                       std::map<std::string, int>& component_counters,
                       const std::set<std::string>& method_names,
@@ -252,4 +269,11 @@ struct Component : ASTNode {
 struct AppConfig {
     std::string root_component;
     std::map<std::string, std::string> routes;
+};
+
+struct BoolLiteral : Expression {
+    bool value;
+    BoolLiteral(bool v) : value(v){}
+    std::string to_webcc() override { return value ? "true" : "false"; }
+    bool is_static() override { return true; }
 };

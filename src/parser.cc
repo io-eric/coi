@@ -134,6 +134,16 @@ std::unique_ptr<Expression> Parser::parse_primary(){
         return std::make_unique<StringLiteral>(value);
     }
 
+    // Boolean literal
+    if(current().type == TokenType::TRUE){
+        advance();
+        return std::make_unique<BoolLiteral>(true);
+    }
+    if(current().type == TokenType::FALSE){
+        advance();
+        return std::make_unique<BoolLiteral>(false);
+    }
+
     // Identifer or function call
     if(current().type == TokenType::IDENTIFIER){
         std::string name = current().value;
@@ -215,11 +225,24 @@ std::unique_ptr<Statement> Parser::parse_statement(){
     }
 
     // Variable declaration
+    bool is_mutable = false;
+    if (current().type == TokenType::MUT) {
+        is_mutable = true;
+        advance();
+    }
+
     if(current().type == TokenType::INT || current().type == TokenType::STRING ||
         current().type == TokenType::FLOAT || current().type == TokenType::BOOL){
 
         std::string type = current().value;
         advance();
+
+        // Handle reference type
+        bool is_reference = false;
+        if(current().type == TokenType::AMPERSAND){
+            is_reference = true;
+            advance();
+        }
 
         // Handle array type
         if(current().type == TokenType::LBRACKET){
@@ -234,6 +257,8 @@ std::unique_ptr<Statement> Parser::parse_statement(){
         auto var_decl = std::make_unique<VarDeclaration>();
         var_decl->type = type;
         var_decl->name = name;
+        var_decl->is_mutable = is_mutable;
+        var_decl->is_reference = is_reference;
 
         if(match(TokenType::ASSIGN)){
             var_decl->initializer = parse_expression();
@@ -241,6 +266,8 @@ std::unique_ptr<Statement> Parser::parse_statement(){
 
         expect(TokenType::SEMICOLON, "Expected ';'");
         return var_decl;
+    } else if (is_mutable) {
+        throw std::runtime_error("Expected type after 'mut'");
     }
 
     // Assignment
@@ -372,7 +399,11 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
         comp->component_name = tag;
 
         // Props
-        while(current().type == TokenType::IDENTIFIER){
+        while(current().type == TokenType::IDENTIFIER || current().type == TokenType::AMPERSAND){
+            bool is_ref_prop = false;
+            if(match(TokenType::AMPERSAND)){
+                is_ref_prop = true;
+            }
             std::string prop_name = current().value;
             advance();
             
@@ -407,7 +438,11 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
                 // Boolean prop?
                 prop_value = std::make_unique<StringLiteral>("true");
             }
-            comp->props.push_back({prop_name, std::move(prop_value)});
+            ComponentProp cprop;
+            cprop.name = prop_name;
+            cprop.value = std::move(prop_value);
+            cprop.is_reference = is_ref_prop;
+            comp->props.push_back(std::move(cprop));
         }
 
         // Self-closing
@@ -519,6 +554,12 @@ Component Parser::parse_component(){
 
     // Parse state variables and methods
     while(current().type != TokenType::VIEW && current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
+        bool is_mutable = false;
+        if (current().type == TokenType::MUT) {
+            is_mutable = true;
+            advance();
+        }
+
         // Variable declaration
         if(current().type == TokenType::INT || current().type == TokenType::STRING || 
             current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
@@ -526,6 +567,12 @@ Component Parser::parse_component(){
             auto var_decl = std::make_unique<VarDeclaration>();
             var_decl->type = current().value;
             advance();
+
+            // Handle reference type
+            if(current().type == TokenType::AMPERSAND){
+                var_decl->is_reference = true;
+                advance();
+            }
 
             if(current().type == TokenType::LBRACKET){
                 advance();
@@ -535,6 +582,7 @@ Component Parser::parse_component(){
 
             var_decl->name = current().value;
             expect(TokenType::IDENTIFIER, "Expected variable name");
+            var_decl->is_mutable = is_mutable;
 
             if(match(TokenType::ASSIGN)){
                 var_decl->initializer = parse_expression();
@@ -542,6 +590,9 @@ Component Parser::parse_component(){
 
             expect(TokenType::SEMICOLON, "Expected ';'");
             comp.state.push_back(std::move(var_decl));
+        }
+        else if (is_mutable) {
+            throw std::runtime_error("Expected variable declaration after 'mut'");
         }
         // Struct definition
         else if(current().type == TokenType::STRUCT){
@@ -557,6 +608,12 @@ Component Parser::parse_component(){
             
             // Parse parameters
             while(current().type != TokenType::RPAREN){
+                bool is_mutable = false;
+                if (current().type == TokenType::MUT) {
+                    is_mutable = true;
+                    advance();
+                }
+
                 std::string paramType = current().value;
                 if(current().type == TokenType::INT || current().type == TokenType::FLOAT || 
                     current().type == TokenType::STRING || current().type == TokenType::BOOL || 
@@ -566,10 +623,16 @@ Component Parser::parse_component(){
                         throw std::runtime_error("Expected parameter type");
                 }
 
+                bool is_reference = false;
+                if(current().type == TokenType::AMPERSAND){
+                    is_reference = true;
+                    advance();
+                }
+
                 std::string paramName = current().value;
                 expect(TokenType::IDENTIFIER, "Expected parameter name");
                 
-                func.params.push_back({paramType, paramName});
+                func.params.push_back({paramType, paramName, is_mutable, is_reference});
 
                 if(current().type == TokenType::COMMA){
                     advance();
@@ -599,6 +662,12 @@ Component Parser::parse_component(){
             
             // Parse parameters
             while(current().type != TokenType::RPAREN){
+                bool is_mutable = false;
+                if (current().type == TokenType::MUT) {
+                    is_mutable = true;
+                    advance();
+                }
+
                 std::string paramType = current().value;
                 if(current().type == TokenType::INT || current().type == TokenType::FLOAT || 
                     current().type == TokenType::STRING || current().type == TokenType::BOOL || 
@@ -608,10 +677,16 @@ Component Parser::parse_component(){
                         throw std::runtime_error("Expected parameter type");
                 }
 
+                bool is_reference = false;
+                if(current().type == TokenType::AMPERSAND){
+                    is_reference = true;
+                    advance();
+                }
+
                 std::string paramName = current().value;
                 expect(TokenType::IDENTIFIER, "Expected parameter name");
                 
-                func.params.push_back({paramType, paramName});
+                func.params.push_back({paramType, paramName, is_mutable, is_reference});
 
                 if(current().type == TokenType::COMMA){
                     advance();
@@ -631,7 +706,15 @@ Component Parser::parse_component(){
         // Prop declaration
         else if(current().type == TokenType::PROP){
             advance();
+            
+            bool is_mutable = false;
+            if (current().type == TokenType::MUT) {
+                is_mutable = true;
+                advance();
+            }
+
             auto prop_decl = std::make_unique<PropDeclaration>();
+            prop_decl->is_mutable = is_mutable;
             
             prop_decl->type = current().value;
             // Check type
@@ -641,6 +724,12 @@ Component Parser::parse_component(){
                 advance();
             } else {
                     throw std::runtime_error("Expected prop type");
+            }
+
+            // Handle reference type
+            if(current().type == TokenType::AMPERSAND){
+                prop_decl->is_reference = true;
+                advance();
             }
 
             if(current().type == TokenType::LBRACKET){
@@ -720,7 +809,12 @@ void Parser::parse_app() {
 
 void Parser::parse_file(){
     while(current().type != TokenType::END_OF_FILE){
-        if(current().type == TokenType::COMPONENT){
+        if(current().type == TokenType::IMPORT){
+            advance();
+            expect(TokenType::STRING_LITERAL, "Expected import path");
+            imports.push_back(tokens[pos-1].value);
+            expect(TokenType::SEMICOLON, "Expected ';'");
+        } else if(current().type == TokenType::COMPONENT){
             components.push_back(parse_component());
         } else if(current().type == TokenType::IDENTIFIER && current().value == "app"){
             advance();

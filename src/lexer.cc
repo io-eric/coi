@@ -102,6 +102,8 @@ Token Lexer::read_identifier(){
         {"tick", TokenType::TICK},
         {"prop", TokenType::PROP},
         {"style", TokenType::STYLE},
+        {"mut", TokenType::MUT},
+        {"import", TokenType::IMPORT},
         {"if", TokenType::IF},
         {"else", TokenType::ELSE},
         {"for", TokenType::FOR},
@@ -223,6 +225,7 @@ std::vector<Token> Lexer::tokenize(){
             case ',': tokens.push_back(make_token(TokenType::COMMA, ",")); break;
             case '.': tokens.push_back(make_token(TokenType::DOT, ".")); break;
             case ':': tokens.push_back(make_token(TokenType::COLON, ":")); break;
+            case '&': tokens.push_back(make_token(TokenType::AMPERSAND, "&")); break;
             default:
                 tokens.push_back(make_token(TokenType::UNKNOWN, std::string(1, current())));
         }

@@ -1,0 +1,45 @@
+component NavBar {
+    style {
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: #2d3436;
+        }
+        ul {
+            list-style: none;
+            display: flex;
+            gap: 32px;
+            margin: 0;
+            padding: 0;
+        }
+        li {
+            cursor: pointer;
+            color: #636e72;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        li:hover {
+            color: #a29bfe;
+        }
+    }
+
+    view {
+        <nav>
+            <div class="logo">.coi</div>
+            <ul>
+                <li>Home</li>
+                <li>Features</li>
+                <li>Docs</li>
+                <li>GitHub</li>
+            </ul>
+        </nav>
+    }
+}

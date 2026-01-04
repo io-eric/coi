@@ -1,0 +1,46 @@
+import "../demos/Counter.coi";
+import "../demos/CodeExample.coi";
+import "../demos/AnimatedBallCodeExample.coi";
+import "../demos/AnimatedBox.coi";
+
+component DemoSection {
+    style {
+        .demo-section {
+            padding: 100px 20px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 80px;
+            border-top: 1px solid #f1f2f6;
+        }
+        .demo-row {
+            display: flex;
+            gap: 60px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        h2 {
+            font-size: 42px;
+            color: #2d3436;
+            margin: 0;
+            font-weight: 800;
+            letter-spacing: -1px;
+        }
+    }
+
+    view {
+        <div class="demo-section">
+            <h2>Experience the Difference</h2>
+            <div class="demo-row">
+                <Counter />
+                <CodeExample />
+            </div>
+            <div class="demo-row">
+                <AnimatedBallCodeExample />
+                <AnimatedBox />
+            </div>
+        </div>
+    }
+}

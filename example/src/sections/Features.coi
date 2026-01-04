@@ -1,0 +1,34 @@
+import "../components/FeatureCard.coi";
+
+component Features {
+    style {
+        .features {
+            padding: 80px 20px;
+            background-color: #ffffff;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+        }
+        h2 {
+            text-align: center;
+            font-size: 32px;
+            margin-bottom: 60px;
+            color: #2d3436;
+        }
+    }
+
+    view {
+        <div class="features">
+            <h2>Why coi?</h2>
+            <div class="grid">
+                <FeatureCard title="WebAssembly & WebCC" description="Compiles to raw WebAssembly using WebCC. No heavy runtime, just native speed." />
+                <FeatureCard title="Incremental DOM" description="Smart updates that only touch what changed, avoiding the overhead of a full Virtual DOM." />
+                <FeatureCard title="Type-Safe Components" description="Catch errors at compile time. Props and state are strictly typed." />
+            </div>
+        </div>
+    }
+}

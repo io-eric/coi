@@ -1,0 +1,46 @@
+import "../components/Button.coi";
+
+component Hero {
+    style {
+        .hero {
+            text-align: center;
+            padding: 140px 20px 100px;
+            max-width: 900px;
+            margin: 0 auto;
+            background-image: radial-gradient(circle at 50% 0%, rgba(162, 155, 254, 0.15) 0%, rgba(255, 255, 255, 0) 60%);
+        }
+        h1 {
+            font-size: 72px;
+            font-weight: 900;
+            color: #2d3436;
+            margin: 0 auto 32px;
+            line-height: 1.1;
+            letter-spacing: -2px;
+            text-align: center;
+        }
+        p {
+            font-size: 22px;
+            color: #636e72;
+            margin: 0 auto 48px;
+            line-height: 1.6;
+            max-width: 640px;
+            text-align: center;
+        }
+        .buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+    }
+
+    view {
+        <div class="hero">
+            <h1>coi</h1>
+            <p>A component-based language for high-performance web apps. Fast, minimal, and type-safe.</p>
+            <div class="buttons">
+                <Button label="Get Started" type="primary" />
+                <Button label="View on GitHub" type="secondary" />
+            </div>
+        </div>
+    }
+}

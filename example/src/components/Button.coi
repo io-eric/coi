@@ -1,0 +1,35 @@
+component Button {
+    prop string label = "Button";
+    prop string type = "primary"; // primary or secondary
+
+    style {
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .primary {
+            background-color: #a29bfe;
+            color: white;
+        }
+        .secondary {
+            background-color: #dfe6e9;
+            color: #2d3436;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+        button:active {
+            transform: translateY(0);
+        }
+    }
+
+    view {
+        <button class={type} onclick={onclick}>{label}</button>
+    }
+}

@@ -1,0 +1,36 @@
+component AnimatedBox {
+    mut float x = 0;
+    mut int direction = 1;
+
+    tick(float dt) {
+        x += direction * dt * 200;
+    
+        if (x > 300) direction = -1;
+        if (x < 0) direction = 1;
+    }
+
+    style {
+        .container {
+            width: 350px;
+            height: 60px;
+            background: #dfe6e9;
+            border-radius: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        .box {
+            width: 50px;
+            height: 50px;
+            background-color: #a29bfe;
+            border-radius: 50%;
+            position: absolute;
+            top: 5px;
+        }
+    }
+
+    view {
+        <div class="container">
+            <div class="box" style="left: {x}px;"></div>
+        </div>
+    }
+}

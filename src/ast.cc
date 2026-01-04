@@ -2,6 +2,9 @@
 #include <cctype>
 #include <algorithm>
 
+// Global context for tracking reference props (which are stored as pointers)
+static std::set<std::string> g_ref_props;
+
 std::string convert_type(const std::string& type) {
     if (type == "string") return "webcc::string";
     if (type.ends_with("[]")) {
@@ -118,7 +121,12 @@ void StringLiteral::collect_dependencies(std::set<std::string>& deps) {
     }
 }
 
-std::string Identifier::to_webcc() {return name;}
+std::string Identifier::to_webcc() { 
+    if(g_ref_props.count(name)) {
+        return "(*" + name + ")";
+    }
+    return name; 
+}
 void Identifier::collect_dependencies(std::set<std::string>& deps) {
     deps.insert(name);
 }
@@ -227,7 +235,9 @@ void UnaryOp::collect_dependencies(std::set<std::string>& deps) {
 bool UnaryOp::is_static() { return operand->is_static(); }
 
 std::string VarDeclaration::to_webcc() {
-    std::string result = convert_type(type) + " " + name;
+    std::string result = (is_mutable ? "" : "const ") + convert_type(type);
+    if(is_reference) result += "&";
+    result += " " + name;
     if(initializer) {
         result += " = " + initializer->to_webcc();
     }
@@ -240,7 +250,11 @@ std::string PropDeclaration::to_webcc() {
 }
 
 std::string Assignment::to_webcc() {
-    return name + " = " + value->to_webcc() + ";";
+    std::string lhs = name;
+    if(g_ref_props.count(name)) {
+        lhs = "(*" + name + ")";
+    }
+    return lhs + " = " + value->to_webcc() + ";";
 }
 void Assignment::collect_dependencies(std::set<std::string>& deps) {
     value->collect_dependencies(deps);
@@ -320,7 +334,9 @@ std::string FunctionDef::to_webcc(const std::string& injected_code){
     std::string result = convert_type(return_type) + " " + name + "(";
     for(size_t i = 0; i < params.size(); i++){
         if(i > 0) result += ", ";
-        result += convert_type(params[i].first) + " " + params[i].second;
+        result += (params[i].is_mutable ? "" : "const ") + convert_type(params[i].type);
+        if(params[i].is_reference) result += "&";
+        result += " " + params[i].name;
     }
     result += ") {\n";
     for(auto& stmt : body){
@@ -333,8 +349,8 @@ std::string FunctionDef::to_webcc(const std::string& injected_code){
     return result;
 }
 
-void FunctionDef::collect_modifications(std::set<std::string>& mods) {
-    for(auto& stmt : body) {
+void FunctionDef::collect_modifications(std::set<std::string>& mods) const {
+    for(const auto& stmt : body) {
         collect_mods_recursive(stmt.get(), mods);
     }
 }
@@ -367,7 +383,7 @@ std::string TextNode::to_webcc() { return "\"" + text + "\""; }
 std::string ComponentInstantiation::to_webcc() { return ""; }
 
 void ComponentInstantiation::generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
-                  std::vector<std::pair<int, std::string>>& click_handlers,
+                  std::vector<std::tuple<int, std::string, bool>>& click_handlers,
                   std::vector<Binding>& bindings,
                   std::map<std::string, int>& component_counters,
                   const std::set<std::string>& method_names,
@@ -378,13 +394,47 @@ void ComponentInstantiation::generate_code(std::stringstream& ss, const std::str
     
     // Set props
     for(auto& prop : props) {
-        std::string val = prop.second->to_webcc();
+        std::string val = prop.value->to_webcc();
         // Check if val is a method name
         if(method_names.count(val)) {
             // Wrap in function
-            ss << "        " << instance_name << "." << prop.first << " = [this]() { this->" << val << "(); };\n";
+            ss << "        " << instance_name << "." << prop.name << " = [this]() { this->" << val << "(); };\n";
+        } else if (prop.is_reference) {
+            // Pass address for reference props
+            ss << "        " << instance_name << "." << prop.name << " = &(" << val << ");\n";
         } else {
-            ss << "        " << instance_name << "." << prop.first << " = " << val << ";\n";
+            ss << "        " << instance_name << "." << prop.name << " = " << val << ";\n";
+        }
+    }
+    
+    // For reference props, set up the onChange callback to call _update_<varname>()
+    for(auto& prop : props) {
+        if(prop.is_reference) {
+            std::string callback_name = "on" + std::string(1, std::toupper(prop.name[0])) + prop.name.substr(1) + "Change";
+            
+            // Collect dependencies from the prop value to know which variable is being passed
+            std::set<std::string> prop_deps;
+            prop.value->collect_dependencies(prop_deps);
+            
+            // Call _update_<varname>() for each variable that has dependent bindings
+            std::string update_calls;
+            for(const auto& dep : prop_deps) {
+                // Check if any binding depends on this variable
+                bool has_dependent_binding = false;
+                for(const auto& binding : bindings) {
+                    if(binding.dependencies.count(dep)) {
+                        has_dependent_binding = true;
+                        break;
+                    }
+                }
+                if(has_dependent_binding) {
+                    update_calls += "_update_" + dep + "(); ";
+                }
+            }
+            
+            if(!update_calls.empty()) {
+                ss << "        " << instance_name << "." << callback_name << " = [this]() { " << update_calls << "};\n";
+            }
         }
     }
     
@@ -398,14 +448,14 @@ void ComponentInstantiation::generate_code(std::stringstream& ss, const std::str
 
 void ComponentInstantiation::collect_dependencies(std::set<std::string>& deps) {
     for(auto& prop : props) {
-        prop.second->collect_dependencies(deps);
+        prop.value->collect_dependencies(deps);
     }
 }
 
 std::string HTMLElement::to_webcc() { return ""; }
 
 void HTMLElement::generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
-                  std::vector<std::pair<int, std::string>>& click_handlers,
+                  std::vector<std::tuple<int, std::string, bool>>& click_handlers,
                   std::vector<Binding>& bindings,
                   std::map<std::string, int>& component_counters,
                   const std::set<std::string>& method_names,
@@ -422,7 +472,8 @@ void HTMLElement::generate_code(std::stringstream& ss, const std::string& parent
         if(attr.name == "onclick"){
              ss << "        webcc::dom::add_click_listener(" << var << ");\n";
              // Store handler for later generation
-             click_handlers.push_back({my_id, attr.value->to_webcc()});
+             bool is_call = dynamic_cast<FunctionCall*>(attr.value.get()) != nullptr;
+             click_handlers.push_back({my_id, attr.value->to_webcc(), is_call});
         } else {
              std::string val = attr.value->to_webcc();
              ss << "        webcc::dom::set_attribute(" << var << ", \"" << attr.name << "\", " << val << ");\n";
@@ -520,11 +571,19 @@ void Component::collect_child_components(ASTNode* node, std::map<std::string, in
 
 std::string Component::to_webcc() {
     std::stringstream ss;
-    std::vector<std::pair<int, std::string>> click_handlers;
+    std::vector<std::tuple<int, std::string, bool>> click_handlers;
     std::vector<Binding> bindings;
     std::map<std::string, int> component_counters; // For generating code
     std::map<std::string, int> component_members; // For declaring members
     int element_count = 0;
+    
+    // Populate global context for reference props
+    g_ref_props.clear();
+    for(auto& prop : props) {
+        if(prop->is_reference) {
+            g_ref_props.insert(prop->name);
+        }
+    }
     
     // Collect child components to declare members
     if(render_root) {
@@ -557,6 +616,7 @@ std::string Component::to_webcc() {
 
     // Generate component as a class
     ss << "class " << name << " {\n";
+    
     ss << "public:\n";
 
     // Structs
@@ -566,11 +626,23 @@ std::string Component::to_webcc() {
     
     // Props
     for(auto& prop : props){
-            ss << "    " << convert_type(prop->type) << " " << prop->name;
-            if(prop->default_value){
-                ss << " = " << prop->default_value->to_webcc();
+            ss << "    " << convert_type(prop->type);
+            if(prop->is_reference) {
+                // Reference props are stored as pointers
+                ss << "* " << prop->name << " = nullptr";
+            } else {
+                ss << " " << prop->name;
+                if(prop->default_value){
+                    ss << " = " << prop->default_value->to_webcc();
+                }
             }
             ss << ";\n";
+            
+            // For reference props, also declare an onChange callback
+            if(prop->is_reference) {
+                std::string callback_name = "on" + std::string(1, std::toupper(prop->name[0])) + prop->name.substr(1) + "Change";
+                ss << "    webcc::function<void()> " << callback_name << ";\n";
+            }
     }
     
     // Special prop for onclick if not present
@@ -582,12 +654,16 @@ std::string Component::to_webcc() {
 
     // State variables
     for(auto& var : state){
-        ss << "    " << convert_type(var->type) << " " << var->name;
+        ss << "    " << (var->is_mutable ? "" : "const ") << convert_type(var->type);
+        if(var->is_reference) ss << "&";
+        ss << " " << var->name;
         if(var->initializer){
             ss << " = " << var->initializer->to_webcc();
         }
         ss << ";\n";
     }
+    
+    // No special constructor needed since ref props are now pointers initialized to nullptr
 
     ss << "private:\n";
 
@@ -605,52 +681,76 @@ std::string Component::to_webcc() {
 
     ss << "\npublic:\n";
 
+    // Build a map of state variable -> update code for that variable
+    std::map<std::string, std::string> var_update_code;
+    for(const auto& binding : bindings) {
+        for(const auto& dep : binding.dependencies) {
+            std::string el_var = "el_" + std::to_string(binding.element_id);
+            std::string update_line;
+            
+            bool optimized = false;
+            if(binding.expr) {
+                if(auto strLit = dynamic_cast<StringLiteral*>(binding.expr)) {
+                    std::string fmt_code = "{ webcc::formatter<256> _fmt; ";
+                    auto parts = strLit->parse();
+                    for(auto& p : parts) {
+                        if(p.is_expr) fmt_code += "_fmt << (" + p.content + "); ";
+                        else fmt_code += "_fmt << \"" + p.content + "\"; ";
+                    }
+                    
+                    if(binding.type == "attr") {
+                        fmt_code += "webcc::dom::set_attribute(" + el_var + ", \"" + binding.name + "\", _fmt.c_str()); }";
+                    } else {
+                        fmt_code += "webcc::dom::set_inner_text(" + el_var + ", _fmt.c_str()); }";
+                    }
+                    update_line = "        " + fmt_code + "\n";
+                    optimized = true;
+                }
+            }
+            
+            if(!optimized) {
+                if(binding.type == "attr") {
+                    update_line = "        webcc::dom::set_attribute(" + el_var + ", \"" + binding.name + "\", " + binding.value_code + ");\n";
+                } else if(binding.type == "text") {
+                    update_line = "        webcc::dom::set_inner_text(" + el_var + ", " + binding.value_code + ");\n";
+                }
+            }
+            
+            if(!update_line.empty()) {
+                var_update_code[dep] += update_line;
+            }
+        }
+    }
+    
+    // Generate _update_{varname}() methods for variables that have UI bindings
+    std::set<std::string> generated_updaters;
+    for(const auto& [var_name, update_code] : var_update_code) {
+        if(!update_code.empty()) {
+            ss << "    void _update_" << var_name << "() {\n";
+            ss << update_code;
+            ss << "    }\n";
+            generated_updaters.insert(var_name);
+        }
+    }
+
     // Methods
     for(auto& method : methods){
         std::set<std::string> modified_vars;
         method.collect_modifications(modified_vars);
         
         std::string updates;
-        // Deduplicate updates by iterating over bindings and checking if any dependency is modified
-        for(const auto& binding : bindings) {
-            bool needs_update = false;
-            for(const auto& mod : modified_vars) {
-                if(binding.dependencies.count(mod)) {
-                    needs_update = true;
-                    break;
-                }
+        // Call the update function for each modified variable that has one
+        for(const auto& mod : modified_vars) {
+            if(generated_updaters.count(mod)) {
+                updates += "        _update_" + mod + "();\n";
             }
-            
-            if(needs_update) {
-                std::string el_var = "el_" + std::to_string(binding.element_id);
-                
-                bool optimized = false;
-                if(binding.expr) {
-                    if(auto strLit = dynamic_cast<StringLiteral*>(binding.expr)) {
-                            std::string fmt_code = "{ webcc::formatter<256> _fmt; ";
-                            auto parts = strLit->parse();
-                            for(auto& p : parts) {
-                                if(p.is_expr) fmt_code += "_fmt << (" + p.content + "); ";
-                                else fmt_code += "_fmt << \"" + p.content + "\"; ";
-                            }
-                            
-                            if(binding.type == "attr") {
-                                fmt_code += "webcc::dom::set_attribute(" + el_var + ", \"" + binding.name + "\", _fmt.c_str()); }";
-                            } else {
-                                fmt_code += "webcc::dom::set_inner_text(" + el_var + ", _fmt.c_str()); }";
-                            }
-                            updates += "        " + fmt_code + "\n";
-                            optimized = true;
-                    }
-                }
-
-                if(!optimized) {
-                    if(binding.type == "attr") {
-                        updates += "        webcc::dom::set_attribute(" + el_var + ", \"" + binding.name + "\", " + binding.value_code + ");\n";
-                    } else if(binding.type == "text") {
-                        updates += "        webcc::dom::set_inner_text(" + el_var + ", " + binding.value_code + ");\n";
-                    }
-                }
+        }
+        
+        // For any modified reference props, call their onChange callback
+        for(const auto& mod : modified_vars) {
+            if(g_ref_props.count(mod)) {
+                std::string callback_name = "on" + std::string(1, std::toupper(mod[0])) + mod.substr(1) + "Change";
+                updates += "        if(" + callback_name + ") " + callback_name + "();\n";
             }
         }
         
@@ -666,8 +766,12 @@ std::string Component::to_webcc() {
 
     // Generated handlers
     for(auto& handler : click_handlers) {
-        ss << "    void _handler_" << handler.first << "() {\n";
-        ss << "        " << handler.second << "();\n";
+        ss << "    void _handler_" << std::get<0>(handler) << "() {\n";
+        if (std::get<2>(handler)) {
+            ss << "        " << std::get<1>(handler) << ";\n";
+        } else {
+            ss << "        " << std::get<1>(handler) << "();\n";
+        }
         ss << "    }\n";
     }
 
@@ -678,9 +782,8 @@ std::string Component::to_webcc() {
     }
     // Register handlers
     for(auto& handler : click_handlers) {
-        ss << "        g_dispatcher.register_click(el_" << handler.first << ", [this]() { this->_handler_" << handler.first << "(); });\n";
+        ss << "        g_dispatcher.register_click(el_" << std::get<0>(handler) << ", [this]() { this->_handler_" << std::get<0>(handler) << "(); });\n";
     }
-    ss << "        webcc::flush();\n";
     ss << "    }\n";
 
     // Update method for event loop
@@ -701,5 +804,8 @@ std::string Component::to_webcc() {
 
     ss << "};\n";
 
+    // Clear global context
+    g_ref_props.clear();
+    
     return ss.str();
 }

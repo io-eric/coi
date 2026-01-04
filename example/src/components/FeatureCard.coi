@@ -1,0 +1,36 @@
+component FeatureCard {
+    prop string title;
+    prop string description;
+
+    style {
+        .card {
+            padding: 32px;
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #f1f2f6;
+            transition: transform 0.2s;
+            text-align: center;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: #a29bfe;
+        }
+        h3 {
+            margin: 0 0 12px 0;
+            color: #2d3436;
+            font-size: 20px;
+        }
+        p {
+            color: #636e72;
+            line-height: 1.5;
+            margin: 0;
+        }
+    }
+
+    view {
+        <div class="card">
+            <h3>{title}</h3>
+            <p>{description}</p>
+        </div>
+    }
+}
