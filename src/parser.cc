@@ -640,7 +640,10 @@ Component Parser::parse_component(){
             }
 
             expect(TokenType::RPAREN, "Expected ')'");
-            expect(TokenType::COLON, "Expected ':'");
+            if (current().type == TokenType::LBRACE) {
+                 throw std::runtime_error("Missing return type for function '" + func.name + "'. Expected ':' followed by return type at line " + std::to_string(current().line));
+            }
+            expect(TokenType::COLON, "Expected ':' for return type");
             func.return_type = current().value;
             advance();
             expect(TokenType::LBRACE, "Expected '{'");
