@@ -15,7 +15,7 @@ Compiles to WASM, JS, and HTML with tiny binaries and efficient updates for DOM,
 ## Features
 
 - **Type-Safe Components**: Compile-time error checking with strictly typed props and state.
-- **Reactive State Management**: Use `mut` for automatic, incremental DOM updates without Virtual DOM overhead.
+- **Incremental Updates**: Automatic, fine-grained DOM updates without Virtual DOM overhead.
 - **Reference Props**: Pass state by reference with `&` for seamless parent-child synchronization.
 - **Minimal Runtime**: Tiny WASM binaries with high-performance updates for DOM, Canvas, and more.
 - **Integrated Styling**: Write standard HTML and scoped CSS directly in components.
@@ -189,7 +189,7 @@ To build the compiler and the toolchain:
 The script will:
 1. **Bootstrap WebCC** (if not installed): Automatically initializes the submodule and builds the `webcc` toolchain.
 2. **Compile Coi**: Compiles the Coi compiler using `g++`.
-3. **Install Coi**: Offers to create a symlink for `coi` in your `/usr/local/bin` for easy access.
+3. **Install**: Offers to install `coi` to your system PATH for easy access.
 
 ## Usage
 
