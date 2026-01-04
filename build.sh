@@ -11,7 +11,7 @@ if ! command -v webcc >/dev/null 2>&1; then
     fi
     
     if [ ! -f "deps/webcc/webcc" ]; then
-        echo "[COI] Building webcc toolchain..."
+        echo "[COI] Building and installing webcc toolchain (required dependency)..."
         pushd deps/webcc > /dev/null
         # Automatically answer 'y' to the install prompt in webcc's build script
         echo "y" | ./build.sh

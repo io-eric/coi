@@ -187,9 +187,9 @@ To build the compiler and the toolchain:
 ```
 
 The script will:
-1. **Bootstrap WebCC** (if not installed): Compiles a bootstrap version of the tool, generates API headers from the schema, and compiles the final `webcc` binary.
+1. **Bootstrap WebCC** (if not installed): Automatically initializes the submodule and builds the `webcc` toolchain.
 2. **Compile Coi**: Compiles the Coi compiler using `g++`.
-3. **Install**: Offers to create symlinks for both `coi` and `webcc` in your `/usr/local/bin` for easy access.
+3. **Install Coi**: Offers to create a symlink for `coi` in your `/usr/local/bin` for easy access.
 
 ## Usage
 
