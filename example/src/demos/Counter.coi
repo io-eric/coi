@@ -39,8 +39,8 @@ component Counter {
             <div style="font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #636e72;">Counter</div>
             <div class="count-text">{count}</div>
             <div class="buttons">
-                <Button label="-" type="secondary" onclick={decrement} />
-                <Button label="+" type="primary" onclick={increment} />
+                <Button label="-" type="secondary" &onclick={decrement} />
+                <Button label="+" type="primary" &onclick={increment} />
             </div>
             <ValueEditor &value={count} />
         </div>

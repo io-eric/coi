@@ -105,10 +105,15 @@ void validate_view_hierarchy(const std::vector<Component>& components) {
                                     std::to_string(comp_inst->line));
                             }
                             if (!declared_prop->is_reference && passed_prop.is_reference) {
-                                throw std::runtime_error(
-                                    "Prop '" + passed_prop.name + "' in component '" + comp_inst->component_name + 
-                                    "' does not expect a reference. Remove '&' prefix at line " + 
-                                    std::to_string(comp_inst->line));
+                                // Allow & syntax for function props (webcc::function)
+                                if (declared_prop->type.find("webcc::function") == 0) {
+                                    // OK
+                                } else {
+                                    throw std::runtime_error(
+                                        "Prop '" + passed_prop.name + "' in component '" + comp_inst->component_name + 
+                                        "' does not expect a reference. Remove '&' prefix at line " + 
+                                        std::to_string(comp_inst->line));
+                                }
                             }
                             break;
                         }

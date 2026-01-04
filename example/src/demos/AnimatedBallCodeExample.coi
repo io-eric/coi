@@ -36,7 +36,8 @@ component AnimatedBallCodeExample {
                 <span>{"\\{"}</span>
             </div>
             <div class="row indent-1">
-                <span class="kwd">float</span>
+                <span class="kwd">mut</span>
+                <span class="type-sp">float</span>
                 <span>{"x"}</span>
                 <span class="op">{"="}</span>
                 <span>{"0;"}</span>

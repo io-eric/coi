@@ -36,7 +36,8 @@ component CodeExample {
                 <span>{"\\{"}</span>
             </div>
             <div class="row indent-1">
-                <span class="kwd">int</span>
+                <span class="kwd">mut</span>
+                <span class="type-sp">int</span>
                 <span>{"count"}</span>
                 <span class="op">{"="}</span>
                 <span>{"0;"}</span>

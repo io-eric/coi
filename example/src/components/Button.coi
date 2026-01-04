@@ -1,6 +1,7 @@
 component Button {
     prop string label = "Button";
     prop string type = "primary"; // primary or secondary
+    prop def onclick : void;
 
     style {
         button {

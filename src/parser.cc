@@ -716,30 +716,47 @@ Component Parser::parse_component(){
             auto prop_decl = std::make_unique<PropDeclaration>();
             prop_decl->is_mutable = is_mutable;
             
-            prop_decl->type = current().value;
-            // Check type
-            if(current().type == TokenType::INT || current().type == TokenType::STRING || 
-                current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
-                current().type == TokenType::IDENTIFIER){
+            if (current().type == TokenType::DEF) {
                 advance();
+                prop_decl->name = current().value;
+                expect(TokenType::IDENTIFIER, "Expected prop name");
+                expect(TokenType::COLON, "Expected ':'");
+                
+                std::string retType = current().value;
+                if(current().type == TokenType::INT || current().type == TokenType::STRING || 
+                    current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
+                    current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
+                    advance();
+                } else {
+                        throw std::runtime_error("Expected return type");
+                }
+                prop_decl->type = "webcc::function<" + retType + "()>";
             } else {
-                    throw std::runtime_error("Expected prop type");
-            }
+                prop_decl->type = current().value;
+                // Check type
+                if(current().type == TokenType::INT || current().type == TokenType::STRING || 
+                    current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
+                    current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
+                    advance();
+                } else {
+                        throw std::runtime_error("Expected prop type");
+                }
 
-            // Handle reference type
-            if(current().type == TokenType::AMPERSAND){
-                prop_decl->is_reference = true;
-                advance();
-            }
+                // Handle reference type
+                if(current().type == TokenType::AMPERSAND){
+                    prop_decl->is_reference = true;
+                    advance();
+                }
 
-            if(current().type == TokenType::LBRACKET){
-                advance();
-                expect(TokenType::RBRACKET, "Expected ']'");
-                prop_decl->type += "[]";
-            }
+                if(current().type == TokenType::LBRACKET){
+                    advance();
+                    expect(TokenType::RBRACKET, "Expected ']'");
+                    prop_decl->type += "[]";
+                }
 
-            prop_decl->name = current().value;
-            expect(TokenType::IDENTIFIER, "Expected prop name");
+                prop_decl->name = current().value;
+                expect(TokenType::IDENTIFIER, "Expected prop name");
+            }
 
             if(match(TokenType::ASSIGN)){
                 prop_decl->default_value = parse_expression();
