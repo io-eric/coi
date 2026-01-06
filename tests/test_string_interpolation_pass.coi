@@ -1,0 +1,17 @@
+// Test: string interpolation in view
+component StringInterpolationTest {
+    string name = "World";
+    int count = 42;
+
+    view {
+        <div>
+            <h1>"Hello, {name}!"</h1>
+            <p>"Count is {count}"</p>
+            <span style="color: blue;">styled text</span>
+        </div>
+    }
+}
+
+app {
+    root = StringInterpolationTest;
+}

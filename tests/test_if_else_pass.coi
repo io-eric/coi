@@ -1,0 +1,21 @@
+// Test: if/else conditional
+component IfElseTest {
+    mut int value = 10;
+    mut string message = "";
+
+    init {
+        if (value > 5) {
+            message = "Greater";
+        } else {
+            message = "Less or equal";
+        }
+    }
+
+    view {
+        <div>{message}</div>
+    }
+}
+
+app {
+    root = IfElseTest;
+}

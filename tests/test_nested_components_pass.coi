@@ -1,0 +1,31 @@
+// Test: nested component composition
+component Inner {
+    prop string text = "Inner";
+
+    view {
+        <span>{text}</span>
+    }
+}
+
+component Middle {
+    prop string prefix = "Middle";
+
+    view {
+        <div>
+            {prefix}: <Inner text="nested" />
+        </div>
+    }
+}
+
+component NestedTest {
+    view {
+        <div>
+            <Middle prefix="Level 1" />
+            <Middle prefix="Level 2" />
+        </div>
+    }
+}
+
+app {
+    root = NestedTest;
+}

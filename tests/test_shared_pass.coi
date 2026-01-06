@@ -1,0 +1,18 @@
+// Test: shared/static method calls (like System.log)
+component SharedTest {
+    def logMessage() : void {
+        System.log("Hello from shared method");
+    }
+
+    init {
+        logMessage();
+    }
+
+    view {
+        <div>"Shared Test"</div>
+    }
+}
+
+app {
+    root = SharedTest;
+}

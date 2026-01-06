@@ -1,0 +1,35 @@
+// Test: comparison operators in conditionals
+component ComparisonTest {
+    int x = 5;
+    int y = 10;
+    mut string result = "";
+
+    init {
+        if (x == y) {
+            result = "equal";
+        }
+        if (x != y) {
+            result = "not equal";
+        }
+        if (x < y) {
+            result = "x less than y";
+        }
+        if (y > x) {
+            result = "y greater than x";
+        }
+        if (x <= y) {
+            result = "x less or equal";
+        }
+        if (y >= x) {
+            result = "y greater or equal";
+        }
+    }
+
+    view {
+        <div>Result: {result}</div>
+    }
+}
+
+app {
+    root = ComparisonTest;
+}

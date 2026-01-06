@@ -1,0 +1,35 @@
+// Test: reference props for two-way binding
+component Editor {
+    prop mut int& value;
+
+    def increment() : void {
+        value++;
+    }
+
+    def decrement() : void {
+        value--;
+    }
+
+    view {
+        <div>
+            <button onclick={decrement}>"-"</button>
+            <span>{value}</span>
+            <button onclick={increment}>"+"</button>
+        </div>
+    }
+}
+
+component RefPropTest {
+    mut int counter = 0;
+
+    view {
+        <div>
+            <div>Parent value: {counter}</div>
+            <Editor &value={counter} />
+        </div>
+    }
+}
+
+app {
+    root = RefPropTest;
+}

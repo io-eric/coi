@@ -215,6 +215,49 @@ std::unique_ptr<Statement> Parser::parse_statement(){
         return ifStmt;
     }
 
+    // While
+    if(current().type == TokenType::WHILE){
+        advance();
+        expect(TokenType::LPAREN, "Expected '('");
+        auto cond = parse_expression();
+        expect(TokenType::RPAREN, "Expected ')'");
+        
+        auto whileStmt = std::make_unique<WhileStatement>();
+        whileStmt->condition = std::move(cond);
+        whileStmt->body = parse_statement();
+        return whileStmt;
+    }
+
+    // For
+    if(current().type == TokenType::FOR){
+        advance();
+        expect(TokenType::LPAREN, "Expected '('");
+        
+        auto forStmt = std::make_unique<ForStatement>();
+        
+        // Parse init (can be variable declaration or expression)
+        if(current().type != TokenType::SEMICOLON) {
+            forStmt->init = parse_statement(); // This handles var decl with semicolon
+        } else {
+            advance(); // skip semicolon
+        }
+        
+        // Parse condition
+        if(current().type != TokenType::SEMICOLON) {
+            forStmt->condition = parse_expression();
+        }
+        expect(TokenType::SEMICOLON, "Expected ';' after for condition");
+        
+        // Parse update
+        if(current().type != TokenType::RPAREN) {
+            forStmt->update = parse_expression();
+        }
+        expect(TokenType::RPAREN, "Expected ')'");
+        
+        forStmt->body = parse_statement();
+        return forStmt;
+    }
+
     // Return
     if(current().type == TokenType::RETURN){
         advance();

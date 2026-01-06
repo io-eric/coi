@@ -1,0 +1,14 @@
+// Test: missing return type on function should fail
+component MissingReturnTypeFail {
+    def doSomething() {
+        System.log("Missing return type");
+    }
+
+    view {
+        <div>"Test"</div>
+    }
+}
+
+app {
+    root = MissingReturnTypeFail;
+}

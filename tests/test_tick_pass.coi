@@ -1,0 +1,19 @@
+// Test: tick block for animation loop
+component TickTest {
+    mut float x = 0;
+    mut int direction = 1;
+
+    tick(float dt) {
+        x += direction * dt * 100;
+        if (x > 200) direction = -1;
+        if (x < 0) direction = 1;
+    }
+
+    view {
+        <div style="left: {x}px;">Moving</div>
+    }
+}
+
+app {
+    root = TickTest;
+}

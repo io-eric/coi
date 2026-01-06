@@ -130,9 +130,20 @@ std::string infer_expression_type(Expression* expr, const std::map<std::string, 
 void validate_types(const std::vector<Component>& components) {
     for (const auto& comp : components) {
         std::map<std::string, std::string> scope;
+        
+        // Check prop types and their default values
         for (const auto& prop : comp.props) {
-            scope[prop->name] = normalize_type(prop->type);
+            std::string type = normalize_type(prop->type);
+            if (prop->default_value) {
+                std::string init = infer_expression_type(prop->default_value.get(), scope);
+                if (init != "unknown" && !is_compatible_type(init, type)) {
+                    std::cerr << "Error: Prop '" << prop->name << "' expects '" << type << "' but initialized with '" << init << "'" << std::endl;
+                    exit(1);
+                }
+            }
+            scope[prop->name] = type;
         }
+        
         for (const auto& var : comp.state) {
             std::string type = normalize_type(var->type);
             if (var->initializer) {

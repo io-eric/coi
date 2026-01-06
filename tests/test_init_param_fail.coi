@@ -1,0 +1,14 @@
+// Test: init block should not have parameters (this should fail)
+component InitParamFail {
+    init(int x) {
+        System.log("This should fail");
+    }
+
+    view {
+        <div>"Test"</div>
+    }
+}
+
+app {
+    root = InitParamFail;
+}

@@ -383,6 +383,45 @@ void IfStatement::collect_dependencies(std::set<std::string>& deps) {
     if(else_branch) else_branch->collect_dependencies(deps);
 }
 
+std::string WhileStatement::to_webcc() {
+    std::string code = "while(" + condition->to_webcc() + ") ";
+    code += body->to_webcc();
+    return code;
+}
+void WhileStatement::collect_dependencies(std::set<std::string>& deps) {
+    condition->collect_dependencies(deps);
+    body->collect_dependencies(deps);
+}
+
+std::string ForStatement::to_webcc() {
+    std::string code = "for(";
+    if(init) {
+        // Remove trailing semicolon from init statement since for() adds it
+        std::string init_code = init->to_webcc();
+        if(!init_code.empty() && init_code.back() == ';') {
+            init_code.pop_back();
+        }
+        code += init_code;
+    }
+    code += "; ";
+    if(condition) {
+        code += condition->to_webcc();
+    }
+    code += "; ";
+    if(update) {
+        code += update->to_webcc();
+    }
+    code += ") ";
+    code += body->to_webcc();
+    return code;
+}
+void ForStatement::collect_dependencies(std::set<std::string>& deps) {
+    if(init) init->collect_dependencies(deps);
+    if(condition) condition->collect_dependencies(deps);
+    if(update) update->collect_dependencies(deps);
+    body->collect_dependencies(deps);
+}
+
 void collect_mods_recursive(Statement* stmt, std::set<std::string>& mods) {
     if(auto assign = dynamic_cast<Assignment*>(stmt)) {
         mods.insert(assign->name);
@@ -411,6 +450,13 @@ void collect_mods_recursive(Statement* stmt, std::set<std::string>& mods) {
         if(ifStmt->else_branch) {
             collect_mods_recursive(ifStmt->else_branch.get(), mods);
         }
+    }
+    else if(auto whileStmt = dynamic_cast<WhileStatement*>(stmt)) {
+        collect_mods_recursive(whileStmt->body.get(), mods);
+    }
+    else if(auto forStmt = dynamic_cast<ForStatement*>(stmt)) {
+        if(forStmt->init) collect_mods_recursive(forStmt->init.get(), mods);
+        collect_mods_recursive(forStmt->body.get(), mods);
     }
 }
 

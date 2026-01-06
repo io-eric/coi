@@ -1,0 +1,18 @@
+// Test: for loop syntax
+component ForLoopTest {
+    mut int sum = 0;
+
+    init {
+        for (int i = 0; i < 10; i++) {
+            sum += i;
+        }
+    }
+
+    view {
+        <div>Sum: {sum}</div>
+    }
+}
+
+app {
+    root = ForLoopTest;
+}

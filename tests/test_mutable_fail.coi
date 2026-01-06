@@ -1,0 +1,16 @@
+// Test: modifying non-mutable variable should fail
+component MutableFail {
+    int x = 0;
+
+    def increment() : void {
+        x++;
+    }
+
+    view {
+        <button onclick={increment}>"Click"</button>
+    }
+}
+
+app {
+    root = MutableFail;
+}

@@ -1,0 +1,28 @@
+// Test: function props (callbacks)
+component ChildButton {
+    prop def onclick : void;
+    prop string label = "Click";
+
+    view {
+        <button onclick={onclick}>{label}</button>
+    }
+}
+
+component FunctionPropTest {
+    mut int clicks = 0;
+
+    def handleClick() : void {
+        clicks++;
+    }
+
+    view {
+        <div>
+            <ChildButton &onclick={handleClick} label="Press me" />
+            <span>Clicks: {clicks}</span>
+        </div>
+    }
+}
+
+app {
+    root = FunctionPropTest;
+}

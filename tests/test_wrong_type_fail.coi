@@ -1,0 +1,12 @@
+// Test: assigning wrong type to prop should fail
+component WrongTypeFail {
+    prop int value = "string";
+
+    view {
+        <div>{value}</div>
+    }
+}
+
+app {
+    root = WrongTypeFail;
+}

@@ -1,0 +1,28 @@
+// Test: global styles
+component GlobalStyleTest {
+    style global {
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        * {
+            box-sizing: border-box;
+        }
+    }
+
+    style {
+        .local-class {
+            color: red;
+        }
+    }
+
+    view {
+        <div class="local-class">
+            <p>"Styled content"</p>
+        </div>
+    }
+}
+
+app {
+    root = GlobalStyleTest;
+}

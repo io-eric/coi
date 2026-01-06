@@ -1,0 +1,16 @@
+// Test: init block runs on component mount
+component InitTest {
+    mut int x = 0;
+
+    init {
+        x = 42;
+    }
+
+    view {
+        <div>{x}</div>
+    }
+}
+
+app {
+    root = InitTest;
+}
