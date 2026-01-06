@@ -1,0 +1,8 @@
+component Test {
+    def fail() : void {
+        Canvas c = dom.getBody();
+    }
+}
+app {
+    root = Test;
+}

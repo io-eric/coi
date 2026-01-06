@@ -11,5 +11,5 @@ component TestPropMutPass {
 }
 
 app {
-    root = TestPropMutPass
+    root = TestPropMutPass;
 }

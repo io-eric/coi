@@ -1,6 +1,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "ast.h"
+#include "schema_loader.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -15,6 +16,179 @@
 // =========================================================
 // MAIN COMPILER
 // =========================================================
+
+std::string normalize_type(const std::string& type) {
+    if (type == "int") return "int32";
+    if (type == "float") return "float32";
+    if (type == "bool") return "bool";
+    if (type == "string") return "string";
+    return type;
+}
+
+bool is_compatible_type(const std::string& source, const std::string& target) {
+    if (source == target) return true;
+    if (source == "unknown" || target == "unknown") return true;
+    if (SchemaLoader::instance().is_assignable_to(source, target)) return true;
+    if (source == "int32" && (target == "float32" || target == "uint8")) return true;
+    if (source == "int32" && SchemaLoader::instance().is_handle(target)) return true;
+    return false;
+}
+
+std::string infer_expression_type(Expression* expr, const std::map<std::string, std::string>& scope) {
+    if (dynamic_cast<IntLiteral*>(expr)) return "int32";
+    if (dynamic_cast<FloatLiteral*>(expr)) return "float32";
+    if (dynamic_cast<StringLiteral*>(expr)) return "string";
+    if (dynamic_cast<BoolLiteral*>(expr)) return "bool";
+    
+    if (auto id = dynamic_cast<Identifier*>(expr)) {
+        if (scope.count(id->name)) return scope.at(id->name);
+        if (SchemaLoader::instance().is_handle(id->name)) return id->name;
+        return "unknown"; 
+    }
+
+    if (auto func = dynamic_cast<FunctionCall*>(expr)) {
+        std::string full_name = func->name;
+        std::string obj_name;
+        std::string method_name = full_name;
+        
+        size_t dot_pos = full_name.rfind('.');
+        if (dot_pos != std::string::npos) {
+            obj_name = full_name.substr(0, dot_pos);
+            method_name = full_name.substr(dot_pos + 1);
+        }
+
+        std::string snake_method = SchemaLoader::to_snake_case(method_name);
+        const auto* entry = SchemaLoader::instance().lookup(snake_method);
+        
+        if (entry) {
+             size_t expected_args = entry->params.size();
+             size_t actual_args = func->args.size();
+             size_t param_offset = 0;
+             
+             bool implicit_obj = false;
+             if (!obj_name.empty()) {
+                  if (scope.count(obj_name)) {
+                      // Only treat as implicit object if function actually expects a handle as first arg
+                      if (!entry->params.empty()) {
+                            std::string first_param_type = entry->params[0].type;
+                            if (SchemaLoader::instance().is_handle(first_param_type)) {
+                                std::string obj_type = scope.at(obj_name);
+                                if (is_compatible_type(obj_type, first_param_type)) {
+                                    implicit_obj = true;
+                                }
+                            }
+                      }
+                  }
+             }
+             
+             if (implicit_obj) {
+                 param_offset = 1;
+             }
+             
+             if (actual_args != (expected_args - param_offset)) {
+                  std::cerr << "Error: Function '" << full_name << "' expects " << (expected_args - param_offset) 
+                            << " arguments but got " << actual_args << " line " << func->line << std::endl;
+                  exit(1);
+             }
+             
+             for (size_t i = 0; i < actual_args; ++i) {
+                 std::string arg_type = infer_expression_type(func->args[i].get(), scope);
+                 std::string expected_type = entry->params[i + param_offset].type;
+                 
+                 if (!is_compatible_type(arg_type, expected_type)) {
+                     std::cerr << "Error: Argument " << (i+1) << " of '" << full_name << "' expects '" << expected_type 
+                               << "' but got '" << arg_type << "' line " << func->line << std::endl;
+                     exit(1);
+                 }
+             }
+             
+             return entry->return_type.empty() ? "void" : entry->return_type;
+        } else {
+            if (!obj_name.empty() && scope.count(obj_name)) {
+                 std::string type = scope.at(obj_name);
+                 if (SchemaLoader::instance().is_handle(type)) {
+                      std::cerr << "Error: Method '" << method_name << "' not found for type '" << type << "' line " << func->line << std::endl;
+                      exit(1);
+                 }
+            }
+        }
+        return "unknown";
+    }
+
+    if (auto bin = dynamic_cast<BinaryOp*>(expr)) {
+        std::string l = infer_expression_type(bin->left.get(), scope);
+        std::string r = infer_expression_type(bin->right.get(), scope);
+        if (l == r) return l;
+        if (l == "int32" && r == "float32") return "float32";
+        if (l == "float32" && r == "int32") return "float32";
+        return "unknown";
+    }
+
+    return "unknown";
+}
+
+void validate_types(const std::vector<Component>& components) {
+    for (const auto& comp : components) {
+        std::map<std::string, std::string> scope;
+        for (const auto& prop : comp.props) {
+            scope[prop->name] = normalize_type(prop->type);
+        }
+        for (const auto& var : comp.state) {
+            std::string type = normalize_type(var->type);
+            if (var->initializer) {
+                std::string init = infer_expression_type(var->initializer.get(), scope);
+                if (init != "unknown" && !is_compatible_type(init, type)) {
+                     std::cerr << "Error: Variable '" << var->name << "' expects '" << type << "' but initialized with '" << init << "'" << std::endl;
+                     exit(1);
+                }
+            }
+            scope[var->name] = type;
+        }
+        
+        for (const auto& method : comp.methods) {
+            std::map<std::string, std::string> method_scope = scope;
+            for (const auto& param : method.params) {
+                method_scope[param.name] = normalize_type(param.type);
+            }
+            
+            std::function<void(const std::unique_ptr<Statement>&)> check_stmt;
+            check_stmt = [&](const std::unique_ptr<Statement>& stmt) {
+                    if (auto block = dynamic_cast<BlockStatement*>(stmt.get())) {
+                        for (const auto& s : block->statements) check_stmt(s);
+                    } else if (auto decl = dynamic_cast<VarDeclaration*>(stmt.get())) {
+                        std::string type = normalize_type(decl->type);
+                        if (decl->initializer) {
+                             std::string init = infer_expression_type(decl->initializer.get(), method_scope);
+                              if (init != "unknown" && !is_compatible_type(init, type)) {
+                                 std::cerr << "Error: Variable '" << decl->name << "' expects '" << type << "' but got '" << init << "' line " << decl->line << std::endl;
+                                 exit(1);
+                             }
+                        }
+                        method_scope[decl->name] = type;
+                    } else if (auto assign = dynamic_cast<Assignment*>(stmt.get())) {
+                         std::string var_type = method_scope.count(assign->name) ? method_scope.at(assign->name) : "unknown";
+                         std::string val_type = infer_expression_type(assign->value.get(), method_scope);
+                         
+                         if (var_type != "unknown" && val_type != "unknown") {
+                             if (!is_compatible_type(val_type, var_type)) {
+                                 std::cerr << "Error: Assigning '" << val_type << "' to '" << assign->name << "' of type '" << var_type << "' line " << assign->line << std::endl;
+                                 exit(1);
+                             }
+                         }
+                    } else if (auto expr_stmt = dynamic_cast<ExpressionStatement*>(stmt.get())) {
+                        infer_expression_type(expr_stmt->expression.get(), method_scope);
+                    } else if (auto if_stmt = dynamic_cast<IfStatement*>(stmt.get())) {
+                        check_stmt(if_stmt->then_branch);
+                        if(if_stmt->else_branch) check_stmt(if_stmt->else_branch);
+                    }
+            };
+            
+            for (const auto& stmt : method.body) {
+                check_stmt(stmt);
+            }
+        }
+    }
+}
 
 void validate_mutability(const std::vector<Component>& components) {
     for (const auto& comp : components) {
@@ -209,6 +383,9 @@ std::vector<Component*> topological_sort_components(std::vector<Component>& comp
 }
 
 int main(int argc, char** argv){
+    // Initialize SchemaLoader with embedded schema
+    SchemaLoader::instance().init();
+    
     if(argc < 2){
         std::cerr << "Usage: " << argv[0] << " <input.coi> [--cc-only] [--keep-cc] [--out <dir> | -o <dir>]" << std::endl;
         return 1;
@@ -308,6 +485,7 @@ int main(int argc, char** argv){
 
         validate_view_hierarchy(all_components);
         validate_mutability(all_components);
+        validate_types(all_components);
 
         // Determine output filename
         namespace fs = std::filesystem;

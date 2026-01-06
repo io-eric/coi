@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "schema_loader.h"
 #include <cctype>
 #include <algorithm>
 
@@ -10,6 +11,10 @@ std::string convert_type(const std::string& type) {
     if (type.ends_with("[]")) {
         std::string inner = type.substr(0, type.length() - 2);
         return "SimpleVector<" + convert_type(inner) + ">";
+    }
+    // Check if type is a webcc handle type and add prefix
+    if (SchemaLoader::instance().is_handle(type)) {
+        return "webcc::" + type;
     }
     return type;
 }
@@ -191,6 +196,75 @@ std::string FunctionCall::to_webcc() {
         return code;
     }
 
+    // Check for Schema-based transformation (e.g. canvas.setSize -> webcc::canvas::set_size(canvas, ...))
+    size_t dot_pos = name.rfind('.');
+    const coi::SchemaEntry* entry = nullptr;
+    std::string obj_arg = "";
+    bool pass_obj = false;
+
+    if (dot_pos != std::string::npos && dot_pos > 0 && dot_pos < name.length() - 1) {
+        std::string obj = name.substr(0, dot_pos);
+        std::string method = name.substr(dot_pos + 1);
+        
+        std::string snake_method = SchemaLoader::to_snake_case(method);
+        entry = SchemaLoader::instance().lookup(snake_method);
+        
+        if (entry) {
+            // Check if we should pass 'obj' as the first argument to support OOP-style calls
+            // e.g. canvas.drawRect(...) -> webcc::canvas::draw_rect(canvas, ...)
+            //
+            // Conditions:
+            // 1. Function has parameters
+            // 2. First parameter is a Handle type (e.g. Canvas, DOMElement)
+            // 3. The actual arguments count is ONE LESS than expected parameters count
+            if (!entry->params.empty()) {
+                const std::string& first_param_type = entry->params[0].type;
+                if (SchemaLoader::instance().is_handle(first_param_type) && 
+                    args.size() == entry->params.size() - 1) {
+                     pass_obj = true;
+                     obj_arg = obj;
+                }
+            }
+        }
+    } else {
+        // No dot, try global lookup
+        std::string snake_name = SchemaLoader::to_snake_case(name);
+        entry = SchemaLoader::instance().lookup(snake_name);
+    }
+
+
+    if (entry) {
+        std::string code = "webcc::" + entry->ns + "::" + entry->func_name + "(";
+        
+        size_t param_idx = 0;
+        bool first_arg = true;
+
+        if (pass_obj) {
+            // typed_handle types implicitly convert to webcc::handle, no cast needed
+            code += obj_arg;
+            first_arg = false;
+            param_idx++;
+        }
+
+        for(size_t i = 0; i < args.size(); i++){
+            if (!first_arg) code += ", ";
+            // typed_handle types implicitly convert to webcc::handle, no cast needed
+            std::string arg_val = args[i]->to_webcc();
+            
+            code += arg_val;
+            first_arg = false;
+            param_idx++;
+        }
+        code += ")";
+        
+        // Cast return type if it is int32 (handles are returned as webcc::handle which has explicit cast)
+        if (entry->return_type == "int32") {
+            code = "(int32_t)(" + code + ")";
+        }
+        
+        return code;
+    }
+
     std::string result = name + "(";
     for(size_t i = 0; i < args.size(); i++){
         if(i > 0) result += ", ";
@@ -239,7 +313,12 @@ std::string VarDeclaration::to_webcc() {
     if(is_reference) result += "&";
     result += " " + name;
     if(initializer) {
-        result += " = " + initializer->to_webcc();
+        // Use brace initialization for handle types to work with typed_handle's explicit constructor
+        if (SchemaLoader::instance().is_handle(type)) {
+            result += "{" + initializer->to_webcc() + "}";
+        } else {
+            result += " = " + initializer->to_webcc();
+        }
     }
     result += ";";
     return result;
@@ -261,10 +340,15 @@ void Assignment::collect_dependencies(std::set<std::string>& deps) {
 }
 
 std::string ReturnStatement::to_webcc() {
-    return "return " + value->to_webcc() + ";";
+    if (value) {
+        return "return " + value->to_webcc() + ";";
+    }
+    return "return;";
 }
 void ReturnStatement::collect_dependencies(std::set<std::string>& deps) {
-    value->collect_dependencies(deps);
+    if (value) {
+        value->collect_dependencies(deps);
+    }
 }
 
 std::string ExpressionStatement::to_webcc() {
@@ -661,7 +745,12 @@ std::string Component::to_webcc() {
         if(var->is_reference) ss << "&";
         ss << " " << var->name;
         if(var->initializer){
-            ss << " = " << var->initializer->to_webcc();
+            // Use brace initialization for handle types to work with typed_handle's explicit constructor
+            if (SchemaLoader::instance().is_handle(var->type)) {
+                ss << "{" << var->initializer->to_webcc() << "}";
+            } else {
+                ss << " = " << var->initializer->to_webcc();
+            }
         }
         ss << ";\n";
     }

@@ -11,5 +11,5 @@ component TestPropMut {
 }
 
 app {
-    root = TestPropMut
+    root = TestPropMut;
 }

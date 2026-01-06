@@ -219,7 +219,9 @@ std::unique_ptr<Statement> Parser::parse_statement(){
     if(current().type == TokenType::RETURN){
         advance();
         auto ret = std::make_unique<ReturnStatement>();
-        ret->value = parse_expression();
+        if (current().type != TokenType::SEMICOLON) {
+            ret->value = parse_expression();
+        }
         expect(TokenType::SEMICOLON, "Expected ';'");
         return ret;
     }
@@ -231,8 +233,30 @@ std::unique_ptr<Statement> Parser::parse_statement(){
         advance();
     }
 
+    bool is_type = false;
     if(current().type == TokenType::INT || current().type == TokenType::STRING ||
-        current().type == TokenType::FLOAT || current().type == TokenType::BOOL){
+       current().type == TokenType::FLOAT || current().type == TokenType::BOOL) {
+        is_type = true;
+    } else if (current().type == TokenType::IDENTIFIER) {
+        // Distinguish between Variable Declaration and other statements starting with Identifier
+        // Declaration: Type Name ... | Type[] Name ... | Type& Name ...
+        // Assignment:  Name = ... | Name[index] = ...
+        // Call:        Name(...)
+        
+        Token next = peek(1);
+        if (next.type == TokenType::IDENTIFIER) {
+            is_type = true; // "Type Name"
+        } else if (next.type == TokenType::AMPERSAND) {
+            is_type = true; // "Type& Name"
+        } else if (next.type == TokenType::LBRACKET) {
+            // Check for "Type[] Name"
+            if (peek(2).type == TokenType::RBRACKET && peek(3).type == TokenType::IDENTIFIER) {
+                is_type = true;
+            }
+        }
+    }
+
+    if(is_type){
 
         std::string type = current().value;
         advance();

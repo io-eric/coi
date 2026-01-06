@@ -22,11 +22,13 @@ if ! command -v webcc >/dev/null 2>&1; then
     export PATH="$PWD/deps/webcc:$PATH"
 fi
 
-echo "[COI] Compiling compiler..."
-# Compile the compiler (now split into multiple files)
-g++ -std=c++20 -O3 -o coi src/main.cc src/lexer.cc src/parser.cc src/ast.cc
+if ! command -v ninja >/dev/null 2>&1; then
+    echo "[COI] Ninja not found. Please install ninja-build."
+    exit 1
+fi
 
-echo "[COI] Done."
+echo "[COI] Running Ninja..."
+ninja
 
 # Check if coi is already linked correctly
 if command -v coi >/dev/null 2>&1 && [ "$(command -v coi)" -ef "$PWD/coi" ]; then

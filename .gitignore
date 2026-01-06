@@ -2,3 +2,4 @@ coi
 **/dist/
 **/build/
 .vscode
+.ninja_log

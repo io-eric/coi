@@ -9,5 +9,5 @@ component Main {
 }
 
 app {
-    root = Main
+    root = Main;
 }
