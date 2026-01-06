@@ -100,6 +100,67 @@ To compile a `.coi` file:
 coi App.coi --out ./dist
 ```
 
+## Language Basics
+
+Coi is a statically-typed language with familiar C-style syntax. Here's an overview of the core features:
+
+### Types
+```tsx
+int count = 42;          // Integer
+float speed = 3.14;      // Floating point
+string name = "Coi";     // String
+bool active = true;      // Boolean
+```
+
+### Control Flow
+
+**Conditionals:**
+```tsx
+if (x > 10) {
+    message = "big";
+} else {
+    message = "small";
+}
+```
+
+**For Loops:**
+```tsx
+for (int i = 0; i < 10; i++) {
+    sum += i;
+}
+```
+
+**While Loops:**
+```tsx
+while (count < 100) {
+    count++;
+}
+```
+
+### Operators
+```tsx
+// Arithmetic
+int sum = a + b;
+int diff = a - b;
+int prod = a * b;
+int quot = a / b;
+int mod = a % b;
+
+// Comparison
+if (x == y) { /* equal */ }
+if (x != y) { /* not equal */ }
+if (x < y)  { /* less than */ }
+if (x > y)  { /* greater than */ }
+if (x <= y) { /* less or equal */ }
+if (x >= y) { /* greater or equal */ }
+
+// Assignment
+count += 10;
+count -= 5;
+count++;
+count--;
+```
+
 ## State & References
 
 Coi provides a powerful system for managing state and component communication:
