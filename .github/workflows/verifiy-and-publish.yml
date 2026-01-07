@@ -34,6 +34,9 @@ jobs:
       - name: Build Compiler
         run: ./build.sh
 
+      - name: Add webcc to PATH
+        run: echo "$PWD/deps/webcc" >> $GITHUB_PATH
+
       - name: Run Tests
         run: ./tests/run_tests.sh
 
