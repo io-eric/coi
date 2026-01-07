@@ -1,15 +1,11 @@
 // Test: nested component composition
-component Inner {
-    prop string text = "Inner";
-
+component Inner(string text = "Inner") {
     view {
         <span>{text}</span>
     }
 }
 
-component Middle {
-    prop string prefix = "Middle";
-
+component Middle(string prefix = "Middle") {
     view {
         <div>
             {prefix}: <Inner text="nested" />

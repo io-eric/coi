@@ -1,0 +1,38 @@
+// Test: pub visibility and component construction syntax
+// component NetworkManager(string url, pub int port) means:
+//   - url is private (only accessible within NetworkManager)
+//   - port is public (accessible from outside as net.port)
+
+component Counter(pub mut int count = 0) {
+    // count is public, so parent can read/write it via counter.count
+
+    pub def increment() : void {
+        count++;
+    }
+
+    def reset() : void {
+        count = 0;
+    }
+
+    view {
+        <div>
+            <span>Count: {count}</span>
+            <button onclick={increment}>"+"</button>
+        </div>
+    }
+}
+
+component App {
+    mut int total = 100;
+
+    view {
+        <div>
+            <div>Total: {total}</div>
+            <Counter count={total} />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}

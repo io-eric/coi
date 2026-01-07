@@ -18,7 +18,7 @@ component GlobalStyleTest {
 
     view {
         <div class="local-class">
-            <p>"Styled content"</p>
+            <p>Styled content</p>
         </div>
     }
 }

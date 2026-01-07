@@ -1,8 +1,8 @@
-component FeatureCard {
-    prop string title;
-    prop string description;
-    prop string icon;
-
+component FeatureCard(
+    string title,
+    string description,
+    string icon
+) {
     style {
         .card {
             padding: 28px;

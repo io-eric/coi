@@ -1,12 +1,11 @@
-component TestPropMut {
-    prop int& count;
+component TestPropMut(int& count) {
 
     def update() : void {
         count++;
     }
 
     view {
-        <button onclick={update}>"Click"</button>
+        <button onclick={update}>Click</button>
     }
 }
 

@@ -1,10 +1,10 @@
 // CodeView - A syntax-highlighted code display component with built-in tokenizer
 // Simple character-by-character tokenizer using state machine (no while loops)
 
-component CodeView {
-    prop string code;
-    prop string width = "420px";
-
+component CodeView(
+    string code,
+    string width = "420px"
+) {
     mut DOMElement codeEl;
     mut string highlighted = "";
 

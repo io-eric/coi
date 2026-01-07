@@ -7,7 +7,7 @@ component MutableFail {
     }
 
     view {
-        <button onclick={increment}>"Click"</button>
+        <button onclick={increment}>Click</button>
     }
 }
 

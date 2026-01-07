@@ -5,7 +5,7 @@ component MissingReturnTypeFail {
     }
 
     view {
-        <div>"Test"</div>
+        <div>Test</div>
     }
 }
 

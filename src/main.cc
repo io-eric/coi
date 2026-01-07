@@ -222,21 +222,37 @@ void validate_types(const std::vector<Component>& components) {
     for (const auto& comp : components) {
         std::map<std::string, std::string> scope;
         
-        // Check prop types and their default values
-        for (const auto& prop : comp.props) {
-            std::string type = normalize_type(prop->type);
-            if (prop->default_value) {
-                std::string init = infer_expression_type(prop->default_value.get(), scope);
+        // Check component parameter types and their default values
+        for (const auto& param : comp.params) {
+            std::string type = normalize_type(param->type);
+            
+            // Disallow pub on reference parameters - references point to parent's data
+            // and should never be exposed to third parties
+            if (param->is_public && param->is_reference) {
+                std::cerr << "Error: Reference parameter '" << param->name << "' cannot be public. "
+                          << "References point to the parent's data and exposing them would break encapsulation." << std::endl;
+                exit(1);
+            }
+            
+            if (param->default_value) {
+                std::string init = infer_expression_type(param->default_value.get(), scope);
                 if (init != "unknown" && !is_compatible_type(init, type)) {
-                    std::cerr << "Error: Prop '" << prop->name << "' expects '" << type << "' but initialized with '" << init << "'" << std::endl;
+                    std::cerr << "Error: Parameter '" << param->name << "' expects '" << type << "' but initialized with '" << init << "'" << std::endl;
                     exit(1);
                 }
             }
-            scope[prop->name] = type;
+            scope[param->name] = type;
         }
         
         for (const auto& var : comp.state) {
             std::string type = normalize_type(var->type);
+            
+            // Disallow pub on reference state variables for the same reason
+            if (var->is_public && var->is_reference) {
+                std::cerr << "Error: Reference variable '" << var->name << "' cannot be public. "
+                          << "References point to other data and exposing them would break encapsulation." << std::endl;
+                exit(1);
+            }
 
             // Disallow uninitialized references (they must be bound immediately)
             if (var->is_reference && !var->initializer) {
@@ -328,9 +344,9 @@ void validate_mutability(const std::vector<Component>& components) {
                 mutable_vars.insert(var->name);
             }
         }
-        for (const auto& prop : comp.props) {
-            if (prop->is_mutable) {
-                mutable_vars.insert(prop->name);
+        for (const auto& param : comp.params) {
+            if (param->is_mutable) {
+                mutable_vars.insert(param->name);
             }
         }
 
@@ -343,7 +359,7 @@ void validate_mutability(const std::vector<Component>& components) {
                 // Check if this variable exists in state and is not mutable
                 bool is_known_var = false;
                 bool is_mutable = false;
-                bool is_prop = false;
+                bool is_param = false;
 
                 for (const auto& var : comp.state) {
                     if (var->name == var_name) {
@@ -354,20 +370,20 @@ void validate_mutability(const std::vector<Component>& components) {
                 }
                 
                 if (!is_known_var) {
-                    for (const auto& prop : comp.props) {
-                        if (prop->name == var_name) {
+                    for (const auto& param : comp.params) {
+                        if (param->name == var_name) {
                             is_known_var = true;
-                            is_prop = true;
-                            is_mutable = prop->is_mutable;
+                            is_param = true;
+                            is_mutable = param->is_mutable;
                             break;
                         }
                     }
                 }
                 
                 if (is_known_var && !is_mutable) {
-                    if (is_prop) {
-                        throw std::runtime_error("Cannot modify prop '" + var_name + "' in component '" + comp.name + 
-                            "': prop is not mutable. Add 'mut' keyword to prop declaration: prop mut " + var_name);
+                    if (is_param) {
+                        throw std::runtime_error("Cannot modify parameter '" + var_name + "' in component '" + comp.name + 
+                            "': parameter is not mutable. Add 'mut' keyword to parameter declaration: mut " + var_name);
                     } else {
                         throw std::runtime_error("Cannot modify '" + var_name + "' in component '" + comp.name + 
                             "': variable is not mutable. Add 'mut' keyword to make it mutable: mut " + var_name);
@@ -394,31 +410,31 @@ void validate_view_hierarchy(const std::vector<Component>& components) {
                      throw std::runtime_error("Component '" + comp_inst->component_name + "' is used in a view but has no view definition (logic-only component) at line " + std::to_string(comp_inst->line));
                 }
                 
-                // Validate reference props
+                // Validate reference params
                 const Component* target_comp = it->second;
-                std::set<std::string> passed_prop_names;
+                std::set<std::string> passed_param_names;
 
                 for (auto& passed_prop : comp_inst->props) {
-                    passed_prop_names.insert(passed_prop.name);
-                    // Find the prop declaration in the target component
-                    bool prop_found = false;
-                    for (const auto& declared_prop : target_comp->props) {
-                        if (declared_prop->name == passed_prop.name) {
-                            prop_found = true;
-                            passed_prop.is_mutable_def = declared_prop->is_mutable;
-                            if (declared_prop->is_reference && !passed_prop.is_reference) {
+                    passed_param_names.insert(passed_prop.name);
+                    // Find the param declaration in the target component
+                    bool param_found = false;
+                    for (const auto& declared_param : target_comp->params) {
+                        if (declared_param->name == passed_prop.name) {
+                            param_found = true;
+                            passed_prop.is_mutable_def = declared_param->is_mutable;
+                            if (declared_param->is_reference && !passed_prop.is_reference) {
                                 throw std::runtime_error(
-                                    "Prop '" + passed_prop.name + "' in component '" + comp_inst->component_name + 
+                                    "Parameter '" + passed_prop.name + "' in component '" + comp_inst->component_name + 
                                     "' expects a reference. Use '&" + passed_prop.name + "={...}' syntax at line " + 
                                     std::to_string(comp_inst->line));
                             }
-                            if (!declared_prop->is_reference && passed_prop.is_reference) {
-                                // Allow & syntax for function props (webcc::function)
-                                if (declared_prop->type.find("webcc::function") == 0) {
+                            if (!declared_param->is_reference && passed_prop.is_reference) {
+                                // Allow & syntax for function params (webcc::function)
+                                if (declared_param->type.find("webcc::function") == 0) {
                                     // OK
                                 } else {
                                     throw std::runtime_error(
-                                        "Prop '" + passed_prop.name + "' in component '" + comp_inst->component_name + 
+                                        "Parameter '" + passed_prop.name + "' in component '" + comp_inst->component_name + 
                                         "' does not expect a reference. Remove '&' prefix at line " + 
                                         std::to_string(comp_inst->line));
                                 }
@@ -426,16 +442,16 @@ void validate_view_hierarchy(const std::vector<Component>& components) {
                             break;
                         }
                     }
-                    if (!prop_found) {
-                        // Warn or error about unknown prop?
-                        // For now we focus on missing required props.
+                    if (!param_found) {
+                        // Warn or error about unknown param?
+                        // For now we focus on missing required params.
                     }
                 }
 
-                // Check for missing required reference props
-                for (const auto& declared_prop : target_comp->props) {
-                    if (declared_prop->is_reference && passed_prop_names.find(declared_prop->name) == passed_prop_names.end()) {
-                        throw std::runtime_error("Missing required reference prop '&" + declared_prop->name + "' for component '" + comp_inst->component_name + "' at line " + std::to_string(comp_inst->line));
+                // Check for missing required reference params
+                for (const auto& declared_param : target_comp->params) {
+                    if (declared_param->is_reference && passed_param_names.find(declared_param->name) == passed_param_names.end()) {
+                        throw std::runtime_error("Missing required reference parameter '&" + declared_param->name + "' for component '" + comp_inst->component_name + "' at line " + std::to_string(comp_inst->line));
                     }
                 }
             }

@@ -19,22 +19,23 @@ Compiles to WASM, JS, and HTML with tiny binaries and efficient updates for DOM,
 ## Features
 
 - **Fine-Grained Reactivity**: State changes map directly to DOM elements at compile-time. Update only what changed, exactly where it changed, without Virtual DOM overhead.
-- **Type-Safe Components**: Compile-time error checking with strictly typed props and state.
-- **Reference Props**: Pass state by reference with `&` for seamless parent-child synchronization.
+- **Type-Safe Components**: Compile-time error checking with strictly typed parameters and state.
+- **Reference Parameters**: Pass state by reference with `&` for seamless parent-child synchronization.
+- **Private by Default**: Component members are private by default; use `pub` to expose them.
 - **Minimal Runtime**: Tiny WASM binaries with high-performance updates for DOM, Canvas, and more.
 - **Integrated Styling**: Write standard HTML and scoped CSS directly in components.
-- **Component Composition**: Build complex UIs from reusable components with typed props.
+- **Component Composition**: Build complex UIs from reusable components with typed parameters.
 - **View Control Flow**: Declarative `<if>`, `<else>`, and `<for>` tags for conditional rendering and list iteration directly in the view.
 - **Animation & Lifecycle**: Built-in `tick {}` block for frame-based animations, `init {}` for pre-render setup, and `mount {}` for post-render initialization when DOM elements are available.
 - **Auto-Generated APIs**: Browser APIs (Canvas, Storage, Audio, etc.) are automatically generated from the [WebCC](https://github.com/io-eric/webcc) schema; new WebCC features instantly become available in Coi.
 - **VS Code Extension**: Full language support with syntax highlighting, completions, hover docs, and signature help, also auto-generated from the schema.
 
 ## Example
-
+****
 ```tsx
-component Counter {
-    prop string label;
-    prop mut int& value;  // Reference to parent's state
+component Counter(string label, mut int& value) {
+    // label: passed by value
+    // value: reference to parent's state (mut allows modification)
 
     def add(int i) : void {
         value += i;
@@ -116,6 +117,18 @@ To compile a `.coi` file:
 ```bash
 coi App.coi --out ./dist
 ```
+
+## Imports
+
+Coi supports importing other `.coi` files to organize your code into multiple files:
+
+```tsx
+import "components/Button.coi";
+import "layout/Header.coi";
+import "../shared/Utils.coi";
+```
+
+Imports are relative to the current file's location. All components defined in imported files become available in the current file.
 
 ## Language Basics
 
@@ -235,12 +248,12 @@ int quot = a / b;
 int mod = a % b;
 
 // Comparison
-if (x == y) { /* equal */ }
-if (x != y) { /* not equal */ }
-if (x < y)  { /* less than */ }
-if (x > y)  { /* greater than */ }
-if (x <= y) { /* less or equal */ }
-if (x >= y) { /* greater or equal */ }
+if (x == y) { }  // equal
+if (x != y) { }  // not equal
+if (x < y)  { }  // less than
+if (x > y)  { }  // greater than
+if (x <= y) { }  // less or equal
+if (x >= y) { }  // greater or equal
 
 // Assignment
 count += 10;
@@ -253,37 +266,96 @@ count--;
 
 Coi provides a powerful system for managing state and component communication:
 
-### Mutability (`mut`)
-Variables declared with `mut` are reactive. When a `mut` variable is modified (e.g., `count++`), Coi automatically triggers an update for any DOM elements or child components that depend on that variable.
+### Mutability (`mut`) and Visibility (`pub`)
+
+Coi uses two orthogonal modifiers for variables:
+- **`mut`**: Makes a variable mutable (can be changed from inside the component)
+- **`pub`**: Makes a variable visible (can be read from outside the component)
+
+| Syntax | Inside Component | Outside Component | Description |
+|--------|------------------|-------------------|-------------|
+| `int x` | Read Only | Hidden | Private constant |
+| `mut int x` | Read/Write | Hidden | Private mutable state |
+| `pub int x` | Read Only | Read Only | Public constant |
+| `pub mut int x` | Read/Write | Read Only | Public state (read-only outside) |
+
+**Important**: You can never write to a component's member from outside. If you need to modify a child's state, use a setter method or reference parameters.
+**Why?**: This protects encapsulation and ensures controlled, predictable state changes, preventing bugs and side effects.
 
 ```tsx
-mut int count = 0; // Reactive state
-int fixed = 10;    // Constant state (cannot be modified)
+component Counter(pub mut int count = 0) {
+    // count: public (readable outside), mutable (changeable inside)
+    
+    mut int internal = 0;      // Private, mutable
+    pub int version = 1;       // Public, constant
+    
+    def helper() : void { }    // Private method
+    pub def reset() : void {   // Public method
+        count = 0;
+    }
+}
+
+component App {
+    view {
+        <div>
+            // Can READ counter.count (it's pub)
+            // Cannot WRITE counter.count = 5 (not allowed from outside)
+            // Must use counter.reset() to modify
+            <Counter />
+        </div>
+    }
+}
 ```
 
-### Reference Props (`&`)
-You can pass state to child components by reference using the `&` operator. This allows the child component to modify the parent's state directly.
+### Component Parameters
+Components receive data through constructor-style parameters. Parameters can be:
+- **Value parameters**: Passed by value (copied)
+- **Reference parameters** (`&`): Passed by reference for two-way binding
+- **Function parameters** (`def`): Callbacks passed by reference
 
-1. **Declaration**: In the child component, declare the prop with `&`. Use `mut` if the component modifies the value.
+```tsx
+component Editor(
+    string label,           // Value parameter with no default (required)
+    mut int& value,         // Reference parameter (two-way binding)
+    int step = 1,           // Value parameter with default
+    def onChange : void     // Function parameter
+) {
+    def increment() : void {
+        value += step;      // Modifies parent's state
+        onChange();         // Call parent's callback
+    }
+    
+    view {
+        <button onclick={increment}>{label}</button>
+    }
+}
+```
+
+### Reference Parameters (`&`)
+Reference parameters allow child components to modify the parent's state directly. 
+
+**Note**: Reference parameters cannot be `pub` — they point to the parent's data, and exposing them would break encapsulation.
+
+1. **Declaration**: In the component signature, declare the parameter with `&`. Use `mut` if the component modifies it.
    ```tsx
-   prop mut int& count;
+   component StepButton(mut int& count) { ... }
    ```
 
-2. **Passing**: In the parent component, pass the variable with `&`.
+2. **Passing**: When using the component, bind with `&`.
    ```tsx
    <StepButton &count={score} />
    ```
 
-When the child modifies `count`, the parent's UI (the `score` display) will automatically update to reflect the change. Coi handles the synchronization by generating efficient `onChange` callbacks.
+When the child modifies `count`, the parent's UI (the `score` display) will automatically update. Coi handles synchronization by generating efficient `onChange` callbacks.
 
-### Function Props (`def`)
-You can pass functions as props to components. Since functions are passed by reference, you must use the `&` operator when passing them. Function props are useful for triggering logic in the parent or for retrieving data.
+### Function Parameters (`def`)
+You can pass functions as parameters to components. Since functions are passed by reference, use the `&` operator when passing them.
 
 ```tsx
-component CustomButton {
-    prop string label;
-    prop def onclick : void;
-
+component CustomButton(
+    string label,
+    def onclick : void
+) {
     view {
         <button onclick={onclick}>{label}</button>
     }
@@ -291,7 +363,7 @@ component CustomButton {
 
 component App {
     def handleClick() : void {
-        // Handle click
+        // Handle click logic here
     }
 
     view {
@@ -299,6 +371,62 @@ component App {
     }
 }
 ```
+
+## Logic-Only Components
+
+Components don't require a `view` block. You can create logic-only components for state management, timers, network handlers, etc.:
+
+```tsx
+component Timer {
+    pub mut int elapsed = 0;
+    pub mut bool running = false;
+    
+    tick(float dt) {
+        if (running) {
+            elapsed++;
+        }
+    }
+    
+    pub def start() : void {
+        running = true;
+    }
+    
+    pub def stop() : void {
+        running = false;
+    }
+    
+    pub def reset() : void {
+        elapsed = 0;
+    }
+    
+    // No view block needed!
+}
+
+component App {
+    mut Timer timer;
+    
+    def toggleTimer() : void {
+        if (timer.running) {
+            timer.stop();
+        } else {
+            timer.start();
+        }
+    }
+    
+    view {
+        <div>
+            <span>Elapsed: {timer.elapsed}</span>
+            <button onclick={toggleTimer}>Toggle</button>
+        </div>
+    }
+}
+```
+
+Logic-only components are useful for:
+- **State management**: Encapsulate complex state logic
+- **Timers & animations**: Use `tick` for frame-based updates
+- **Network/API handlers**: Manage async operations
+- **Game logic**: Separate game state from rendering
 
 ## Styling
 
@@ -310,14 +438,14 @@ By default, styles defined within a `style { ... }` block are **scoped** to that
 ```tsx
 component Card {
     style {
-        /* This only affects divs inside the Card component */
+        // This only affects divs inside the Card component
         div {
             padding: 20px;
             border: 1px solid #eee;
         }
     }
     view {
-        <div>"I am a scoped card"</div>
+        <div>I am a scoped card</div>
     }
 }
 ```
@@ -327,7 +455,7 @@ If you need to define global styles (e.g., for resets or base typography), you c
 
 ```tsx
 component App {
-    /* Global styles (not scoped) */
+    // Global styles (not scoped)
     style global {
         body {
             margin: 0;
@@ -335,7 +463,7 @@ component App {
         }
     }
 
-    /* Scoped styles (only affects this component) */
+    // Scoped styles (only affects this component)
     style {
         .container {
             max-width: 1200px;
@@ -424,9 +552,9 @@ component TodoApp {
 
     view {
         <div>
-            <input value={input} oninput={/* update input */} />
-            <button onclick={save}>"Save"</button>
-            <p>"Saved: " {saved}</p>
+            <input value={input} />
+            <button onclick={save}>Save</button>
+            <p>Saved: {saved}</p>
         </div>
     }
 }
@@ -456,7 +584,7 @@ component Gallery {
     view {
         <div>
             <canvas &={canvas}></canvas>
-            <button onclick={draw}>"Draw"</button>
+            <button onclick={draw}>Draw</button>
         </div>
     }
 }

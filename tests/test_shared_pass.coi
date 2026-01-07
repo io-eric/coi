@@ -9,7 +9,7 @@ component SharedTest {
     }
 
     view {
-        <div>"Shared Test"</div>
+        <div>Shared Test</div>
     }
 }
 

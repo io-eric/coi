@@ -1,9 +1,9 @@
-component Button {
-    prop string label = "Button";
-    prop string type = "primary";
-    prop string href = "";
-    prop def onclick : void;
-
+component Button(
+    string label = "Button",
+    string type = "primary",
+    string href = "",
+    def onclick : void
+) {
     def handleClick() : void {
         if (!href.isEmpty()) {
             System.openUrl(href);

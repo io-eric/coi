@@ -1,0 +1,43 @@
+// Test: Parent reacts to changes in child's pub mut member
+// When a child component's pub mut variable changes, the parent's
+// view that depends on it (via <if child.member>) should update
+
+component Network {
+    pub mut bool connected = false;
+    
+    pub def connect() : void {
+        connected = true;
+    }
+    
+    pub def disconnect() : void {
+        connected = false;
+    }
+    
+    view {
+        <div></div>
+    }
+}
+
+component App {
+    mut Network net;
+    
+    def doConnect() : void {
+        net.connect();
+    }
+    
+    view {
+        <div>
+            <if net.connected>
+                <h1>"Connected!"</h1>
+            <else>
+                <h1>Disconnected</h1>
+            </else>
+            </if>
+            <button onclick={doConnect}>Connect</button>
+        </div>
+    }
+}
+
+app {
+    root = App;
+}

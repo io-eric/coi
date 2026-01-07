@@ -1,0 +1,21 @@
+// Test: Reference parameters cannot be public
+// References point to parent's data - exposing them breaks encapsulation
+
+component Child(pub mut int& val) {
+    // ERROR: Reference parameter cannot be public
+    view {
+        <span>{val}</span>
+    }
+}
+
+component App {
+    mut int secret = 100;
+
+    view {
+        <Child &val={secret} />
+    }
+}
+
+app {
+    root = App;
+}

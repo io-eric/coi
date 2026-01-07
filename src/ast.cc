@@ -354,6 +354,14 @@ std::string MemberAccess::to_webcc() {
 void MemberAccess::collect_dependencies(std::set<std::string>& deps) {
     object->collect_dependencies(deps);
 }
+void MemberAccess::collect_member_dependencies(std::set<MemberDependency>& member_deps) {
+    // If the object is a simple identifier (e.g., net.connected), track it
+    if (auto id = dynamic_cast<Identifier*>(object.get())) {
+        member_deps.insert({id->name, member});
+    }
+    // Also recurse into the object for nested access
+    object->collect_member_dependencies(member_deps);
+}
 
 PostfixOp::PostfixOp(std::unique_ptr<Expression> expr, const std::string& o)
     : operand(std::move(expr)), op(o) {}
@@ -420,6 +428,18 @@ bool ArrayRepeatLiteral::is_static() {
     return value->is_static();
 }
 
+std::string ComponentConstruction::to_webcc() {
+    // Component construction generates the component type name followed by ()
+    // The actual initialization is handled in VarDeclaration::to_webcc
+    return component_name + "()";
+}
+
+void ComponentConstruction::collect_dependencies(std::set<std::string>& deps) {
+    for (auto& arg : args) {
+        arg.value->collect_dependencies(deps);
+    }
+}
+
 IndexAccess::IndexAccess(std::unique_ptr<Expression> arr, std::unique_ptr<Expression> idx)
     : array(std::move(arr)), index(std::move(idx)) {}
 
@@ -478,7 +498,7 @@ std::string VarDeclaration::to_webcc() {
     return result;
 }
 
-std::string PropDeclaration::to_webcc() {
+std::string ComponentParam::to_webcc() {
     return "";
 }
 
@@ -979,6 +999,7 @@ void ViewIfStatement::generate_code(std::stringstream& ss, const std::string& pa
     region.if_id = my_if_id;
     region.condition_code = condition->to_webcc();
     condition->collect_dependencies(region.dependencies);
+    condition->collect_member_dependencies(region.member_dependencies);
     
     // Use _if_X_parent for branch creation code since it will be used in _sync_if_X() 
     // where the original 'parent' parameter is not in scope
@@ -1381,11 +1402,11 @@ std::string Component::to_webcc() {
     int loop_counter = 0;
     int if_counter = 0;
     
-    // Populate global context for reference props
+    // Populate global context for reference params
     g_ref_props.clear();
-    for(auto& prop : props) {
-        if(prop->is_reference) {
-            g_ref_props.insert(prop->name);
+    for(auto& param : params) {
+        if(param->is_reference) {
+            g_ref_props.insert(param->name);
         }
     }
     
@@ -1398,6 +1419,14 @@ std::string Component::to_webcc() {
     // Collect method names
     std::set<std::string> method_names;
     for(auto& m : methods) method_names.insert(m.name);
+    
+    // Track pub mut state variables (they get onChange callbacks)
+    std::set<std::string> pub_mut_vars;
+    for(auto& var : state) {
+        if(var->is_public && var->is_mutable) {
+            pub_mut_vars.insert(var->name);
+        }
+    }
 
     std::stringstream ss_render;
     for(auto& root : render_roots){
@@ -1417,6 +1446,7 @@ std::string Component::to_webcc() {
     // Generate component as a class
     ss << "class " << name << " {\n";
     
+    // Everything is public in C++ - visibility is enforced by Coi compiler
     ss << "public:\n";
 
     // Structs
@@ -1424,25 +1454,25 @@ std::string Component::to_webcc() {
         ss << s->to_webcc() << "\n";
     }
     
-    // Props
-    for(auto& prop : props){
-            ss << "    " << convert_type(prop->type);
-            if(prop->is_reference) {
-                // Reference props are stored as pointers
-                ss << "* " << prop->name << " = nullptr";
-            } else {
-                ss << " " << prop->name;
-                if(prop->default_value){
-                    ss << " = " << prop->default_value->to_webcc();
-                }
+    // Component parameters
+    for(auto& param : params){
+        ss << "    " << convert_type(param->type);
+        if(param->is_reference) {
+            // Reference params are stored as pointers
+            ss << "* " << param->name << " = nullptr";
+        } else {
+            ss << " " << param->name;
+            if(param->default_value){
+                ss << " = " << param->default_value->to_webcc();
             }
-            ss << ";\n";
-            
-            // For reference props, also declare an onChange callback
-            if(prop->is_reference && prop->is_mutable) {
-                std::string callback_name = "on" + std::string(1, std::toupper(prop->name[0])) + prop->name.substr(1) + "Change";
-                ss << "    webcc::function<void()> " << callback_name << ";\n";
-            }
+        }
+        ss << ";\n";
+        
+        // For reference params, also declare an onChange callback
+        if(param->is_reference && param->is_mutable) {
+            std::string callback_name = "on" + std::string(1, std::toupper(param->name[0])) + param->name.substr(1) + "Change";
+            ss << "    webcc::function<void()> " << callback_name << ";\n";
+        }
     }
     
     // State variables
@@ -1459,11 +1489,13 @@ std::string Component::to_webcc() {
             }
         }
         ss << ";\n";
+        
+        // For pub mut state variables, declare an onChange callback so parents can subscribe
+        if(var->is_public && var->is_mutable) {
+            std::string callback_name = "on" + std::string(1, std::toupper(var->name[0])) + var->name.substr(1) + "Change";
+            ss << "    webcc::function<void()> " << callback_name << ";\n";
+        }
     }
-    
-    // No special constructor needed since ref props are now pointers initialized to nullptr
-
-    ss << "private:\n";
 
     // Element handles
     for(int i=0; i<element_count; ++i) {
@@ -1498,9 +1530,7 @@ std::string Component::to_webcc() {
         ss << "    bool _if_" << region.if_id << "_state = false;\n";
     }
 
-    ss << "\npublic:\n";
-
-    // Build a map of state variable -> update code for that variable
+    // Internal update methods (private) - Build a map of state variable -> update code for that variable
     std::map<std::string, std::string> var_update_code;
     for(const auto& binding : bindings) {
         for(const auto& dep : binding.dependencies) {
@@ -1547,16 +1577,32 @@ std::string Component::to_webcc() {
         if(!update_code.empty()) {
             ss << "    void _update_" << var_name << "() {\n";
             ss << update_code;
+            // For pub mut variables, also call onChange callback if set (for parent subscriptions)
+            if(pub_mut_vars.count(var_name)) {
+                std::string callback_name = "on" + std::string(1, std::toupper(var_name[0])) + var_name.substr(1) + "Change";
+                ss << "        if(" << callback_name << ") " << callback_name << "();\n";
+            }
+            ss << "    }\n";
+            generated_updaters.insert(var_name);
+        }
+    }
+    
+    // Generate _update methods for pub mut variables that don't have UI bindings but need onChange callbacks
+    for(const auto& var_name : pub_mut_vars) {
+        if(generated_updaters.find(var_name) == generated_updaters.end()) {
+            std::string callback_name = "on" + std::string(1, std::toupper(var_name[0])) + var_name.substr(1) + "Change";
+            ss << "    void _update_" << var_name << "() {\n";
+            ss << "        if(" << callback_name << ") " << callback_name << "();\n";
             ss << "    }\n";
             generated_updaters.insert(var_name);
         }
     }
 
-    // Ensure all props have an update method, even if empty, so loop reconciliation can call them safely
-    for(const auto& prop : props) {
-        if(generated_updaters.find(prop->name) == generated_updaters.end()) {
-             ss << "    void _update_" << prop->name << "() {}\n";
-             generated_updaters.insert(prop->name);
+    // Ensure all params have an update method, even if empty, so loop reconciliation can call them safely
+    for(const auto& param : params) {
+        if(generated_updaters.find(param->name) == generated_updaters.end()) {
+             ss << "    void _update_" << param->name << "() {}\n";
+             generated_updaters.insert(param->name);
         }
     }
     
@@ -1777,8 +1823,8 @@ std::string Component::to_webcc() {
         collect_child_updates(root.get(), child_updates, update_counters);
     }
 
-    // Methods
-    for(auto& method : methods){
+    // Helper lambda to generate method code
+    auto generate_method = [&](FunctionDef& method) {
         std::set<std::string> modified_vars;
         method.collect_modifications(modified_vars);
         
@@ -1813,15 +1859,9 @@ std::string Component::to_webcc() {
             }
         }
         
-        // For any modified reference props, call their onChange callback
+        // For any modified reference params, call their onChange callback
         for(const auto& mod : modified_vars) {
             if(g_ref_props.count(mod)) {
-                // Only call if mutable (we can check this by seeing if the callback member exists, 
-                // but here we are in the component definition, so we should check the prop definition.
-                // However, g_ref_props only stores names.
-                // But wait, if the prop is NOT mutable, the compiler would have thrown an error 
-                // in validate_mutability if we tried to modify it.
-                // So if we are here, and it is modified, it MUST be mutable.
                 std::string callback_name = "on" + std::string(1, std::toupper(mod[0])) + mod.substr(1) + "Change";
                 updates += "        if(" + callback_name + ") " + callback_name + "();\n";
             }
@@ -1836,13 +1876,14 @@ std::string Component::to_webcc() {
             method.name = "_user_mount";
         }
         ss << "    " << method.to_webcc(updates);
-        if (original_name == "tick") {
-            method.name = original_name;
-        } else if (original_name == "init") {
-            method.name = original_name;
-        } else if (original_name == "mount") {
+        if (original_name == "tick" || original_name == "init" || original_name == "mount") {
             method.name = original_name;
         }
+    };
+
+    // All user-defined methods (visibility is enforced by Coi compiler, not C++)
+    for(auto& method : methods){
+        generate_method(method);
     }
 
     // Generated handlers
@@ -1872,6 +1913,19 @@ std::string Component::to_webcc() {
     for(auto& handler : click_handlers) {
         ss << "        g_dispatcher.set(el_" << std::get<0>(handler) << ", [this]() { this->_handler_" << std::get<0>(handler) << "(); });\n";
     }
+    
+    // Wire up onChange callbacks for child component pub mut members used in if conditions
+    // This allows <if child.member> to react when the child updates member
+    for(const auto& region : if_regions) {
+        for(const auto& mem_dep : region.member_dependencies) {
+            // mem_dep.object is the child variable name (e.g., "net")
+            // mem_dep.member is the member name (e.g., "connected")
+            // Generate: net.onConnectedChange = [this]() { _sync_if_X(); };
+            std::string callback_name = "on" + std::string(1, std::toupper(mem_dep.member[0])) + mem_dep.member.substr(1) + "Change";
+            ss << "        " << mem_dep.object << "." << callback_name << " = [this]() { _sync_if_" << region.if_id << "(); };\n";
+        }
+    }
+    
     // Call mount after view is created
     if(has_mount) ss << "        _user_mount();\n";
     ss << "    }\n";

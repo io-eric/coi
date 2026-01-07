@@ -1,17 +1,16 @@
-// Test: Reference Props must be bound by the parent.
-// You cannot instantiate a component with a reference prop
+// Test: Reference Params must be bound by the parent.
+// You cannot instantiate a component with a reference param
 // without passing a valid reference variable to it.
 
-component Child {
-    // Reference prop (internally a pointer)
-    prop mut int& val; 
+component Child(mut int& val) {
+    // Reference param (internally a pointer)
     view { <div>{val}</div> }
 }
 
 component App {
     view {
-        // Error: Missing required prop '&val'. 
-        // Reference props cannot be default-initialized and must be provided.
+        // Error: Missing required param '&val'. 
+        // Reference params cannot be default-initialized and must be provided.
         <Child />
     }
 }

@@ -11,10 +11,22 @@
 
 std::string convert_type(const std::string& type);
 
+// Represents a dependency on a member of an object (e.g., net.connected)
+struct MemberDependency {
+    std::string object;   // e.g., "net"
+    std::string member;   // e.g., "connected"
+    
+    bool operator<(const MemberDependency& other) const {
+        if (object != other.object) return object < other.object;
+        return member < other.member;
+    }
+};
+
 struct ASTNode {
     virtual ~ASTNode() = default;
     virtual std::string to_webcc() = 0;
     virtual void collect_dependencies(std::set<std::string>& deps) {}
+    virtual void collect_member_dependencies(std::set<MemberDependency>& member_deps) {}
     int line = 0;
 };
 
@@ -87,6 +99,7 @@ struct MemberAccess : Expression {
     MemberAccess(std::unique_ptr<Expression> obj, const std::string& mem);
     std::string to_webcc() override;
     void collect_dependencies(std::set<std::string>& deps) override;
+    void collect_member_dependencies(std::set<MemberDependency>& member_deps) override;
 };
 
 struct PostfixOp : Expression {
@@ -130,6 +143,22 @@ struct ArrayRepeatLiteral : Expression {
     bool is_static() override;
 };
 
+// Component construction expression: NetworkManager(&url: currentUrl, port: 8080)
+struct ComponentArg {
+    std::string name;                      // Parameter name
+    std::unique_ptr<Expression> value;     // Value to pass
+    bool is_reference = false;             // & prefix means pass by reference
+};
+
+struct ComponentConstruction : Expression {
+    std::string component_name;
+    std::vector<ComponentArg> args;
+
+    ComponentConstruction(const std::string& name) : component_name(name) {}
+    std::string to_webcc() override;
+    void collect_dependencies(std::set<std::string>& deps) override;
+};
+
 struct IndexAccess : Expression {
     std::unique_ptr<Expression> array;
     std::unique_ptr<Expression> index;
@@ -145,16 +174,19 @@ struct VarDeclaration : Statement {
     std::unique_ptr<Expression> initializer;
     bool is_mutable = false;
     bool is_reference = false;
+    bool is_public = false;
 
     std::string to_webcc() override;
 };
 
-struct PropDeclaration : Statement {
+// Component constructor parameter (e.g., component Counter(mut int& count = 0))
+struct ComponentParam : Statement {
     std::string type;
     std::string name;
     std::unique_ptr<Expression> default_value;
     bool is_mutable = false;
     bool is_reference = false;
+    bool is_public = false;  // pub keyword makes param accessible from outside
 
     std::string to_webcc() override;
 };
@@ -228,6 +260,7 @@ void collect_mods_recursive(Statement* stmt, std::set<std::string>& mods);
 struct FunctionDef {
     std::string name;
     std::string return_type;
+    bool is_public = false;
     struct Param {
         std::string type;
         std::string name;
@@ -300,6 +333,7 @@ struct IfRegion {
     int if_id;
     std::string condition_code;         // The condition expression code
     std::set<std::string> dependencies; // Variables this if depends on
+    std::set<MemberDependency> member_dependencies; // Child member access (e.g., net.connected)
     std::string then_creation_code;     // Code to create then branch elements
     std::string else_creation_code;     // Code to create else branch elements
     std::string then_destroy_code;      // Code to destroy then branch elements
@@ -365,7 +399,7 @@ struct Component : ASTNode {
     std::string global_css;
     std::vector<std::unique_ptr<StructDef>> structs;
     std::vector<std::unique_ptr<VarDeclaration>> state;
-    std::vector<std::unique_ptr<PropDeclaration>> props;
+    std::vector<std::unique_ptr<ComponentParam>> params;  // Constructor parameters
     std::vector<FunctionDef> methods;
     std::vector<std::unique_ptr<ASTNode>> render_roots;
 

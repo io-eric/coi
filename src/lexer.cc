@@ -102,7 +102,7 @@ Token Lexer::read_identifier(){
         {"tick", TokenType::TICK},
         {"init", TokenType::INIT},
         {"mount", TokenType::MOUNT},
-        {"prop", TokenType::PROP},
+        {"pub", TokenType::PUB},
         {"style", TokenType::STYLE},
         {"mut", TokenType::MUT},
         {"import", TokenType::IMPORT},

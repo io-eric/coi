@@ -1,8 +1,5 @@
 // Test: function props (callbacks)
-component ChildButton {
-    prop def onclick : void;
-    prop string label = "Click";
-
+component ChildButton(def onclick : void, string label = "Click") {
     view {
         <button onclick={onclick}>{label}</button>
     }

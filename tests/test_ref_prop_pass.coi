@@ -1,6 +1,5 @@
 // Test: reference props for two-way binding
-component Editor {
-    prop mut int& value;
+component Editor(mut int& value) {
 
     def increment() : void {
         value++;

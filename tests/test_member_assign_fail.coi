@@ -1,0 +1,31 @@
+// Test: Cannot assign to child component members from outside
+// Even pub mut members can only be READ from outside, not written
+
+component Counter(pub mut int count = 0) {
+    pub def increment() : void {
+        count++;
+    }
+
+    view {
+        <span>{count}</span>
+    }
+}
+
+component App {
+    mut Counter child;
+
+    def tryModify() : void {
+        // This should fail - can't assign to member from outside
+        child.count = 5;
+    }
+
+    view {
+        <div>
+            <Counter />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}

@@ -189,16 +189,63 @@ std::unique_ptr<Expression> Parser::parse_primary(){
 
         while(true) {
             if(current().type == TokenType::LPAREN){
-                // Call
                 advance();
-                auto call = std::make_unique<FunctionCall>(expr->to_webcc());
                 
-                while(current().type != TokenType::RPAREN){
-                    call->args.push_back(parse_expression());
-                    if(current().type == TokenType::COMMA) advance();
+                // Check if this is component construction (named args) or function call (positional args)
+                // Component construction: Name(&param: value) or Name(param: value)
+                // Function call: Name(value, value, ...)
+                bool is_component_construction = false;
+                if (current().type != TokenType::RPAREN) {
+                    // Look ahead to determine if this is named argument syntax
+                    if (current().type == TokenType::AMPERSAND) {
+                        // &param: value syntax
+                        is_component_construction = true;
+                    } else if (current().type == TokenType::IDENTIFIER && peek().type == TokenType::COLON) {
+                        // param: value syntax
+                        is_component_construction = true;
+                    }
                 }
-                expect(TokenType::RPAREN, "Expected ')'");
-                expr = std::move(call);
+                
+                if (is_component_construction) {
+                    // Parse component construction with named arguments
+                    auto comp_expr = std::make_unique<ComponentConstruction>(expr->to_webcc());
+                    
+                    while (current().type != TokenType::RPAREN) {
+                        ComponentArg arg;
+                        
+                        // Check for reference prefix &
+                        if (current().type == TokenType::AMPERSAND) {
+                            arg.is_reference = true;
+                            advance();
+                        }
+                        
+                        // Parameter name
+                        arg.name = current().value;
+                        expect(TokenType::IDENTIFIER, "Expected parameter name");
+                        expect(TokenType::COLON, "Expected ':' after parameter name");
+                        
+                        // Value
+                        arg.value = parse_expression();
+                        
+                        comp_expr->args.push_back(std::move(arg));
+                        
+                        if (current().type == TokenType::COMMA) {
+                            advance();
+                        }
+                    }
+                    expect(TokenType::RPAREN, "Expected ')'");
+                    expr = std::move(comp_expr);
+                } else {
+                    // Regular function call with positional arguments
+                    auto call = std::make_unique<FunctionCall>(expr->to_webcc());
+                    
+                    while(current().type != TokenType::RPAREN){
+                        call->args.push_back(parse_expression());
+                        if(current().type == TokenType::COMMA) advance();
+                    }
+                    expect(TokenType::RPAREN, "Expected ')'");
+                    expr = std::move(call);
+                }
             }
             else if(current().type == TokenType::DOT){
                 advance();
@@ -919,11 +966,96 @@ Component Parser::parse_component(){
     expect(TokenType::COMPONENT, "Expected 'component'");
     comp.name = current().value;
     expect(TokenType::IDENTIFIER, "Expected component name");
+    
+    // Parse component parameters (constructor-style): component Name(pub mut int& value = 0)
+    if (match(TokenType::LPAREN)) {
+        while (current().type != TokenType::RPAREN) {
+            auto param = std::make_unique<ComponentParam>();
+            
+            // Check for pub keyword (makes param accessible from outside)
+            if (current().type == TokenType::PUB) {
+                param->is_public = true;
+                advance();
+            }
+            
+            // Check for mut keyword
+            if (current().type == TokenType::MUT) {
+                param->is_mutable = true;
+                advance();
+            }
+            
+            // Parse type
+            if (current().type == TokenType::DEF) {
+                // Function parameter: def onclick : void
+                advance();
+                param->name = current().value;
+                expect(TokenType::IDENTIFIER, "Expected param name");
+                expect(TokenType::COLON, "Expected ':'");
+                
+                std::string retType = current().value;
+                if(current().type == TokenType::INT || current().type == TokenType::STRING || 
+                    current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
+                    current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
+                    advance();
+                } else {
+                    throw std::runtime_error("Expected return type");
+                }
+                param->type = "webcc::function<" + retType + "()>";
+            } else {
+                param->type = current().value;
+                if(current().type == TokenType::INT || current().type == TokenType::STRING || 
+                    current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
+                    current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
+                    advance();
+                } else {
+                    throw std::runtime_error("Expected param type");
+                }
+                
+                // Handle reference type
+                if(current().type == TokenType::AMPERSAND){
+                    param->is_reference = true;
+                    advance();
+                }
+                
+                // Handle array type
+                if(current().type == TokenType::LBRACKET){
+                    advance();
+                    expect(TokenType::RBRACKET, "Expected ']'");
+                    param->type += "[]";
+                }
+                
+                param->name = current().value;
+                expect(TokenType::IDENTIFIER, "Expected param name");
+            }
+            
+            // Parse default value
+            if(match(TokenType::ASSIGN)){
+                param->default_value = parse_expression();
+            }
+            
+            comp.params.push_back(std::move(param));
+            
+            if (current().type == TokenType::COMMA) {
+                advance();
+            }
+        }
+        expect(TokenType::RPAREN, "Expected ')'");
+    }
+    
     expect(TokenType::LBRACE, "Expected '{'");
 
     // Parse state variables and methods
     while(current().type != TokenType::VIEW && current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
+        bool is_public = false;
         bool is_mutable = false;
+        
+        // Check for pub keyword
+        if (current().type == TokenType::PUB) {
+            is_public = true;
+            advance();
+        }
+        
+        // Check for mut keyword
         if (current().type == TokenType::MUT) {
             is_mutable = true;
             advance();
@@ -935,6 +1067,7 @@ Component Parser::parse_component(){
             current().type == TokenType::IDENTIFIER){
             auto var_decl = std::make_unique<VarDeclaration>();
             var_decl->type = current().value;
+            var_decl->is_public = is_public;
             advance();
 
             // Handle reference type
@@ -964,17 +1097,18 @@ Component Parser::parse_component(){
             expect(TokenType::SEMICOLON, "Expected ';'");
             comp.state.push_back(std::move(var_decl));
         }
-        else if (is_mutable) {
+        else if (is_mutable && !is_public && current().type != TokenType::DEF) {
             throw std::runtime_error("Expected variable declaration after 'mut'");
         }
         // Struct definition
         else if(current().type == TokenType::STRUCT){
             comp.structs.push_back(parse_struct());
         }
-        // Function definition
+        // Function definition (with optional pub prefix)
         else if(current().type == TokenType::DEF){
             advance();
             FunctionDef func;
+            func.is_public = is_public;
             func.name  = current().value;
             expect(TokenType::IDENTIFIER, "Expected function name");
             expect(TokenType::LPAREN, "Expected '('");
@@ -1108,68 +1242,6 @@ Component Parser::parse_component(){
 
             expect(TokenType::RBRACE, "Expected '}'");
             comp.methods.push_back(std::move(func));
-        }
-        // Prop declaration
-        else if(current().type == TokenType::PROP){
-            advance();
-            
-            bool is_mutable = false;
-            if (current().type == TokenType::MUT) {
-                is_mutable = true;
-                advance();
-            }
-
-            auto prop_decl = std::make_unique<PropDeclaration>();
-            prop_decl->is_mutable = is_mutable;
-            
-            if (current().type == TokenType::DEF) {
-                advance();
-                prop_decl->name = current().value;
-                expect(TokenType::IDENTIFIER, "Expected prop name");
-                expect(TokenType::COLON, "Expected ':'");
-                
-                std::string retType = current().value;
-                if(current().type == TokenType::INT || current().type == TokenType::STRING || 
-                    current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
-                    current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
-                    advance();
-                } else {
-                        throw std::runtime_error("Expected return type");
-                }
-                prop_decl->type = "webcc::function<" + retType + "()>";
-            } else {
-                prop_decl->type = current().value;
-                // Check type
-                if(current().type == TokenType::INT || current().type == TokenType::STRING || 
-                    current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
-                    current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
-                    advance();
-                } else {
-                        throw std::runtime_error("Expected prop type");
-                }
-
-                // Handle reference type
-                if(current().type == TokenType::AMPERSAND){
-                    prop_decl->is_reference = true;
-                    advance();
-                }
-
-                if(current().type == TokenType::LBRACKET){
-                    advance();
-                    expect(TokenType::RBRACKET, "Expected ']'");
-                    prop_decl->type += "[]";
-                }
-
-                prop_decl->name = current().value;
-                expect(TokenType::IDENTIFIER, "Expected prop name");
-            }
-
-            if(match(TokenType::ASSIGN)){
-                prop_decl->default_value = parse_expression();
-            }
-
-            expect(TokenType::SEMICOLON, "Expected ';'");
-            comp.props.push_back(std::move(prop_decl));
         }
         // Style block
         else if(current().type == TokenType::STYLE){
