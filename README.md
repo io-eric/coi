@@ -127,6 +127,18 @@ int count = 42;          // Integer
 float speed = 3.14;      // Floating point
 string name = "Coi";     // String
 bool active = true;      // Boolean
+
+// Arrays
+int[] scores = [10, 20, 30]; 
+string[] tags = ["web", "fast"];
+mut float[] prices = []; // Mutable empty array
+
+// Array Methods
+int len = scores.size();
+scores.push(40);         // Add element (requires mut)
+scores.pop();            // Remove last element (requires mut)
+scores.clear();          // Remove all elements (requires mut)
+bool empty = scores.isEmpty();
 ```
 
 ### Control Flow
@@ -140,10 +152,19 @@ if (x > 10) {
 }
 ```
 
-**For Loops:**
+**Loops:**
+
+Coi supports range-based loops and iterator-based foreach loops.
+
 ```tsx
-for (int i = 0; i < 10; i++) {
+// Range-based (start:end)
+for i in 0:10 {
     sum += i;
+}
+
+// ForEach (Arrays)
+for score in scores {
+    total += score;
 }
 ```
 
@@ -175,6 +196,17 @@ view {
     <div class="list">
         <for i in 0:itemCount>
             <div class="item">Item {i}</div>
+        </for>
+    </div>
+}
+```
+
+**List Rendering with Array:**
+```tsx
+view {
+    <div class="list">
+        <for item in items>
+            <div class="item">{item}</div>
         </for>
     </div>
 }

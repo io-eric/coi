@@ -3,7 +3,7 @@ component ForLoopTest {
     mut int sum = 0;
 
     init {
-        for (int i = 0; i < 10; i++) {
+        for i in 0:10 {
             sum += i;
         }
     }

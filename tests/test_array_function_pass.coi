@@ -5,8 +5,8 @@ component ArrayFunctionTest {
 
     def sumArray() : int {
         int result = 0;
-        for (int i = 0; i < data.size(); i++) {
-            result = result + data[i];
+        for val in data {
+            result = result + val;
         }
         return result;
     }

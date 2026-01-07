@@ -333,32 +333,7 @@ std::unique_ptr<Statement> Parser::parse_statement(){
             return forEach;
         }
         
-        // Traditional C-style for loop: for (init; cond; update) { }
-        expect(TokenType::LPAREN, "Expected '('");
-        
-        auto forStmt = std::make_unique<ForStatement>();
-        
-        // Parse init (can be variable declaration or expression)
-        if(current().type != TokenType::SEMICOLON) {
-            forStmt->init = parse_statement(); // This handles var decl with semicolon
-        } else {
-            advance(); // skip semicolon
-        }
-        
-        // Parse condition
-        if(current().type != TokenType::SEMICOLON) {
-            forStmt->condition = parse_expression();
-        }
-        expect(TokenType::SEMICOLON, "Expected ';' after for condition");
-        
-        // Parse update
-        if(current().type != TokenType::RPAREN) {
-            forStmt->update = parse_expression();
-        }
-        expect(TokenType::RPAREN, "Expected ')'");
-        
-        forStmt->body = parse_statement();
-        return forStmt;
+        throw std::runtime_error("Unexpected token after 'for'. Expected range 'i in start:end' or foreach 'i in array'. C-style for loops are not supported.");
     }
 
     // Return

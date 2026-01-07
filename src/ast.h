@@ -204,16 +204,6 @@ struct IfStatement : Statement {
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
-struct ForStatement : Statement {
-    std::unique_ptr<Statement> init;
-    std::unique_ptr<Expression> condition;
-    std::unique_ptr<Expression> update;
-    std::unique_ptr<Statement> body;
-
-    std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override;
-};
-
 struct ForRangeStatement : Statement {
     std::string var_name;
     std::unique_ptr<Expression> start;

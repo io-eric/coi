@@ -4,7 +4,7 @@ component ArrayLoopTest {
     mut int sum = 0;
 
     init {
-        for (int i = 0; i < values.size(); i++) {
+        for i in 0:values.size() {
             sum = sum + values[i];
         }
     }

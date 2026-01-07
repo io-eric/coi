@@ -558,39 +558,6 @@ void IfStatement::collect_dependencies(std::set<std::string>& deps) {
     if(else_branch) else_branch->collect_dependencies(deps);
 }
 
-std::string ForStatement::to_webcc() {
-    std::string code = "for(";
-    if(init) {
-        // For loop init variables must be mutable (not const) for increment to work
-        if(auto varDecl = dynamic_cast<VarDeclaration*>(init.get())) {
-            varDecl->is_mutable = true;
-        }
-        // Remove trailing semicolon from init statement since for() adds it
-        std::string init_code = init->to_webcc();
-        if(!init_code.empty() && init_code.back() == ';') {
-            init_code.pop_back();
-        }
-        code += init_code;
-    }
-    code += "; ";
-    if(condition) {
-        code += condition->to_webcc();
-    }
-    code += "; ";
-    if(update) {
-        code += update->to_webcc();
-    }
-    code += ") ";
-    code += body->to_webcc();
-    return code;
-}
-void ForStatement::collect_dependencies(std::set<std::string>& deps) {
-    if(init) init->collect_dependencies(deps);
-    if(condition) condition->collect_dependencies(deps);
-    if(update) update->collect_dependencies(deps);
-    body->collect_dependencies(deps);
-}
-
 std::string ForRangeStatement::to_webcc() {
     // Generates: for(int var_name = start; var_name < end; var_name++)
     std::string code = "for(int " + var_name + " = " + start->to_webcc() + "; ";
@@ -665,10 +632,6 @@ void collect_mods_recursive(Statement* stmt, std::set<std::string>& mods) {
         if(ifStmt->else_branch) {
             collect_mods_recursive(ifStmt->else_branch.get(), mods);
         }
-    }
-    else if(auto forStmt = dynamic_cast<ForStatement*>(stmt)) {
-        if(forStmt->init) collect_mods_recursive(forStmt->init.get(), mods);
-        collect_mods_recursive(forStmt->body.get(), mods);
     }
     else if(auto forRange = dynamic_cast<ForRangeStatement*>(stmt)) {
         collect_mods_recursive(forRange->body.get(), mods);
