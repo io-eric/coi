@@ -22,7 +22,6 @@ component Button {
             transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
             text-decoration: none;
             display: inline-block;
-
         }
         button:active {
             transform: translateY(1px);
