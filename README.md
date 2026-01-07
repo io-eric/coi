@@ -24,6 +24,7 @@ Compiles to WASM, JS, and HTML with tiny binaries and efficient updates for DOM,
 - **Minimal Runtime**: Tiny WASM binaries with high-performance updates for DOM, Canvas, and more.
 - **Integrated Styling**: Write standard HTML and scoped CSS directly in components.
 - **Component Composition**: Build complex UIs from reusable components with typed props.
+- **View Control Flow**: Declarative `<if>`, `<else>`, and `<for>` tags for conditional rendering and list iteration directly in the view.
 - **Animation Support**: Built-in `tick` lifecycle method for smooth animations and updates.
 - **Lifecycle Hooks**: `init` block runs when a component mounts, perfect for setup logic.
 - **Auto-Generated APIs**: Browser APIs (Canvas, Storage, Audio, etc.) are automatically generated from the [WebCC](https://github.com/io-eric/webcc) schema; new WebCC features instantly become available in Coi.
