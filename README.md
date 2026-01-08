@@ -18,19 +18,16 @@ Compiles to WASM, JS, and HTML with tiny binaries and efficient updates for DOM,
 
 ## Features
 
-- **Fine-Grained Reactivity**: State changes map directly to DOM elements at compile-time. Update only what changed, exactly where it changed, without Virtual DOM overhead.
+- **Fine-Grained Reactivity**: State changes map directly to DOM elements at compile-time. No Virtual DOM overhead.
 - **Type-Safe Components**: Compile-time error checking with strictly typed parameters and state.
-- **Typed Callbacks**: Pass callbacks with type-checked parameters using `def onAction(int) : void` syntax.
-- **Keyed Lists**: Efficient list rendering with `key={item.id}` for optimal DOM updates on additions, removals, and reorders.
 - **Reference Parameters**: Pass state by reference with `&` for seamless parent-child synchronization.
-- **Private by Default**: Component members are private by default; use `pub` to expose them.
+- **Private by Default**: Component members are private; use `pub` to expose them.
 - **Minimal Runtime**: Tiny WASM binaries with high-performance updates for DOM, Canvas, and more.
-- **Integrated Styling**: Write standard HTML and scoped CSS directly in components.
-- **Component Composition**: Build complex UIs from reusable components with typed parameters.
-- **View Control Flow**: Declarative `<if>`, `<else>`, and `<for>` tags for conditional rendering and list iteration directly in the view.
-- **Animation & Lifecycle**: Built-in `tick {}` block for frame-based animations, `init {}` for pre-render setup, and `mount {}` for post-render initialization when DOM elements are available.
-- **Auto-Generated APIs**: Browser APIs (Canvas, Storage, Audio, etc.) are automatically generated from the [WebCC](https://github.com/io-eric/webcc) schema; new WebCC features instantly become available in Coi.
-- **VS Code Extension**: Full language support with syntax highlighting, completions, hover docs, and signature help, also auto-generated from the schema.
+- **Integrated DOM & Styling**: Write HTML elements and scoped CSS directly in components.
+- **View Control Flow**: Declarative `<if>`, `<else>`, and `<for>` tags for conditional rendering and iteration.
+- **Component Lifecycle**: Built-in `init {}`, `mount {}`, and `tick {}` blocks for setup and animations.
+- **Auto-Generated APIs**: Browser APIs (Canvas, Storage, Audio, etc.) generated from [WebCC](https://github.com/io-eric/webcc) schema.
+- **VS Code Extension**: Syntax highlighting, completions, hover docs, and formatting.
 
 ## Example
 ****
