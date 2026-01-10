@@ -1,0 +1,18 @@
+component IndexAssignTypePass {
+    mut int[] numbers = [1, 2, 3];
+    mut string[] names = ["a", "b"];
+    
+    def good_assign() : void {
+        numbers[0] = 42;      // OK: int to int[]
+        numbers[1] = 2 + 3;   // OK: expression returning int
+        names[0] = "hello";   // OK: string to string[]
+    }
+
+    view {
+        <div>test</div>
+    }
+}
+
+app {
+    root = IndexAssignTypePass;
+}

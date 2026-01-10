@@ -498,6 +498,44 @@ void validate_types(const std::vector<Component> &components)
                     }
                     check_stmt(for_each->body, loop_scope);
                 }
+                else if (auto idx_assign = dynamic_cast<IndexAssignment *>(stmt.get()))
+                {
+                    // Type check index assignment: arr[i] = value
+                    std::string array_type = infer_expression_type(idx_assign->array.get(), current_scope);
+                    std::string element_type = "unknown";
+                    
+                    // Extract element type from array type
+                    if (array_type.ends_with("[]"))
+                    {
+                        element_type = array_type.substr(0, array_type.length() - 2);
+                    }
+                    else if (array_type.back() == ']')
+                    {
+                        // Fixed-size array like int32[10]
+                        size_t bracket_pos = array_type.find('[');
+                        if (bracket_pos != std::string::npos)
+                        {
+                            element_type = array_type.substr(0, bracket_pos);
+                        }
+                    }
+                    
+                    std::string value_type = infer_expression_type(idx_assign->value.get(), current_scope);
+                    
+                    if (element_type != "unknown" && !is_compatible_type(element_type, value_type))
+                    {
+                        std::cerr << "Type error: Cannot assign '" << value_type 
+                                  << "' to array element of type '" << element_type << "'" << std::endl;
+                        exit(1);
+                    }
+                    
+                    // Also validate index is numeric
+                    std::string index_type = infer_expression_type(idx_assign->index.get(), current_scope);
+                    if (index_type != "int32" && index_type != "float32" && index_type != "unknown")
+                    {
+                        std::cerr << "Type error: Array index must be numeric, got '" << index_type << "'" << std::endl;
+                        exit(1);
+                    }
+                }
             };
 
             for (const auto &stmt : method.body)

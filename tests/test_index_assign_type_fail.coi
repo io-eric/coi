@@ -1,0 +1,15 @@
+component IndexAssignTypeFail {
+    mut int[] numbers = [1, 2, 3];
+    
+    def bad_assign() : void {
+        numbers[0] = "hello";  // Error: assigning string to int[]
+    }
+
+    view {
+        <div>test</div>
+    }
+}
+
+app {
+    root = IndexAssignTypeFail;
+}
