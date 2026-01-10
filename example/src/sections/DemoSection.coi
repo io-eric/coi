@@ -3,6 +3,7 @@ import "../demos/AnimatedBox.coi";
 import "../demos/CanvasDemo.coi";
 import "../demos/TodoList.coi";
 import "../demos/InputDemo.coi";
+import "../demos/AudioPlayer.coi";
 import "../components/CodeView.coi";
 
 component DemoSection {
@@ -150,6 +151,47 @@ component TodoList \{
     \}
 \}";
 
+    string audioPlayerCode = "component AudioPlayer \{
+    mut Audio audio;
+    mut bool playing = false;
+    mut float currentTime = 0;
+    mut float duration = 0;
+    mut float progress = 0;
+
+    mount \{
+        audio = Audio.createAudio(\"song.mp3\");
+    \}
+
+    tick(float dt) \{
+        if (playing) \{
+            currentTime = audio.getCurrentTime();
+            duration = audio.getDuration();
+            if (duration > 0) \{
+                progress = (currentTime / duration) * 100;
+            \}
+        \}
+    \}
+
+    def togglePlay() : void \{
+        if (playing) audio.pause();
+        else audio.play();
+        playing = !playing;
+    \}
+
+    view \{
+        <div class=\"progress\" style=\"width:\{progress\}%\"></div>
+        <div class=\"time\">
+            <span>\{currentTime\}s</span>
+            <span>\{duration\}s</span>
+        </div>
+        <button onclick=\{togglePlay\}>
+            <if playing><span>⏸</span>
+            <else><span>▶</span></else>
+            </if>
+        </button>
+    \}
+\}";
+
     style {
         .demo-section {
             padding: 80px 20px;
@@ -224,6 +266,12 @@ component TodoList \{
                     <AnimatedBox />
                 </div>
                 <CodeView code={animatedBoxCode} width="600px" />
+            </div>
+            <div class="demo-row">
+                <div class="demo-wrapper">
+                    <AudioPlayer />
+                </div>
+                <CodeView code={audioPlayerCode} width="600px" />
             </div>
          
         </div>

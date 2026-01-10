@@ -159,6 +159,13 @@ BinaryOp::BinaryOp(std::unique_ptr<Expression> l, const std::string& o, std::uni
     : left(std::move(l)), op(o), right(std::move(r)){}
 
 std::string BinaryOp::to_webcc() {
+    // For + operator with string literals, wrap in webcc::string() to enable concatenation with numeric types
+    if (op == "+") {
+        auto* left_str = dynamic_cast<StringLiteral*>(left.get());
+        if (left_str) {
+            return "webcc::string(" + left->to_webcc() + ") + " + right->to_webcc();
+        }
+    }
     return left->to_webcc() + " " + op + " " + right->to_webcc();
 }
 void BinaryOp::collect_dependencies(std::set<std::string>& deps) {

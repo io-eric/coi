@@ -2,6 +2,53 @@
 
 set -e
 
+# Parse arguments
+REBUILD_WEBCC=false
+REBUILD_SCHEMA=false
+for arg in "$@"; do
+    case $arg in
+        --rebuild-webcc|--force-webcc)
+            REBUILD_WEBCC=true
+            ;;
+        --rebuild-schema|--force-schema)
+            REBUILD_SCHEMA=true
+            ;;
+        --help|-h)
+            echo "Usage: ./build.sh [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --rebuild-webcc   Force rebuild the webcc toolchain"
+            echo "  --rebuild-schema  Force regenerate COI schema files (coi_schema.h/cc and def/*.d.coi)"
+            echo "  --help            Show this help message"
+            exit 0
+            ;;
+    esac
+done
+
+# Force rebuild webcc if requested
+if [ "$REBUILD_WEBCC" = true ]; then
+    echo "[COI] Force rebuilding webcc toolchain..."
+    if [ -d "deps/webcc" ]; then
+        pushd deps/webcc > /dev/null
+        ./build.sh
+        popd > /dev/null
+    else
+        echo "[COI] Error: deps/webcc not found"
+        exit 1
+    fi
+fi
+
+# Force rebuild schema if requested
+if [ "$REBUILD_SCHEMA" = true ]; then
+    echo "[COI] Force rebuilding COI schema..."
+    # Remove generated schema files to force regeneration
+    rm -f src/coi_schema.h src/coi_schema.cc
+    rm -f build/gen_schema build/obj/gen_schema.o
+    # Also regenerate .d.coi definition files
+    rm -f def/*.d.coi
+    echo "[COI] Schema files removed."
+fi
+
 # Check for webcc dependency
 if ! command -v webcc >/dev/null 2>&1; then
     echo "[COI] webcc not found in PATH. Checking submodule..."

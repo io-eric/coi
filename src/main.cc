@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "schema_loader.h"
 #include "type_checker.h"
+#include "coi_schema.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -13,6 +14,84 @@
 #include <cstdio>
 #include <queue>
 #include <algorithm>
+
+// =========================================================
+// INCLUDE DETECTION
+// =========================================================
+
+// Build type-to-header mapping from schema (handle types -> namespace)
+static std::map<std::string, std::string> build_type_to_header() {
+    std::map<std::string, std::string> result;
+    for (size_t i = 0; i < coi::SCHEMA_COUNT; ++i) {
+        const auto& entry = coi::SCHEMA[i];
+        // Map return type (if it's a handle) to namespace
+        if (!entry.return_type.empty()) {
+            result[entry.return_type] = entry.ns;
+        }
+        // Map parameter types (if they're handles) to namespace
+        for (const auto& param : entry.params) {
+            // Check if it's a handle type (not a primitive)
+            if (param.type != "string" && param.type != "int32" && param.type != "uint32" && 
+                param.type != "uint8" && param.type != "float32" && param.type != "float64" &&
+                param.type != "bool" && param.type != "func_ptr") {
+                result[param.type] = entry.ns;
+            }
+        }
+    }
+    return result;
+}
+
+// Extract base type from array types (e.g., "Audio[]" -> "Audio")
+static std::string get_base_type(const std::string& type) {
+    size_t bracket = type.find('[');
+    if (bracket != std::string::npos) {
+        return type.substr(0, bracket);
+    }
+    return type;
+}
+
+// Collect all types used in a component
+static void collect_used_types(const Component& comp, std::set<std::string>& types) {
+    // Collect from state variables
+    for (const auto& var : comp.state) {
+        types.insert(get_base_type(var->type));
+    }
+    // Collect from parameters
+    for (const auto& param : comp.params) {
+        types.insert(get_base_type(param->type));
+    }
+    // Collect from method parameters and return types
+    for (const auto& method : comp.methods) {
+        types.insert(get_base_type(method.return_type));
+        for (const auto& param : method.params) {
+            types.insert(get_base_type(param.type));
+        }
+    }
+}
+
+// Determine which headers are needed based on used types
+static std::set<std::string> get_required_headers(const std::vector<Component>& components) {
+    static auto type_to_header = build_type_to_header();
+    
+    std::set<std::string> used_types;
+    for (const auto& comp : components) {
+        collect_used_types(comp, used_types);
+    }
+    
+    std::set<std::string> headers;
+    // Always include dom and system (needed for basic DOM operations and main loop)
+    headers.insert("dom");
+    headers.insert("system");
+    
+    for (const auto& type : used_types) {
+        auto it = type_to_header.find(type);
+        if (it != type_to_header.end()) {
+            headers.insert(it->second);
+        }
+    }
+    
+    return headers;
+}
 
 // =========================================================
 // MAIN COMPILER
@@ -309,12 +388,11 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        // Code generation
-        // This should in best case be automated based on what is used in the coi source files
-        out << "#include \"webcc/canvas.h\"\n";
-        out << "#include \"webcc/dom.h\"\n";
-        out << "#include \"webcc/system.h\"\n";
-        out << "#include \"webcc/input.h\"\n";
+        // Code generation - automatically detect required headers
+        std::set<std::string> required_headers = get_required_headers(all_components);
+        for (const auto& header : required_headers) {
+            out << "#include \"webcc/" << header << ".h\"\n";
+        }
         out << "#include \"webcc/core/function.h\"\n";
         out << "#include \"webcc/core/allocator.h\"\n";
         out << "#include \"webcc/core/new.h\"\n";

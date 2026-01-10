@@ -21,6 +21,18 @@ This will:
 2. Build the WebCC toolchain
 3. Build the Coi compiler
 
+### Build Options
+
+The build script supports these options:
+
+```bash
+./build.sh --rebuild-schema   # Force regenerate COI schema (coi_schema.h/cc and def/*.d.coi)
+./build.sh --rebuild-webcc    # Force rebuild the WebCC toolchain
+./build.sh --help             # Show all available options
+```
+
+Use `--rebuild-schema` when you've modified the WebCC schema.def and need to regenerate COI's type definitions.
+
 ## Usage
 
 To compile a `.coi` file:
