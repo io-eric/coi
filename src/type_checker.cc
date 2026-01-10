@@ -931,6 +931,39 @@ void validate_view_hierarchy(const std::vector<Component> &components)
         }
         else if (auto *el = dynamic_cast<HTMLElement *>(node))
         {
+            // Validate event handler parameter types
+            for (const auto &attr : el->attributes)
+            {
+                // oninput/onchange/onkeydown pass a string to the handler
+                if (attr.name == "oninput" || attr.name == "onchange" || attr.name == "onkeydown")
+                {
+                    std::string handler_name;
+                    if (auto *func = dynamic_cast<FunctionCall *>(attr.value.get()))
+                        handler_name = func->name;
+                    else if (auto *id = dynamic_cast<Identifier *>(attr.value.get()))
+                        handler_name = id->name;
+                    
+                    if (!handler_name.empty() && scope.count(handler_name))
+                    {
+                        std::string sig = scope.at(handler_name);
+                        // sig format: "method(param_types):return_type"
+                        if (sig.starts_with("method(") && sig.find("):") != std::string::npos)
+                        {
+                            std::string params = sig.substr(7, sig.find("):") - 7);
+                            if (params.empty())
+                                throw std::runtime_error("Event '" + attr.name + "' handler '" + handler_name + 
+                                    "' needs 1 string parameter at line " + std::to_string(el->line));
+                            if (params.find(',') != std::string::npos)
+                                throw std::runtime_error("Event '" + attr.name + "' handler '" + handler_name + 
+                                    "' should have 1 parameter, not multiple at line " + std::to_string(el->line));
+                            if (!is_compatible_type("string", normalize_type(params)))
+                                throw std::runtime_error("Event '" + attr.name + "' handler '" + handler_name + 
+                                    "' parameter must be string, not '" + params + "' at line " + std::to_string(el->line));
+                        }
+                    }
+                }
+            }
+            
             for (const auto &child : el->children)
             {
                 validate_node(child.get(), parent_comp_name, scope);
