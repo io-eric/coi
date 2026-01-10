@@ -153,6 +153,76 @@ scores.clear();          // Remove all elements (requires mut)
 bool empty = scores.isEmpty();
 ```
 
+### Enums
+Enums define a set of named constants. They can be declared inside components, as shared (accessible from other components), or globally.
+
+```tsx
+// Inside a component
+component App {
+    enum Mode {
+        Idle,
+        Running,
+        Paused
+    }
+    
+    mut Mode currentMode = Mode::Idle;
+    
+    def start() : void {
+        currentMode = Mode::Running;
+    }
+}
+
+// Global enum (outside any component)
+enum Status {
+    Pending,
+    Success,
+    Error
+}
+
+component Handler {
+    mut Status status = Status::Pending;
+}
+```
+
+**Shared enums** can be accessed from other components using the `ComponentName.EnumName::Value` syntax:
+
+```tsx
+component Theme {
+    shared enum Mode {
+        Light,
+        Dark
+    }
+    
+    mut Mode current = Mode::Light;
+}
+
+component Settings {
+    // Access shared enum from another component
+    mut Theme.Mode selectedTheme = Theme.Mode::Dark;
+}
+```
+
+**Enum features:**
+- Enums implicitly convert to/from `int` for easy serialization
+- Comparison with `==` and `!=` works as expected
+- Trailing commas are allowed in enum value lists
+- `.size()` returns the number of enum values
+
+```tsx
+// Implicit int conversion
+mut Mode mode = Mode::Idle;
+int modeValue = mode;        // enum -> int
+mode = 2;                    // int -> enum
+
+// Get enum size (useful for iteration)
+int count = Mode.size();     // returns 3 (Idle, Running, Paused)
+
+// Comparison
+if (mode == Mode::Running) {
+    // ...
+}
+```
+
 ### Control Flow
 
 **Conditionals:**
