@@ -21,7 +21,7 @@ class CoiFormatter {
         let indentLevel = 0;
         let inViewBlock = false;
         let inStyleBlock = false;
-        let inMultilineString = false;
+        let styleBlockBraceCount = 0;
 
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
@@ -33,14 +33,21 @@ class CoiFormatter {
                 continue;
             }
 
-            // Handle style blocks (preserve CSS formatting)
+            // Handle style blocks (preserve CSS formatting with proper brace counting)
             if (inStyleBlock) {
-                if (trimmed === '}') {
+                // Count braces in this line
+                const openBraces = (trimmed.match(/\{/g) || []).length;
+                const closeBraces = (trimmed.match(/\}/g) || []).length;
+                styleBlockBraceCount += openBraces - closeBraces;
+
+                if (styleBlockBraceCount <= 0) {
+                    // End of style block
                     inStyleBlock = false;
-                    indentLevel--;
+                    indentLevel = Math.max(0, indentLevel - 1);
                     formattedLines.push(this.indent(indentLevel) + trimmed);
+                    styleBlockBraceCount = 0;
                 } else {
-                    // Preserve CSS indentation relative to style block
+                    // Inside style block - preserve CSS indentation
                     formattedLines.push(this.indent(indentLevel) + trimmed);
                 }
                 continue;
@@ -48,44 +55,46 @@ class CoiFormatter {
 
             // Check for style block start
             if (/^style\s*(global)?\s*\{/.test(trimmed)) {
-                inStyleBlock = true;
                 formattedLines.push(this.indent(indentLevel) + this.formatStyleDeclaration(trimmed));
+                inStyleBlock = true;
+                styleBlockBraceCount = 1;
                 indentLevel++;
                 continue;
             }
 
-            // Calculate indent adjustment before this line
-            const closeBraces = (trimmed.match(/^\}|^\<\//) || []).length;
-            if (closeBraces > 0 && indentLevel > 0) {
+            // Determine if we should decrease indent before this line
+            const startsWithClose = /^[\}\]>]|^<\//.test(trimmed);
+            if (startsWithClose && indentLevel > 0) {
                 indentLevel--;
+            }
+
+            // Check for view block boundaries
+            if (/^view\s*\{/.test(trimmed)) {
+                inViewBlock = true;
+            }
+            if (inViewBlock && trimmed === '}') {
+                inViewBlock = false;
             }
 
             // Format the line
             let formattedLine = this.formatLine(trimmed, inViewBlock);
             formattedLines.push(this.indent(indentLevel) + formattedLine);
 
-            // Calculate indent adjustment after this line
-            const openBraces = (trimmed.match(/\{$|\{\s*$/) || []).length;
-            const selfClosing = trimmed.endsWith('/>') || trimmed.endsWith('/>');
+            // Determine if we should increase indent after this line
+            const endsWithOpen = /[\{\[]$/.test(trimmed) && !/\}$/.test(trimmed);
             
-            // Check for view block
-            if (/^view\s*\{/.test(trimmed)) {
-                inViewBlock = true;
-            }
-            
-            // Check for view block end
-            if (inViewBlock && trimmed === '}') {
-                inViewBlock = false;
-            }
-
             // Handle view element tags
             if (inViewBlock) {
-                const tagOpen = (trimmed.match(/<[a-zA-Z][^/>]*>(?!.*<\/)/g) || []).length;
-                const tagClose = (trimmed.match(/<\/[a-zA-Z]+>/g) || []).length;
-                indentLevel += tagOpen - tagClose;
-            }
-
-            if (openBraces > 0 && !trimmed.includes('}')) {
+                // Count opening and closing tags
+                const selfClosingTags = (trimmed.match(/\/>/g) || []).length;
+                const openTags = (trimmed.match(/<[a-zA-Z][^/>]*>/g) || []).length - selfClosingTags;
+                const closeTags = (trimmed.match(/<\/[a-zA-Z0-9-]+>/g) || []).length;
+                
+                // Adjust only for tags that don't close on the same line
+                if (openTags > closeTags) {
+                    indentLevel += openTags - closeTags;
+                }
+            } else if (endsWithOpen) {
                 indentLevel++;
             }
 
@@ -110,6 +119,11 @@ class CoiFormatter {
         // Format function declaration
         if (line.startsWith('def ')) {
             return this.formatFunctionDeclaration(line);
+        }
+
+        // Don't try to format lines in view blocks (HTML-like content)
+        if (inView && (line.startsWith('<') || line.includes('{') || line.includes('}'))) {
+            return line;
         }
 
         // Format variable declarations
@@ -154,16 +168,25 @@ class CoiFormatter {
     }
 
     formatStyleDeclaration(line) {
-        return line.replace(/style\s*(global)?\s*\{/, 'style$1 {').replace(/style {/, 'style {');
+        return line
+            .replace(/style\s*(global)?\s*\{/, (m, global) => global ? 'style global {' : 'style {');
     }
 
     formatOperators(line) {
-        // Don't format inside strings
-        const strings = [];
-        let stringIndex = 0;
+        // Don't format inside strings or braces (could be expressions)
+        const protected = [];
+        let protectedIndex = 0;
+        
+        // Protect strings
         line = line.replace(/"[^"]*"/g, (match) => {
-            strings.push(match);
-            return `__STRING_${stringIndex++}__`;
+            protected.push(match);
+            return `__PROTECTED_${protectedIndex++}__`;
+        });
+        
+        // Protect expressions in braces
+        line = line.replace(/\{[^}]*\}/g, (match) => {
+            protected.push(match);
+            return `__PROTECTED_${protectedIndex++}__`;
         });
 
         // Format operators
@@ -173,9 +196,6 @@ class CoiFormatter {
             .replace(/\s*!=\s*/g, ' != ')
             .replace(/\s*<=\s*/g, ' <= ')
             .replace(/\s*>=\s*/g, ' >= ')
-            // Be careful with < and > (could be view elements)
-            .replace(/([^<>])\s*<\s*([^<>=])/g, '$1 < $2')
-            .replace(/([^<>])\s*>\s*([^<>=])/g, '$1 > $2')
             // Logical operators
             .replace(/\s*&&\s*/g, ' && ')
             .replace(/\s*\|\|\s*/g, ' || ')
@@ -187,9 +207,9 @@ class CoiFormatter {
             // Simple assignment (but not == or !=)
             .replace(/([^=!<>+\-*/])\s*=\s*([^=])/g, '$1 = $2');
 
-        // Restore strings
-        strings.forEach((str, i) => {
-            line = line.replace(`__STRING_${i}__`, str);
+        // Restore protected sections
+        protected.forEach((str, i) => {
+            line = line.replace(`__PROTECTED_${i}__`, str);
         });
 
         return line;
@@ -233,6 +253,7 @@ class CoiDefinitions {
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             const trimmed = line.trim();
+            const lineNumber = i + 1;  // 1-based line number
 
             // Skip comments and empty lines
             if (trimmed.startsWith('//') || trimmed === '') continue;
@@ -248,7 +269,8 @@ class CoiDefinitions {
                     extends: typeMatch[2] || null,
                     methods: [],
                     typeMethods: [],  // type def (static)
-                    source: filename
+                    source: filename,
+                    line: lineNumber
                 };
                 braceDepth = 1;
                 continue;
@@ -259,7 +281,8 @@ class CoiDefinitions {
                     kind: 'namespace',
                     name: nsMatch[1],
                     methods: [],
-                    source: filename
+                    source: filename,
+                    line: lineNumber
                 };
                 braceDepth = 1;
                 continue;
@@ -284,7 +307,8 @@ class CoiDefinitions {
                         params: this.parseParams(typeDefMatch[2]),
                         returnType: typeDefMatch[3],
                         isTypeMethod: true,
-                        mapsTo: null
+                        mapsTo: null,
+                        line: lineNumber
                     };
                     currentBlock.typeMethods.push(method);
                     currentBlock._lastMethod = method;
@@ -294,7 +318,8 @@ class CoiDefinitions {
                         params: this.parseParams(defMatch[2]),
                         returnType: defMatch[3],
                         isTypeMethod: false,
-                        mapsTo: null
+                        mapsTo: null,
+                        line: lineNumber
                     };
                     currentBlock.methods.push(method);
                     currentBlock._lastMethod = method;
@@ -437,6 +462,13 @@ function activate(context) {
         '(', ','
     );
 
+    // Register definition provider (Ctrl+Click go to definition)
+    const definitionProvider = vscode.languages.registerDefinitionProvider('coi', {
+        provideDefinition(document, position) {
+            return getDefinition(document, position);
+        }
+    });
+
     // Register document formatter
     const formattingProvider = vscode.languages.registerDocumentFormattingEditProvider('coi', {
         provideDocumentFormattingEdits(document) {
@@ -481,6 +513,7 @@ function activate(context) {
         completionProvider, 
         hoverProvider, 
         signatureProvider,
+        definitionProvider,
         formattingProvider,
         rangeFormattingProvider
     );
@@ -705,6 +738,91 @@ function getHover(document, position) {
     }
 
     return null;
+}
+
+function getDefinition(document, position) {
+    const wordRange = document.getWordRangeAtPosition(position);
+    if (!wordRange) return null;
+
+    const word = document.getText(wordRange);
+    const lineText = document.lineAt(position).text;
+
+    // Check if it's Type.method or var.method
+    const dotPattern = new RegExp(`(\\w+)\\.${word}\\s*\\(`);
+    const dotMatch = lineText.match(dotPattern);
+
+    if (dotMatch) {
+        const typeName = dotMatch[1];
+
+        // Check type methods
+        const typeInfo = definitions.types.get(typeName);
+        if (typeInfo) {
+            const typeMethod = (typeInfo.typeMethods || []).find(m => m.name === word);
+            if (typeMethod && typeInfo.source) {
+                return createDefinitionLocation(typeInfo.source, typeMethod.line);
+            }
+            const method = typeInfo.methods.find(m => m.name === word);
+            if (method && typeInfo.source) {
+                return createDefinitionLocation(typeInfo.source, method.line);
+            }
+        }
+
+        // Check namespace
+        const nsInfo = definitions.namespaces.get(typeName);
+        if (nsInfo) {
+            const method = nsInfo.methods.find(m => m.name === word);
+            if (method && nsInfo.source) {
+                return createDefinitionLocation(nsInfo.source, method.line);
+            }
+        }
+
+        // Check by variable type
+        const varType = findVariableType(document, position, typeName);
+        if (varType) {
+            const varTypeInfo = definitions.types.get(varType);
+            if (varTypeInfo) {
+                const method = varTypeInfo.methods.find(m => m.name === word);
+                if (method && varTypeInfo.source) {
+                    return createDefinitionLocation(varTypeInfo.source, method.line);
+                }
+            }
+        }
+    }
+
+    // Check if it's a type name directly
+    const typeInfo = definitions.types.get(word);
+    if (typeInfo && typeInfo.source) {
+        return createDefinitionLocation(typeInfo.source, typeInfo.line);
+    }
+
+    // Check if it's a namespace
+    const nsInfo = definitions.namespaces.get(word);
+    if (nsInfo && nsInfo.source) {
+        return createDefinitionLocation(nsInfo.source, nsInfo.line);
+    }
+
+    return null;
+}
+
+function createDefinitionLocation(sourcePath, line) {
+    // sourcePath might be relative or just a filename, resolve it
+    let fullPath = sourcePath;
+    
+    // Check workspace def/ folder first
+    if (vscode.workspace.workspaceFolders) {
+        const workspaceDefPath = path.join(
+            vscode.workspace.workspaceFolders[0].uri.fsPath, 
+            'def', 
+            path.basename(sourcePath)
+        );
+        if (fs.existsSync(workspaceDefPath)) {
+            fullPath = workspaceDefPath;
+        }
+    }
+
+    const uri = vscode.Uri.file(fullPath);
+    const pos = new vscode.Position(Math.max(0, (line || 1) - 1), 0);
+    return new vscode.Location(uri, pos);
 }
 
 function getSignatureHelp(document, position) {

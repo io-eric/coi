@@ -36,6 +36,9 @@
       "include": "#component-reference"
     },
     {
+      "include": "#function-call"
+    },
+    {
       "include": "#keywords"
     },
     {
@@ -61,11 +64,19 @@
       "patterns": [
         {
           "name": "keyword.control.coi",
-          "match": "\\b(component|def|view|return|if|else|for|while|computed|tick|init|mount|app|import|struct|style|type|global|in|root|key)\\b"
+          "match": "\\b(component|def|view|return|if|else|for|while|computed|tick|init|mount|app|import|struct|style|type|global|in|root)\\b"
         },
         {
           "name": "storage.modifier.coi",
           "match": "\\b(mut|pub|shared)\\b"
+        },
+        {
+          "name": "constant.numeric.coi",
+          "match": "\\b[0-9]+\\.?[0-9]*\\b"
+        },
+        {
+          "name": "constant.language.boolean.coi",
+          "match": "\\b(true|false)\\b"
         }
       ]
     },
@@ -74,6 +85,25 @@
         {
           "name": "keyword.control.coi",
           "match": "\\b(view|tick|prop|app)\\b"
+        }
+      ]
+    },
+    "function-call": {
+      "patterns": [
+        {
+          "comment": "Method calls like obj.method() or Type.method()",
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\.([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": { "name": "variable.other.object.coi" },
+            "2": { "name": "entity.name.function.coi" }
+          }
+        },
+        {
+          "comment": "Standalone function calls like doSomething()",
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": { "name": "entity.name.function.coi" }
+          }
         }
       ]
     },
@@ -199,15 +229,99 @@
       "patterns": [
         { "include": "#view-control-tags" },
         { "include": "#view-element-tags" },
-        { "include": "#view-expression-interpolation" },
+        { "include": "#view-attribute-value" },
+        { "include": "#view-text-interpolation" },
         { "include": "#comments" }
+      ]
+    },
+    "view-text-interpolation": {
+      "comment": "Expression interpolation in text content: {expression}",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.coi" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.coi" }
+      },
+      "contentName": "meta.embedded.expression.coi",
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.coi",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.logical.coi",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.arithmetic.coi",
+          "match": "\\+\\+|--|\\+|-|\\*|/|%"
+        },
+        {
+          "name": "keyword.operator.ternary.coi",
+          "match": "\\?|:"
+        },
+        {
+          "name": "constant.numeric.coi",
+          "match": "\\b[0-9]+\\.?[0-9]*\\b"
+        },
+        {
+          "name": "constant.language.boolean.coi",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "name": "variable.other.coi",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+        }
       ]
     },
     "view-control-tags": {
       "patterns": [
         {
-          "comment": "Opening control flow tags: <if, <else, <for",
-          "match": "(<)(if|else|for)\\b",
+          "comment": "For loop with in keyword, range, and optional key: <for i in 0:count key={id}>",
+          "begin": "(<)(for)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+(in)\\s+",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.tag.coi" },
+            "2": { "name": "keyword.control.coi" },
+            "3": { "name": "variable.other.coi" },
+            "4": { "name": "keyword.control.coi" }
+          },
+          "end": "(>)",
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.tag.coi" }
+          },
+          "patterns": [
+            {
+              "comment": "key attribute",
+              "match": "(key)\\s*=\\s*\\{([^}]+)\\}",
+              "captures": {
+                "1": { "name": "keyword.control.key.coi" },
+                "2": { "name": "variable.other.coi" }
+              }
+            },
+            {
+              "comment": "Range expression with colon",
+              "match": "([a-zA-Z0-9_]+)(:)([a-zA-Z0-9_]+)",
+              "captures": {
+                "1": { "name": "variable.other.coi" },
+                "2": { "name": "keyword.operator.range.coi" },
+                "3": { "name": "variable.other.coi" }
+              }
+            },
+            {
+              "comment": "Array/iterable reference",
+              "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b",
+              "name": "variable.other.coi"
+            }
+          ]
+        },
+        {
+          "comment": "Opening control flow tags: <if, <else",
+          "match": "(<)(if|else)\\b",
           "captures": {
             "1": { "name": "punctuation.definition.tag.coi" },
             "2": { "name": "keyword.control.coi" }
@@ -220,20 +334,6 @@
             "1": { "name": "punctuation.definition.tag.coi" },
             "2": { "name": "keyword.control.coi" },
             "3": { "name": "punctuation.definition.tag.coi" }
-          }
-        },
-        {
-          "comment": "For loop with in keyword and range: <for i in 0:count>",
-          "match": "(<)(for)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+(in)\\s+([a-zA-Z0-9_]+)(:)([a-zA-Z0-9_]+)(>)",
-          "captures": {
-            "1": { "name": "punctuation.definition.tag.coi" },
-            "2": { "name": "keyword.control.coi" },
-            "3": { "name": "variable.other.coi" },
-            "4": { "name": "keyword.control.coi" },
-            "5": { "name": "constant.numeric.coi" },
-            "6": { "name": "keyword.operator.range.coi" },
-            "7": { "name": "variable.other.coi" },
-            "8": { "name": "punctuation.definition.tag.coi" }
           }
         },
         {
@@ -301,25 +401,8 @@
           }
         },
         {
-          "name": "entity.other.attribute-name.key.coi",
-          "match": "\\b(key)\\s*=",
-          "captures": {
-            "1": { "name": "keyword.control.coi" }
-          }
-        },
-        {
           "match": "/?>",
           "name": "punctuation.definition.tag"
-        },
-        {
-          "name": "entity.other.attribute-name",
-          "match": "\\b([A-Za-z0-9-:]+)="
-        },
-        {
-          "include": "#strings"
-        },
-        {
-          "include": "#view-expression-interpolation"
         },
         {
           "name": "entity.other.attribute-name.event",
@@ -327,18 +410,31 @@
           "captures": {
             "1": { "name": "support.function.event-handler" }
           }
+        },
+        {
+          "name": "entity.other.attribute-name",
+          "match": "\\b([A-Za-z0-9_-]+)="
+        },
+        {
+          "include": "#view-attribute-value"
+        },
+        {
+          "include": "#strings"
         }
       ]
     },
-    "view-expression-interpolation": {
-      "begin": "\\{",
-      "end": "\\}",
+    "view-attribute-value": {
+      "comment": "Expression in curly braces as attribute value: attr={expression}",
+      "begin": "(=)(\\{)",
       "beginCaptures": {
-        "0": { "name": "punctuation.section.embedded.begin.coi" }
+        "1": { "name": "punctuation.separator.key-value" },
+        "2": { "name": "punctuation.section.embedded.begin.coi" }
       },
+      "end": "(\\})",
       "endCaptures": {
-        "0": { "name": "punctuation.section.embedded.end.coi" }
+        "1": { "name": "punctuation.section.embedded.end.coi" }
       },
+      "contentName": "meta.embedded.expression.coi",
       "patterns": [
         {
           "name": "keyword.operator.comparison.coi",
@@ -365,7 +461,8 @@
           "match": "\\b(true|false)\\b"
         },
         {
-          "include": "#strings" },
+          "include": "#strings"
+        },
         {
           "name": "variable.other.coi",
           "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
