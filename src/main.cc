@@ -814,6 +814,19 @@ void validate_view_hierarchy(const std::vector<Component> &components)
                                         std::to_string(comp_inst->line));
                                 }
                             }
+                            // Validate regular (non-callback) prop types
+                            else if (!declared_param->is_callback && passed_prop.value)
+                            {
+                                std::string passed_type = infer_expression_type(passed_prop.value.get(), scope);
+                                std::string expected_type = normalize_type(declared_param->type);
+                                if (passed_type != "unknown" && !is_compatible_type(passed_type, expected_type))
+                                {
+                                    throw std::runtime_error(
+                                        "Parameter '" + passed_prop.name + "' in component '" + comp_inst->component_name +
+                                        "' expects type '" + expected_type + "' but got '" + passed_type +
+                                        "' at line " + std::to_string(comp_inst->line));
+                                }
+                            }
                             break;
                         }
                     }

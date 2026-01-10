@@ -1,0 +1,27 @@
+// Test: reference prop with correct type should work
+component Counter(mut int& count) {
+    def increment() : void {
+        count += 1;
+    }
+
+    view {
+        <div>
+            <span>Count: {count}</span>
+            <button onclick={increment}>+</button>
+        </div>
+    }
+}
+
+component App {
+    mut int value = 0;
+
+    view {
+        <div>
+            <Counter &count={value} />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}

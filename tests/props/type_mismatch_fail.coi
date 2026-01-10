@@ -1,0 +1,23 @@
+// Test: passing wrong type to callback parameter should fail
+component Button(def onClick(int) : void) {
+    view {
+        <button onclick={onClick(0)}>Click</button>
+    }
+}
+
+component App {
+    def handleClick(string s) : void {
+        // Handler expects string but Button expects int
+    }
+
+    view {
+        <div>
+            // Callback type mismatch: Button expects (int), but passing handler that expects string
+            <Button &onClick={handleClick("wrong")} />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}

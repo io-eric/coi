@@ -1,0 +1,18 @@
+// Test: basic prop passing should work correctly
+component Greeting(string name, int age) {
+    view {
+        <div>Hello {name}, you are {age} years old</div>
+    }
+}
+
+component App {
+    view {
+        <div>
+            <Greeting name="Alice" age={30} />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}

@@ -1,0 +1,19 @@
+// Test: passing wrong type to prop should fail (string instead of int)
+component Counter(int count) {
+    view {
+        <div>Count: {count}</div>
+    }
+}
+
+component App {
+    view {
+        <div>
+            // Type error: passing string "five" where int is expected
+            <Counter count="five" />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}
