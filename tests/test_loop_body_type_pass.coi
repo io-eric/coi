@@ -1,0 +1,26 @@
+// Test: type checking inside loop body should pass with correct types
+component LoopBodyTypePass {
+    mut int total = 0;
+    mut string[] names = ["alice", "bob", "charlie"];
+
+    init {
+        // Range loop with correct types
+        for i in 0:10 {
+            int doubled = i * 2;
+            total += doubled;
+        }
+
+        // Foreach loop with correct types
+        for name in names {
+            string greeting = "Hello, " + name;
+        }
+    }
+
+    view {
+        <div>Total: {total}</div>
+    }
+}
+
+app {
+    root = LoopBodyTypePass;
+}

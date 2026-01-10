@@ -1,0 +1,19 @@
+// Test: type error inside loop body should be caught
+component LoopBodyTypeFail {
+    mut int total = 0;
+
+    init {
+        for i in 0:10 {
+            // Error: assigning string to int variable
+            int bad = "this is a string";
+        }
+    }
+
+    view {
+        <div>{total}</div>
+    }
+}
+
+app {
+    root = LoopBodyTypeFail;
+}

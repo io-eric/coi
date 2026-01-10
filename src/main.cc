@@ -340,23 +340,23 @@ void validate_types(const std::vector<Component>& components) {
                 method_scope[param.name] = normalize_type(param.type);
             }
             
-            std::function<void(const std::unique_ptr<Statement>&)> check_stmt;
-            check_stmt = [&](const std::unique_ptr<Statement>& stmt) {
+            std::function<void(const std::unique_ptr<Statement>&, std::map<std::string, std::string>&)> check_stmt;
+            check_stmt = [&](const std::unique_ptr<Statement>& stmt, std::map<std::string, std::string>& current_scope) {
                     if (auto block = dynamic_cast<BlockStatement*>(stmt.get())) {
-                        for (const auto& s : block->statements) check_stmt(s);
+                        for (const auto& s : block->statements) check_stmt(s, current_scope);
                     } else if (auto decl = dynamic_cast<VarDeclaration*>(stmt.get())) {
                         std::string type = normalize_type(decl->type);
                         if (decl->initializer) {
-                             std::string init = infer_expression_type(decl->initializer.get(), method_scope);
+                             std::string init = infer_expression_type(decl->initializer.get(), current_scope);
                               if (init != "unknown" && !is_compatible_type(init, type)) {
                                  std::cerr << "Error: Variable '" << decl->name << "' expects '" << type << "' but got '" << init << "' line " << decl->line << std::endl;
                                  exit(1);
                              }
                         }
-                        method_scope[decl->name] = type;
+                        current_scope[decl->name] = type;
                     } else if (auto assign = dynamic_cast<Assignment*>(stmt.get())) {
-                         std::string var_type = method_scope.count(assign->name) ? method_scope.at(assign->name) : "unknown";
-                         std::string val_type = infer_expression_type(assign->value.get(), method_scope);
+                         std::string var_type = current_scope.count(assign->name) ? current_scope.at(assign->name) : "unknown";
+                         std::string val_type = infer_expression_type(assign->value.get(), current_scope);
                          
                          // Store the target type for code generation (needed for handle casts)
                          assign->target_type = var_type;
@@ -368,15 +368,33 @@ void validate_types(const std::vector<Component>& components) {
                              }
                          }
                     } else if (auto expr_stmt = dynamic_cast<ExpressionStatement*>(stmt.get())) {
-                        infer_expression_type(expr_stmt->expression.get(), method_scope);
+                        infer_expression_type(expr_stmt->expression.get(), current_scope);
                     } else if (auto if_stmt = dynamic_cast<IfStatement*>(stmt.get())) {
-                        check_stmt(if_stmt->then_branch);
-                        if(if_stmt->else_branch) check_stmt(if_stmt->else_branch);
+                        check_stmt(if_stmt->then_branch, current_scope);
+                        if(if_stmt->else_branch) check_stmt(if_stmt->else_branch, current_scope);
+                    } else if (auto for_range = dynamic_cast<ForRangeStatement*>(stmt.get())) {
+                        // Validate range expressions
+                        infer_expression_type(for_range->start.get(), current_scope);
+                        infer_expression_type(for_range->end.get(), current_scope);
+                        // Create new scope with loop variable
+                        std::map<std::string, std::string> loop_scope = current_scope;
+                        loop_scope[for_range->var_name] = "int32";
+                        check_stmt(for_range->body, loop_scope);
+                    } else if (auto for_each = dynamic_cast<ForEachStatement*>(stmt.get())) {
+                        // Validate iterable and infer element type
+                        std::string iterable_type = infer_expression_type(for_each->iterable.get(), current_scope);
+                        std::map<std::string, std::string> loop_scope = current_scope;
+                        if (iterable_type.ends_with("[]")) {
+                            loop_scope[for_each->var_name] = iterable_type.substr(0, iterable_type.length() - 2);
+                        } else {
+                            loop_scope[for_each->var_name] = "unknown";
+                        }
+                        check_stmt(for_each->body, loop_scope);
                     }
             };
             
             for (const auto& stmt : method.body) {
-                check_stmt(stmt);
+                check_stmt(stmt, method_scope);
             }
         }
     }
