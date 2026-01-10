@@ -13,7 +13,7 @@ void SchemaLoader::init() {
         entries_[entry.func_name] = &entry;
     }
     for (size_t i = 0; i < coi::HANDLE_COUNT; ++i) {
-        handles_.push_back(coi::HANDLES[i]);
+        handles_.insert(coi::HANDLES[i]);  // Use insert for unordered_set
     }
     // Load inheritance table
     for (const auto* kv = coi::HANDLE_INHERITANCE; kv->first != nullptr; ++kv) {
@@ -30,7 +30,7 @@ const coi::SchemaEntry* SchemaLoader::lookup(const std::string& func_name) const
 }
 
 bool SchemaLoader::is_handle(const std::string& type) const {
-    return std::find(handles_.begin(), handles_.end(), type) != handles_.end();
+    return handles_.count(type) > 0;  
 }
 
 bool SchemaLoader::is_assignable_to(const std::string& derived, const std::string& base) const {

@@ -1,6 +1,6 @@
 #include "lexer.h"
 #include <cctype>
-#include <map>
+#include <unordered_map>
 
 Lexer::Lexer(const std::string& src) : source(src){}
 
@@ -86,6 +86,7 @@ Token Lexer::read_identifier(){
     int start_line = line;
     int start_column = column;
     std::string id;
+    id.reserve(32);  // Pre-allocate for typical identifier lengths
 
     while(std::isalnum(current()) || current() == '_'){
         id += current();
@@ -93,7 +94,7 @@ Token Lexer::read_identifier(){
     }
 
     // Check for keywords
-    static std::map<std::string, TokenType> keywords = {
+    static const std::unordered_map<std::string, TokenType> keywords = {
         {"component", TokenType::COMPONENT},
         {"def", TokenType::DEF},
         {"return", TokenType::RETURN},
@@ -131,6 +132,8 @@ Token Lexer::read_identifier(){
 
 std::vector<Token> Lexer::tokenize(){
     std::vector<Token> tokens;
+    // Pre-allocate based on source size estimate (roughly 1 token per 5 chars)
+    tokens.reserve(source.size() / 5);
 
     while(current() != '\0'){
         // Skip whitespace and comments

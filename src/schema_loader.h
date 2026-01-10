@@ -1,8 +1,8 @@
 #pragma once
 
 #include <string>
-#include <map>
-#include <vector>
+#include <unordered_map>
+#include <unordered_set>
 #include "coi_schema.h"
 
 class SchemaLoader {
@@ -26,7 +26,7 @@ public:
     static std::string to_snake_case(const std::string& camel);
 
 private:
-    std::map<std::string, const coi::SchemaEntry*> entries_;
-    std::vector<std::string> handles_;
-    std::map<std::string, std::string> handle_inheritance_; // derived -> base
+    std::unordered_map<std::string, const coi::SchemaEntry*> entries_;
+    std::unordered_set<std::string> handles_;  
+    std::unordered_map<std::string, std::string> handle_inheritance_; // derived -> base
 };
