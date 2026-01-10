@@ -60,6 +60,9 @@ component TodoItem(pub int id, pub string text, pub mut bool done, def onRemove(
             font-size: 18px;
             border-radius: 4px;
             transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .remove:hover {
             background: #fee;
