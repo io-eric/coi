@@ -1,0 +1,26 @@
+// Test: Global enum declaration (outside component)
+enum Status {
+    Pending,
+    Success,
+    Error
+}
+
+component GlobalEnumTest {
+    mut Status status = Status::Pending;
+    
+    def complete() : void {
+        status = Status::Success;
+    }
+    
+    def fail() : void {
+        status = Status::Error;
+    }
+
+    view {
+        <div>Status test</div>
+    }
+}
+
+app {
+    root = GlobalEnumTest;
+}

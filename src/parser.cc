@@ -218,6 +218,15 @@ std::unique_ptr<Expression> Parser::parse_primary(){
     if(current().type == TokenType::IDENTIFIER){
         std::string name = current().value;
         advance();
+        
+        // Check for enum access: EnumName::Value
+        if(current().type == TokenType::DOUBLE_COLON){
+            advance();
+            std::string value_name = current().value;
+            expect(TokenType::IDENTIFIER, "Expected enum value name after '::'");
+            return std::make_unique<EnumAccess>(name, value_name);
+        }
+        
         std::unique_ptr<Expression> expr = std::make_unique<Identifier>(name);
 
         while(true) {
@@ -284,6 +293,16 @@ std::unique_ptr<Expression> Parser::parse_primary(){
                 advance();
                 std::string member = current().value;
                 expect(TokenType::IDENTIFIER, "Expected member name");
+                
+                // Check for Component.EnumName::Value syntax for shared enums
+                if(current().type == TokenType::DOUBLE_COLON){
+                    advance();
+                    std::string value_name = current().value;
+                    expect(TokenType::IDENTIFIER, "Expected enum value name after '::'");
+                    // name is the component name, member is the enum name
+                    return std::make_unique<EnumAccess>(member, value_name, name);
+                }
+                
                 expr = std::make_unique<MemberAccess>(std::move(expr), member);
             }
             else if(current().type == TokenType::LBRACKET){
@@ -637,6 +656,29 @@ std::unique_ptr<StructDef> Parser::parse_struct(){
         expect(TokenType::SEMICOLON, "Expected ';'");
 
         def->fields.push_back({type, fieldName});
+    }
+    expect(TokenType::RBRACE, "Expected '}'");
+    return def;
+}
+
+std::unique_ptr<EnumDef> Parser::parse_enum(){
+    expect(TokenType::ENUM, "Expected 'enum'");
+    std::string name = current().value;
+    expect(TokenType::IDENTIFIER, "Expected enum name");
+    expect(TokenType::LBRACE, "Expected '{'");
+
+    auto def = std::make_unique<EnumDef>();
+    def->name = name;
+
+    while(current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
+        std::string valueName = current().value;
+        expect(TokenType::IDENTIFIER, "Expected enum value name");
+        def->values.push_back(valueName);
+        
+        // Allow optional comma between values
+        if(current().type == TokenType::COMMA){
+            advance();
+        }
     }
     expect(TokenType::RBRACE, "Expected '}'");
     return def;
@@ -1147,6 +1189,13 @@ Component Parser::parse_component(){
     while(current().type != TokenType::VIEW && current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
         bool is_public = false;
         bool is_mutable = false;
+        bool is_shared = false;
+        
+        // Check for shared keyword (for enums)
+        if (current().type == TokenType::SHARED) {
+            is_shared = true;
+            advance();
+        }
         
         // Check for pub keyword
         if (current().type == TokenType::PUB) {
@@ -1168,6 +1217,13 @@ Component Parser::parse_component(){
             var_decl->type = current().value;
             var_decl->is_public = is_public;
             advance();
+            
+            // Handle Component.EnumName type syntax for shared enums
+            if(current().type == TokenType::DOT){
+                advance();
+                var_decl->type += "." + current().value;
+                expect(TokenType::IDENTIFIER, "Expected enum name after '.'");
+            }
 
             // Handle reference type
             if(current().type == TokenType::AMPERSAND){
@@ -1202,6 +1258,15 @@ Component Parser::parse_component(){
         // Struct definition
         else if(current().type == TokenType::STRUCT){
             comp.structs.push_back(parse_struct());
+        }
+        // Enum definition (with optional shared prefix)
+        else if(current().type == TokenType::ENUM){
+            auto enum_def = parse_enum();
+            enum_def->is_shared = is_shared;
+            if (is_shared) {
+                enum_def->owner_component = comp.name;
+            }
+            comp.enums.push_back(std::move(enum_def));
         }
         // Function definition (with optional pub prefix)
         else if(current().type == TokenType::DEF){
@@ -1413,6 +1478,9 @@ void Parser::parse_file(){
             expect(TokenType::SEMICOLON, "Expected ';'");
         } else if(current().type == TokenType::COMPONENT){
             components.push_back(parse_component());
+        } else if(current().type == TokenType::ENUM){
+            // Global enum (outside any component)
+            global_enums.push_back(parse_enum());
         } else if(current().type == TokenType::IDENTIFIER && current().value == "app"){
             advance();
             parse_app();

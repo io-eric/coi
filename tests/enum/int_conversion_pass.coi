@@ -1,0 +1,36 @@
+// Test: Enum to/from int implicit conversion
+component EnumIntConversion {
+    enum State {
+        Off,
+        On,
+        Standby
+    }
+    
+    mut State state = State::Off;
+    mut int stateValue = 0;
+    
+    def getStateAsInt() : int {
+        return state;
+    }
+    
+    def setStateFromInt(int val) : void {
+        state = val;
+    }
+    
+    def toggle() : void {
+        if (state == State::Off) {
+            state = State::On;
+        } else {
+            state = State::Off;
+        }
+        stateValue = state;
+    }
+
+    view {
+        <div>Int conversion test</div>
+    }
+}
+
+app {
+    root = EnumIntConversion;
+}

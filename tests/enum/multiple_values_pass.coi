@@ -1,0 +1,25 @@
+// Test: Enum with multiple values and trailing comma
+component MultiValueEnum {
+    enum Direction {
+        North,
+        South,
+        East,
+        West,
+    }
+    
+    mut Direction dir = Direction::North;
+    
+    def turnRight() : void {
+        if (dir == Direction::North) {
+            dir = Direction::East;
+        }
+    }
+
+    view {
+        <div>Direction test</div>
+    }
+}
+
+app {
+    root = MultiValueEnum;
+}

@@ -300,6 +300,28 @@ struct StructDef : ASTNode {
     std::string to_webcc() override;
 };
 
+// Enum definition: enum Mode { Idle, Running, Paused }
+struct EnumDef : ASTNode {
+    std::string name;
+    std::vector<std::string> values;
+    bool is_shared = false;  // If true, accessible as ComponentName.EnumName::Value
+    std::string owner_component;  // Component that owns this enum (for shared enums)
+
+    std::string to_webcc() override;
+};
+
+// Enum value access: Mode::Idle or App.Mode::Idle (for shared enums)
+struct EnumAccess : Expression {
+    std::string enum_name;      // e.g., "Mode"
+    std::string value_name;     // e.g., "Idle"
+    std::string component_name; // e.g., "App" (empty for local/global enums)
+
+    EnumAccess(const std::string& enum_n, const std::string& val_n, const std::string& comp_n = "")
+        : enum_name(enum_n), value_name(val_n), component_name(comp_n) {}
+    std::string to_webcc() override;
+    bool is_static() override { return true; }
+};
+
 struct TextNode : ASTNode {
     std::string text;
     TextNode(const std::string& t) : text(t) {}
@@ -418,6 +440,7 @@ struct Component : ASTNode {
     std::string css;
     std::string global_css;
     std::vector<std::unique_ptr<StructDef>> structs;
+    std::vector<std::unique_ptr<EnumDef>> enums;  // Enum definitions within this component
     std::vector<std::unique_ptr<VarDeclaration>> state;
     std::vector<std::unique_ptr<ComponentParam>> params;  // Constructor parameters
     std::vector<FunctionDef> methods;

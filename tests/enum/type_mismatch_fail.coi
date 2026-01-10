@@ -1,0 +1,25 @@
+// Test: Assigning wrong enum type should fail
+component EnumTypeMismatch {
+    enum Color {
+        Red,
+        Green,
+        Blue
+    }
+    
+    enum Size {
+        Small,
+        Medium,
+        Large
+    }
+    
+    // This should fail - assigning Size value to Color variable
+    mut Color color = Size::Small;
+
+    view {
+        <div>Type mismatch test</div>
+    }
+}
+
+app {
+    root = EnumTypeMismatch;
+}

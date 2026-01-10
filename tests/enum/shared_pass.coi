@@ -1,0 +1,33 @@
+// Test: Shared enum accessible from other components via ComponentName.EnumName::Value
+component App {
+    shared enum Mode {
+        Light,
+        Dark
+    }
+    
+    mut Mode theme = Mode::Light;
+
+    view {
+        <div>Theme test</div>
+    }
+}
+
+component Child {
+    // Access shared enum from App component
+    mut App.Mode mode = App.Mode::Dark;
+
+    view {
+        <div>Child</div>
+    }
+}
+
+component Main {
+    view {
+        <App />
+        <Child />
+    }
+}
+
+app {
+    root = Main;
+}

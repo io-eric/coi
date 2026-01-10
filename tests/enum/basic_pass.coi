@@ -1,0 +1,26 @@
+// Test: Basic enum declaration and usage inside component
+component EnumTest {
+    enum Mode {
+        Idle,
+        Running,
+        Paused
+    }
+    
+    mut Mode currentMode = Mode::Idle;
+    
+    def start() : void {
+        currentMode = Mode::Running;
+    }
+    
+    def pause() : void {
+        currentMode = Mode::Paused;
+    }
+
+    view {
+        <div>Mode test</div>
+    }
+}
+
+app {
+    root = EnumTest;
+}

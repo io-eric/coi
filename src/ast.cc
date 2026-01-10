@@ -8,6 +8,13 @@ static std::set<std::string> g_ref_props;
 
 std::string convert_type(const std::string& type) {
     if (type == "string") return "webcc::string";
+    // Handle Component.EnumName type syntax - convert to Component::EnumName
+    if (type.find('.') != std::string::npos) {
+        std::string result = type;
+        size_t pos = result.find('.');
+        result.replace(pos, 1, "::");
+        return result;
+    }
     // Handle dynamic arrays: T[]
     if (type.ends_with("[]")) {
         std::string inner = type.substr(0, type.length() - 2);
@@ -731,6 +738,23 @@ std::string StructDef::to_webcc() {
     ss << "    " << name << "() {}\n"; // Default constructor
     ss << "};\n";
     return ss.str();
+}
+
+std::string EnumDef::to_webcc() {
+    std::stringstream ss;
+    ss << "enum class " << name << " {\n";
+    for(size_t i = 0; i < values.size(); i++){
+        ss << "    " << values[i];
+        if(i < values.size() - 1) ss << ",";
+        ss << "\n";
+    }
+    ss << "};\n";
+    return ss.str();
+}
+
+std::string EnumAccess::to_webcc() {
+    // Just output EnumName::Value - the type alias handles Component.Enum access
+    return enum_name + "::" + value_name;
 }
 
 std::string TextNode::to_webcc() { return "\"" + text + "\""; }
@@ -1635,6 +1659,11 @@ std::string Component::to_webcc() {
     // Structs
     for(auto& s : structs){
         ss << s->to_webcc() << "\n";
+    }
+    
+    // Enums (inside component)
+    for(auto& e : enums){
+        ss << e->to_webcc() << "\n";
     }
     
     // Component parameters

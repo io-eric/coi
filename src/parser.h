@@ -32,6 +32,7 @@ class Parser{
         std::unique_ptr<Expression> parse_primary();
         std::unique_ptr<Statement> parse_statement();
         std::unique_ptr<StructDef> parse_struct();
+        std::unique_ptr<EnumDef> parse_enum();
         std::string parse_style_block();
         std::unique_ptr<ASTNode> parse_html_element();
         std::unique_ptr<ASTNode> parse_view_node();  // Parse HTML element or view if/else/for
@@ -42,6 +43,7 @@ class Parser{
 
     public:
         std::vector<Component> components;
+        std::vector<std::unique_ptr<EnumDef>> global_enums;  // Enums declared outside components
         std::vector<std::string> imports;
         AppConfig app_config;
         Parser(const std::vector<Token>& toks);

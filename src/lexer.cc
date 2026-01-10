@@ -120,6 +120,7 @@ Token Lexer::read_identifier(){
         {"void", TokenType::VOID},
         {"true", TokenType::TRUE},
         {"false", TokenType::FALSE},
+        {"enum", TokenType::ENUM},
     };
 
     auto it = keywords.find(id);
@@ -233,6 +234,11 @@ std::vector<Token> Lexer::tokenize(){
         }
         if (current() == '=' && peek() == '>') {
             tokens.push_back(make_token(TokenType::ARROW, "=>"));
+            advance(); advance();
+            continue;
+        }
+        if (current() == ':' && peek() == ':') {
+            tokens.push_back(make_token(TokenType::DOUBLE_COLON, "::"));
             advance(); advance();
             continue;
         }

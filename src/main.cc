@@ -188,6 +188,7 @@ int main(int argc, char **argv)
     }
 
     std::vector<Component> all_components;
+    std::vector<std::unique_ptr<EnumDef>> all_global_enums;
     AppConfig final_app_config;
     std::set<std::string> processed_files;
     std::queue<std::string> file_queue;
@@ -233,6 +234,11 @@ int main(int argc, char **argv)
             parser.parse_file();
 
             all_components.insert(all_components.end(), std::make_move_iterator(parser.components.begin()), std::make_move_iterator(parser.components.end()));
+            
+            // Collect global enums
+            for (auto& enum_def : parser.global_enums) {
+                all_global_enums.push_back(std::move(enum_def));
+            }
 
             if (!parser.app_config.root_component.empty())
             {
@@ -265,7 +271,7 @@ int main(int argc, char **argv)
 
         validate_view_hierarchy(all_components);
         validate_mutability(all_components);
-        validate_types(all_components);
+        validate_types(all_components, all_global_enums);
 
         // Determine output filename
         namespace fs = std::filesystem;
@@ -362,6 +368,14 @@ int main(int argc, char **argv)
         // Sort components topologically so dependencies come first
         auto sorted_components = topological_sort_components(all_components);
 
+        // Output global enums (defined outside components)
+        for (const auto& enum_def : all_global_enums) {
+            out << enum_def->to_webcc();
+        }
+        if (!all_global_enums.empty()) {
+            out << "\n";
+        }
+        
         // Forward declarations
         for (auto *comp : sorted_components)
         {

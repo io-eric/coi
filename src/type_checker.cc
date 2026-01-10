@@ -5,8 +5,32 @@
 #include <set>
 #include <functional>
 
+// Global set of known enum type names (populated during validation)
+static std::set<std::string> g_enum_types;
+
+// Check if a type is a known enum type
+static bool is_enum_type(const std::string &t) {
+    // Check direct match
+    if (g_enum_types.count(t))
+        return true;
+    // Check qualified name (Component.EnumName) - extract enum name
+    size_t dot_pos = t.find('.');
+    if (dot_pos != std::string::npos) {
+        std::string enum_name = t.substr(dot_pos + 1);
+        return g_enum_types.count(enum_name) > 0;
+    }
+    return false;
+}
+
 std::string normalize_type(const std::string &type)
 {
+    // Handle Component.EnumName type syntax - extract just the enum name for comparison
+    // App.Mode and Mode should both normalize to the same thing when in the same scope
+    if (type.find('.') != std::string::npos)
+    {
+        // Keep the full qualified name for type checking
+        return type;
+    }
     // Handle dynamic array types: T[]
     if (type.ends_with("[]"))
     {
@@ -42,6 +66,24 @@ bool is_compatible_type(const std::string &source, const std::string &target)
         return true;
     if (source == "unknown" || target == "unknown")
         return true;
+
+    // Handle Component.EnumName type compatibility
+    // App.Mode should be compatible with Mode (when Mode is from App's shared enum)
+    auto extract_enum_name = [](const std::string &t) -> std::string {
+        size_t dot_pos = t.find('.');
+        if (dot_pos != std::string::npos) {
+            return t.substr(dot_pos + 1);
+        }
+        return t;
+    };
+    
+    // If either is a qualified enum type, compare the enum names
+    if (source.find('.') != std::string::npos || target.find('.') != std::string::npos) {
+        std::string src_enum = extract_enum_name(source);
+        std::string tgt_enum = extract_enum_name(target);
+        if (src_enum == tgt_enum)
+            return true;
+    }
 
     // Handle dynamic array type compatibility: T[]
     if (source.ends_with("[]") && target.ends_with("[]"))
@@ -99,6 +141,15 @@ bool is_compatible_type(const std::string &source, const std::string &target)
     // int32 can be used as handle (for raw handle values)
     if (source == "int32" && SchemaLoader::instance().is_handle(target))
         return true;
+    
+    // Enum <-> int implicit conversions (only for known enum types)
+    // Allow int -> enum (cast int to enum)
+    if (source == "int32" && is_enum_type(target))
+        return true;
+    // Allow enum -> int (cast enum to int)
+    if (is_enum_type(source) && target == "int32")
+        return true;
+    
     return false;
 }
 
@@ -112,6 +163,13 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
         return "string";
     if (dynamic_cast<BoolLiteral *>(expr))
         return "bool";
+    
+    // Enum access type inference
+    if (auto enum_access = dynamic_cast<EnumAccess *>(expr))
+    {
+        // Return the enum type name
+        return enum_access->enum_name;
+    }
 
     // Array literal type inference (dynamic array)
     if (auto arr = dynamic_cast<ArrayLiteral *>(expr))
@@ -337,11 +395,34 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
     return "unknown";
 }
 
-void validate_types(const std::vector<Component> &components)
+void validate_types(const std::vector<Component> &components, const std::vector<std::unique_ptr<EnumDef>> &global_enums)
 {
     std::set<std::string> component_names;
     for (const auto &c : components)
         component_names.insert(c.name);
+
+    // Collect all enum type names (for enum <-> int conversion checking)
+    g_enum_types.clear();
+    
+    // Add global enums
+    for (const auto &e : global_enums)
+    {
+        g_enum_types.insert(e->name);
+    }
+    
+    // Add component enums
+    for (const auto &comp : components)
+    {
+        for (const auto &e : comp.enums)
+        {
+            g_enum_types.insert(e->name);
+            // Also add qualified name for shared enums
+            if (e->is_shared)
+            {
+                g_enum_types.insert(comp.name + "." + e->name);
+            }
+        }
+    }
 
     for (const auto &comp : components)
     {

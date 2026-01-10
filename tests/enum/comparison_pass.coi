@@ -1,0 +1,30 @@
+// Test: Enum comparison in conditions
+component EnumComparison {
+    enum State {
+        Loading,
+        Ready,
+        Error
+    }
+    
+    mut State state = State::Loading;
+    
+    def checkReady() : bool {
+        return state == State::Ready;
+    }
+    
+    def isError() : bool {
+        return state == State::Error;
+    }
+    
+    def setReady() : void {
+        state = State::Ready;
+    }
+
+    view {
+        <div>Comparison test</div>
+    }
+}
+
+app {
+    root = EnumComparison;
+}
