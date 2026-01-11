@@ -31,7 +31,17 @@ The build script supports these options:
 ./build.sh --help             # Show all available options
 ```
 
-Use `--rebuild-schema` when you've modified the WebCC schema.def and need to regenerate COI's type definitions.
+### Automatic Schema Rebuild
+
+The build system automatically detects when `deps/webcc/schema.def` changes:
+
+1. Running `./build.sh` checks if WebCC's schema.def was modified
+2. If changed, WebCC rebuilds automatically
+3. COI then regenerates its schema files to match
+
+This means you can simply run `./build.sh` after editing `schema.def` and everything cascades correctly.
+
+Use `--rebuild-schema` to force regeneration even when no changes are detected.
 
 ## Usage
 

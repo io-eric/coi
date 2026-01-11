@@ -30,43 +30,47 @@ if [ "$REBUILD_WEBCC" = true ]; then
     echo "[COI] Force rebuilding webcc toolchain..."
     if [ -d "deps/webcc" ]; then
         pushd deps/webcc > /dev/null
-        ./build.sh
+        ./build.sh --force && WEBCC_EXIT=0 || WEBCC_EXIT=$?
         popd > /dev/null
+        # Exit 2 = rebuilt, Exit 0 = up to date, anything else = error
+        if [ $WEBCC_EXIT -ne 0 ] && [ $WEBCC_EXIT -ne 2 ]; then
+            echo "[COI] Error: webcc build failed"
+            exit 1
+        fi
+        REBUILD_SCHEMA=true  # webcc rebuilt, so regenerate coi schema
     else
         echo "[COI] Error: deps/webcc not found"
         exit 1
     fi
 fi
 
+# Auto-rebuild webcc if schema.def changed (smart incremental)
+if [ -d "deps/webcc" ]; then
+    pushd deps/webcc > /dev/null
+    ./build.sh && WEBCC_EXIT=0 || WEBCC_EXIT=$?
+    popd > /dev/null
+    
+    # Exit 2 = rebuilt, Exit 0 = up to date, anything else = error
+    if [ $WEBCC_EXIT -eq 2 ]; then
+        echo "[COI] WebCC schema changed, regenerating COI schema..."
+        REBUILD_SCHEMA=true
+    elif [ $WEBCC_EXIT -ne 0 ]; then
+        echo "[COI] Error: webcc build failed"
+        exit 1
+    fi
+    
+    # Ensure webcc is in PATH
+    export PATH="$PWD/deps/webcc:$PATH"
+fi
+
 # Force rebuild schema if requested
 if [ "$REBUILD_SCHEMA" = true ]; then
-    echo "[COI] Force rebuilding COI schema..."
+    echo "[COI] Rebuilding COI schema..."
     # Remove generated schema files to force regeneration
     rm -f src/coi_schema.h src/coi_schema.cc
     rm -f build/gen_schema build/obj/gen_schema.o
     # Also regenerate .d.coi definition files
     rm -f def/*.d.coi
-    echo "[COI] Schema files removed."
-fi
-
-# Check for webcc dependency
-if ! command -v webcc >/dev/null 2>&1; then
-    echo "[COI] webcc not found in PATH. Checking submodule..."
-    if [ ! -f "deps/webcc/build.sh" ]; then
-        echo "[COI] Initializing webcc submodule..."
-        git submodule update --init --recursive
-    fi
-    
-    if [ ! -f "deps/webcc/webcc" ]; then
-        echo "[COI] Building and installing webcc toolchain (required dependency)..."
-        pushd deps/webcc > /dev/null
-        # Automatically answer 'y' to the install prompt in webcc's build script
-        echo "y" | ./build.sh
-        popd > /dev/null
-    fi
-    
-    # Add webcc to PATH for the rest of the script if it was built locally
-    export PATH="$PWD/deps/webcc:$PATH"
 fi
 
 if ! command -v ninja >/dev/null 2>&1; then
