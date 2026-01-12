@@ -246,18 +246,25 @@ int main(int argc, char **argv)
         return init_project(project_name);
     }
     
+    // Parse build flags (shared by build, dev, and direct compilation)
+    bool keep_cc = false;
+    bool cc_only = false;
+    for (int i = 2; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--keep-cc") keep_cc = true;
+        else if (arg == "--cc-only") cc_only = true;
+    }
+
     if (first_arg == "build") {
-        return build_project();
+        return build_project(keep_cc, cc_only);
     }
     
     if (first_arg == "dev") {
-        return dev_project();
+        return dev_project(keep_cc, cc_only);
     }
 
     std::string input_file;
     std::string output_dir;
-    bool cc_only = false;
-    bool keep_cc = false;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -403,18 +410,21 @@ int main(int argc, char **argv)
             if (final_output_dir.empty()) final_output_dir = ".";
         }
 
-        // Create temp directory for intermediate files
-        fs::path temp_dir = fs::temp_directory_path() / "coi_build";
-        fs::create_directories(temp_dir);
+        // Create cache directory in project folder (alongside output dir)
+        fs::path cache_dir = final_output_dir.parent_path() / ".coi_cache";
+        if (final_output_dir.filename() == ".") {
+            cache_dir = fs::current_path() / ".coi_cache";
+        }
+        fs::create_directories(cache_dir);
 
-        // Generate .cc in temp dir (or output dir if --keep-cc)
-        if (keep_cc)
+        // Generate .cc in output dir if --keep-cc or --cc-only, otherwise in cache
+        if (keep_cc || cc_only)
         {
             output_path = final_output_dir / "app.cc";
         }
         else
         {
-            output_path = temp_dir / "app.cc";
+            output_path = cache_dir / "app.cc";
         }
 
         std::string output_cc = output_path.string();
@@ -693,8 +703,8 @@ int main(int argc, char **argv)
 
         if (!cc_only)
         {
-        // Generate HTML template in temp directory
-        fs::path template_path = temp_dir / "index.template.html";
+        // Generate HTML template in cache directory
+        fs::path template_path = cache_dir / "index.template.html";
         {
             std::ofstream tmpl_out(template_path);
             if (tmpl_out)
@@ -725,19 +735,22 @@ int main(int argc, char **argv)
             fs::path abs_output_cc = fs::absolute(output_cc);
             fs::path abs_output_dir = fs::absolute(final_output_dir);
             fs::path abs_template = fs::absolute(template_path);
-            fs::path cache_dir = temp_dir / "webcc_cache";
-            fs::create_directories(cache_dir);
+            fs::path webcc_cache_dir = cache_dir / "webcc";
+            fs::create_directories(webcc_cache_dir);
 
             std::string cmd = "webcc " + abs_output_cc.string();
             cmd += " --out " + abs_output_dir.string();
-            cmd += " --cache-dir " + cache_dir.string();
+            cmd += " --cache-dir " + webcc_cache_dir.string();
             cmd += " --template " + abs_template.string();
 
             std::cerr << "Running: " << cmd << std::endl;
             int ret = system(cmd.c_str());
             
-            // Clean up temp files
-            fs::remove_all(temp_dir);
+            // Clean up intermediate files from cache (keep webcc cache for faster rebuilds)
+            if (!keep_cc) {
+                fs::remove(cache_dir / "app.cc");
+            }
+            fs::remove(cache_dir / "index.template.html");
             
             if (ret != 0)
             {

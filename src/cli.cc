@@ -199,7 +199,9 @@ static fs::path find_entry_point() {
     return fs::path();
 }
 
-int build_project() {
+int build_project(bool keep_cc, bool cc_only) {
+    print_banner("build");
+    
     fs::path entry = find_entry_point();
     if (entry.empty()) {
         std::cerr << RED << "error" << RESET << ": No " << BOLD << "src/App.coi" << RESET << " found in current directory." << std::endl;
@@ -235,7 +237,10 @@ int build_project() {
     fs::path coi_bin = exe_dir / "coi";
     
     // Build command - use bash pipefail to preserve coi's exit code through the pipe
-    std::string cmd = "bash -c 'set -o pipefail; " + coi_bin.string() + " " + entry.string() + " --out " + dist_dir.string() + " 2>&1 | grep -v \"Success! Run\"'";
+    std::string extra_flags;
+    if (keep_cc) extra_flags += " --keep-cc";
+    if (cc_only) extra_flags += " --cc-only";
+    std::string cmd = "bash -c 'set -o pipefail; " + coi_bin.string() + " " + entry.string() + " --out " + dist_dir.string() + extra_flags + " 2>&1 | grep -v \"Success! Run\"'";
     
     std::cout << BRAND << "▶" << RESET << " Building..." << std::endl;
     int ret = system(cmd.c_str());
@@ -250,11 +255,11 @@ int build_project() {
     return 0;
 }
 
-int dev_project() {
+int dev_project(bool keep_cc, bool cc_only) {
     print_banner("dev");
     
     // First build
-    int ret = build_project();
+    int ret = build_project(keep_cc, cc_only);
     if (ret != 0) {
         return ret;
     }

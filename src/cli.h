@@ -26,11 +26,11 @@ int init_project(const std::string& project_name_arg);
 
 // Build a Coi project in the current directory
 // Returns 0 on success, non-zero on error
-int build_project();
+int build_project(bool keep_cc = false, bool cc_only = false);
 
 // Build and start dev server
 // Returns 0 on success, non-zero on error  
-int dev_project();
+int dev_project(bool keep_cc = false, bool cc_only = false);
 
 // Print help message
 void print_help(const char* program_name);
