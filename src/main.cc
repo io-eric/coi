@@ -1,6 +1,6 @@
 #include "lexer.h"
 #include "parser.h"
-#include "ast.h"
+#include "ast/ast.h"
 #include "schema_loader.h"
 #include "type_checker.h"
 #include "coi_schema.h"
