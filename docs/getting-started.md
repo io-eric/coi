@@ -92,6 +92,7 @@ This compiles `src/App.coi` and outputs to `dist/`:
 - `dist/index.html` — Entry HTML file
 - `dist/app.js` — JavaScript runtime
 - `dist/app.wasm` — WebAssembly binary
+- `dist/app.css` — Generated CSS bundle
 
 Assets from the `assets/` folder are automatically copied to `dist/assets/`.
 
