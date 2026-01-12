@@ -31,13 +31,14 @@ while IFS= read -r -d '' test_file; do
     rel_path="${test_file#$SCRIPT_DIR/}"
     filename=$(basename "$test_file")
     
+    # Get directory of test file for cleanup
+    test_dir=$(dirname "$test_file")
+    
     if [[ "$filename" == *"_pass.coi" ]]; then
         echo -n "Running $rel_path (Expect Success)... "
         OUTPUT=$($COMPILER "$test_file" --cc-only 2>&1)
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}PASS${NC}"
-            # Clean up generated .cc file
-            rm -f "${test_file%.coi}.cc"
         else
             echo -e "${RED}FAIL${NC}"
             echo "Output: $OUTPUT"
@@ -53,6 +54,9 @@ while IFS= read -r -d '' test_file; do
             FAILURES=$((FAILURES+1))
         fi
     fi
+    
+    # Clean up any generated .cc files
+    rm -f "${test_file%.coi}.cc" "$test_dir/app.cc"
 done < <(find "$SCRIPT_DIR" -name "*.coi" -type f -print0 | sort -z)
 
 if [ $FAILURES -eq 0 ]; then
