@@ -7,6 +7,55 @@
 // This is set at the start of Component::to_webcc() and cleared at the end
 static std::set<std::string> g_ref_props;
 
+// =========================================================
+// STRING CONCATENATION OPTIMIZATION
+// =========================================================
+// Detects string + value chains and generates formatter-based code
+// instead of allocating temporary strings for each concatenation.
+
+// Check if an expression is a string literal or starts a string concat chain
+static bool is_string_expr(Expression* expr) {
+    if (dynamic_cast<StringLiteral*>(expr)) return true;
+    if (auto* bin = dynamic_cast<BinaryOp*>(expr)) {
+        if (bin->op == "+" && is_string_expr(bin->left.get())) return true;
+    }
+    return false;
+}
+
+// Flatten a string concatenation chain into a vector of expressions
+// e.g., "Hello " + name + " you are " + age -> ["Hello ", name, " you are ", age]
+static void flatten_string_concat(Expression* expr, std::vector<Expression*>& parts) {
+    if (auto* bin = dynamic_cast<BinaryOp*>(expr)) {
+        if (bin->op == "+" && is_string_expr(bin->left.get())) {
+            flatten_string_concat(bin->left.get(), parts);
+            flatten_string_concat(bin->right.get(), parts);
+            return;
+        }
+    }
+    parts.push_back(expr);
+}
+
+// Generate optimized formatter-based code for string concatenation
+static std::string generate_formatter_concat(const std::vector<Expression*>& parts) {
+    // Uses an immediately-invoked lambda to declare the formatter in an expression context.
+    // The lambda is fully inlined by the compiler - zero overhead.
+    // hybrid_formatter uses stack first, auto-grows to heap if needed.
+    std::string code = "([&]() { webcc::hybrid_formatter<512> _fmt; _fmt";
+    
+    for (auto* part : parts) {
+        code += " << ";
+        if (auto* str_lit = dynamic_cast<StringLiteral*>(part)) {
+            // String literals - output directly without webcc::string wrapper
+            code += str_lit->to_webcc();
+        } else {
+            code += part->to_webcc();
+        }
+    }
+    
+    code += "; return webcc::string(_fmt.c_str()); }())";
+    return code;
+}
+
 std::string convert_type(const std::string& type) {
     if (type == "string") return "webcc::string";
     // Handle Component.EnumName type syntax - convert to Component::EnumName
@@ -160,12 +209,11 @@ BinaryOp::BinaryOp(std::unique_ptr<Expression> l, const std::string& o, std::uni
     : left(std::move(l)), op(o), right(std::move(r)){}
 
 std::string BinaryOp::to_webcc() {
-    // For + operator with string literals, wrap in webcc::string() to enable concatenation with numeric types
-    if (op == "+") {
-        auto* left_str = dynamic_cast<StringLiteral*>(left.get());
-        if (left_str) {
-            return "webcc::string(" + left->to_webcc() + ") + " + right->to_webcc();
-        }
+    // Optimize string concatenation chains to use formatter (zero heap allocations for small strings)
+    if (op == "+" && is_string_expr(left.get())) {
+        std::vector<Expression*> parts;
+        flatten_string_concat(this, parts);
+        return generate_formatter_concat(parts);
     }
     return left->to_webcc() + " " + op + " " + right->to_webcc();
 }
@@ -254,42 +302,6 @@ std::string FunctionCall::to_webcc() {
         }
     }
 
-    if (name == "log" || name == "log.info" || name == "log.warn" || name == "log.error" || name == "log.debug" || name == "log.event") {
-        std::vector<Expression*> parts;
-        std::function<void(Expression*)> flatten = [&](Expression* e) {
-            if (auto bin = dynamic_cast<BinaryOp*>(e)) {
-                if (bin->op == "+") {
-                    flatten(bin->left.get());
-                    flatten(bin->right.get());
-                    return;
-                }
-            }
-            parts.push_back(e);
-        };
-
-        for(auto& arg : args) {
-            flatten(arg.get());
-        }
-
-        std::string code = "{ webcc::formatter<256> _fmt; ";
-        for(auto* p : parts) {
-            code += "_fmt << (" + p->to_webcc() + "); ";
-        }
-
-        if (name == "log" || name == "log.info") {
-            code += "webcc::system::log(_fmt.c_str()); }";
-        } else if (name == "log.warn") {
-            code += "webcc::system::warn(_fmt.c_str()); }";
-        } else if (name == "log.error") {
-            code += "webcc::system::error(_fmt.c_str()); }";
-        } else if (name == "log.debug") {
-            code += "webcc::system::log(webcc::string::concat(\"[DEBUG] \", _fmt.c_str())); }";
-        } else if (name == "log.event") {
-            code += "webcc::system::log(webcc::string::concat(\"[EVENT] \", _fmt.c_str())); }";
-        }
-        return code;
-    }
-
     // Check for Schema-based transformation (e.g. canvas.setSize -> webcc::canvas::set_size(canvas, ...))
     size_t dot_pos = name.rfind('.');
     const coi::SchemaEntry* entry = nullptr;
@@ -328,6 +340,53 @@ std::string FunctionCall::to_webcc() {
 
 
     if (entry) {
+        // Check if any argument is a string concat chain - if so, use block form with formatter
+        // This avoids allocating temporary webcc::string objects
+        bool has_string_concat_arg = false;
+        int string_concat_arg_idx = -1;
+        for (size_t i = 0; i < args.size(); i++) {
+            if (is_string_expr(args[i].get()) && dynamic_cast<BinaryOp*>(args[i].get())) {
+                has_string_concat_arg = true;
+                string_concat_arg_idx = i;
+                break;
+            }
+        }
+        
+        if (has_string_concat_arg) {
+            // Generate block form: { formatter _fmt; _fmt << parts...; func(_fmt.c_str()); }
+            std::vector<Expression*> parts;
+            flatten_string_concat(args[string_concat_arg_idx].get(), parts);
+            
+            std::string code = "{ webcc::hybrid_formatter<512> _fmt; ";
+            for (auto* p : parts) {
+                code += "_fmt << (" + p->to_webcc() + "); ";
+            }
+            
+            code += "webcc::" + entry->ns + "::" + entry->func_name + "(";
+            
+            size_t param_idx = 0;
+            bool first_arg = true;
+            
+            if (pass_obj) {
+                code += obj_arg;
+                first_arg = false;
+                param_idx++;
+            }
+            
+            for (size_t i = 0; i < args.size(); i++) {
+                if (!first_arg) code += ", ";
+                if ((int)i == string_concat_arg_idx) {
+                    code += "_fmt.c_str()";
+                } else {
+                    code += args[i]->to_webcc();
+                }
+                first_arg = false;
+                param_idx++;
+            }
+            code += "); }";
+            return code;
+        }
+        
         std::string code = "webcc::" + entry->ns + "::" + entry->func_name + "(";
         
         size_t param_idx = 0;
@@ -996,40 +1055,75 @@ void HTMLElement::generate_code(std::stringstream& ss, const std::string& parent
              }
          }
     } else {
-         // Text content
+         // Text content - use formatter for zero-allocation when dynamic
          std::string code;
          bool all_static = true;
+         bool generated_inline = false;
          
-         if (children.size() == 1) {
-             code = children[0]->to_webcc();
-             if (!(code.size() >= 2 && code.front() == '"' && code.back() == '"')) {
+         // Check if all children are static strings
+         for(auto& child : children) {
+             std::string c = child->to_webcc();
+             if (!(c.size() >= 2 && c.front() == '"' && c.back() == '"')) {
                  all_static = false;
-                 code = "webcc::string::concat(" + code + ")";
+                 break;
              }
+         }
+         
+         if (children.size() == 1 && all_static) {
+             // Single static string - pass directly
+             code = children[0]->to_webcc();
+         } else if (children.size() == 1 && !all_static) {
+             // Single dynamic value - use formatter block
+             generated_inline = true;
+             ss << "        { webcc::hybrid_formatter<512> _fmt; _fmt << (" << children[0]->to_webcc() << "); ";
+             ss << "webcc::dom::set_inner_text(" << var << ", _fmt.c_str()); }\n";
          } else if (children.size() > 1) {
-             std::string args;
-             bool first = true;
-             for(auto& child : children){
-                 if(!first) args += ", ";
-                 std::string c = child->to_webcc();
-                 args += c;
-                 if (!(c.size() >= 2 && c.front() == '"' && c.back() == '"')) all_static = false;
-                 first = false;
+             if (all_static) {
+                 // All static - concatenate at compile time (or use concat for simplicity)
+                 std::string args;
+                 bool first = true;
+                 for(auto& child : children) {
+                     if(!first) args += ", ";
+                     args += child->to_webcc();
+                     first = false;
+                 }
+                 code = "webcc::string::concat(" + args + ")";
+             } else {
+                 // Mixed or dynamic - use formatter block for zero-allocation
+                 generated_inline = true;
+                 ss << "        { webcc::hybrid_formatter<512> _fmt; ";
+                 for(auto& child : children) {
+                     ss << "_fmt << (" << child->to_webcc() << "); ";
+                 }
+                 ss << "webcc::dom::set_inner_text(" << var << ", _fmt.c_str()); }\n";
              }
-             code = "webcc::string::concat(" + args + ")";
          }
 
          if(!code.empty()) {
              ss << "        webcc::dom::set_inner_text(" << var << ", " << code << ");\n";
-             
-             if(!all_static && !in_loop) {
-                 Binding b;
-                 b.element_id = my_id;
-                 b.type = "text";
-                 b.value_code = code;
-                 for(auto& child : children) child->collect_dependencies(b.dependencies);
-                 bindings.push_back(b);
+         }
+         
+         // Create binding for update functions (even if we generated inline)
+         if(!all_static && !in_loop) {
+             Binding b;
+             b.element_id = my_id;
+             b.type = "text";
+             // For update functions, the binding generation already uses formatter optimization
+             // when b.expr is a StringLiteral. Store the expression if available.
+             if(children.size() == 1) {
+                 b.expr = dynamic_cast<Expression*>(children[0].get());
              }
+             // Build value_code as fallback (used by update gen when expr optimization doesn't apply)
+             std::string args;
+             bool first = true;
+             for(auto& child : children) {
+                 if(!first) args += ", ";
+                 args += child->to_webcc();
+                 first = false;
+             }
+             b.value_code = (children.size() == 1) ? children[0]->to_webcc() : "webcc::string::concat(" + args + ")";
+             for(auto& child : children) child->collect_dependencies(b.dependencies);
+             bindings.push_back(b);
          }
     }
 }
@@ -1814,7 +1908,7 @@ std::string Component::to_webcc(CompilerSession& session) {
             bool optimized = false;
             if(binding.expr) {
                 if(auto strLit = dynamic_cast<StringLiteral*>(binding.expr)) {
-                    std::string fmt_code = "{ webcc::formatter<256> _fmt; ";
+                    std::string fmt_code = "{ webcc::hybrid_formatter<512> _fmt; ";
                     auto parts = strLit->parse();
                     for(auto& p : parts) {
                         if(p.is_expr) fmt_code += "_fmt << (" + p.content + "); ";
@@ -1829,6 +1923,47 @@ std::string Component::to_webcc(CompilerSession& session) {
                     update_line = fmt_code;
                     optimized = true;
                 }
+            }
+            
+            // If not optimized and value_code uses concat, parse and generate formatter code
+            if(!optimized && binding.value_code.find("webcc::string::concat(") == 0) {
+                // Parse args from "webcc::string::concat(arg1, arg2, ...)"
+                std::string args_str = binding.value_code.substr(22); // skip "webcc::string::concat("
+                if(!args_str.empty() && args_str.back() == ')') args_str.pop_back();
+                
+                // Split by ", " but respect nested parens
+                std::vector<std::string> args;
+                int paren_depth = 0;
+                std::string current;
+                for(size_t i = 0; i < args_str.size(); ++i) {
+                    char c = args_str[i];
+                    if(c == '(') paren_depth++;
+                    else if(c == ')') paren_depth--;
+                    else if(c == ',' && paren_depth == 0) {
+                        // Skip leading space after comma
+                        while(!current.empty() && current.front() == ' ') current.erase(0, 1);
+                        while(!current.empty() && current.back() == ' ') current.pop_back();
+                        if(!current.empty()) args.push_back(current);
+                        current.clear();
+                        continue;
+                    }
+                    current += c;
+                }
+                while(!current.empty() && current.front() == ' ') current.erase(0, 1);
+                while(!current.empty() && current.back() == ' ') current.pop_back();
+                if(!current.empty()) args.push_back(current);
+                
+                std::string fmt_code = "{ webcc::hybrid_formatter<512> _fmt; ";
+                for(const auto& arg : args) {
+                    fmt_code += "_fmt << (" + arg + "); ";
+                }
+                if(binding.type == "attr") {
+                    fmt_code += "webcc::dom::set_attribute(" + el_var + ", \"" + binding.name + "\", _fmt.c_str()); }";
+                } else {
+                    fmt_code += "webcc::dom::set_inner_text(" + el_var + ", _fmt.c_str()); }";
+                }
+                update_line = fmt_code;
+                optimized = true;
             }
             
             if(!optimized) {
