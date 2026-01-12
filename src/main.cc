@@ -305,7 +305,7 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Error resolving input file path: " << e.what() << std::endl;
+        std::cerr << colors::RED << "Error:" << colors::RESET << " resolving input file path: " << e.what() << std::endl;
         return 1;
     }
 
@@ -325,7 +325,7 @@ int main(int argc, char **argv)
             std::ifstream file(current_file_path);
             if (!file)
             {
-                std::cerr << "Error: Could not open file " << current_file_path << std::endl;
+                std::cerr << colors::RED << "Error:" << colors::RESET << " Could not open file " << current_file_path << std::endl;
                 return 1;
             }
             std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -366,7 +366,7 @@ int main(int argc, char **argv)
                 }
                 catch (const std::exception &e)
                 {
-                    std::cerr << "Error resolving import path " << import_path_str << ": " << e.what() << std::endl;
+                    std::cerr << colors::RED << "Error:" << colors::RESET << " resolving import path " << import_path_str << ": " << e.what() << std::endl;
                     return 1;
                 }
             }
@@ -748,7 +748,7 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << colors::RED << "Error:" << colors::RESET << " " << e.what() << std::endl;
         return 1;
     }
 

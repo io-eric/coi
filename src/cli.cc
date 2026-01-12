@@ -234,8 +234,8 @@ int build_project() {
     fs::path exe_dir = get_executable_dir();
     fs::path coi_bin = exe_dir / "coi";
     
-    // Build command (suppress webcc success message)
-    std::string cmd = coi_bin.string() + " " + entry.string() + " --out " + dist_dir.string() + " 2>&1 | grep -v 'Success! Run'";
+    // Build command - use bash pipefail to preserve coi's exit code through the pipe
+    std::string cmd = "bash -c 'set -o pipefail; " + coi_bin.string() + " " + entry.string() + " --out " + dist_dir.string() + " 2>&1 | grep -v \"Success! Run\"'";
     
     std::cout << BRAND << "▶" << RESET << " Building..." << std::endl;
     int ret = system(cmd.c_str());

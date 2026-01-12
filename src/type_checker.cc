@@ -912,8 +912,23 @@ void validate_view_hierarchy(const std::vector<Component> &components)
                     }
                     if (!param_found)
                     {
-                        // Warn or error about unknown param?
-                        // For now we focus on missing required params.
+                        // Check for case-insensitive match to provide helpful error
+                        std::string suggestion;
+                        for (const auto &declared_param : target_comp->params)
+                        {
+                            std::string lower_passed = passed_prop.name;
+                            std::string lower_declared = declared_param->name;
+                            std::transform(lower_passed.begin(), lower_passed.end(), lower_passed.begin(), ::tolower);
+                            std::transform(lower_declared.begin(), lower_declared.end(), lower_declared.begin(), ::tolower);
+                            if (lower_passed == lower_declared)
+                            {
+                                suggestion = "; did you mean '" + declared_param->name + "'?";
+                                break;
+                            }
+                        }
+                        throw std::runtime_error(
+                            "Unknown parameter '" + passed_prop.name + "' for component '" + comp_inst->component_name +
+                            "'" + suggestion + " at line " + std::to_string(comp_inst->line));
                     }
                 }
 
