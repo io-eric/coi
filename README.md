@@ -125,6 +125,20 @@ Open `http://localhost:8000` in your browser.
 | `coi dev` | Build and start dev server |
 | `coi <file.coi> --out <dir>` | Compile a single file |
 
+### Project Structure
+
+```
+my-app/
+├── src/
+│   ├── App.coi          # Entry point (required)
+│   └── components/      # Your components
+├── assets/              # Static files (images, fonts, etc.)
+└── dist/                # Build output
+```
+
+- **`src/App.coi`** — The compiler always looks for this as the entry point.
+- **`assets/`** — Automatically copied to `dist/assets/` on build.
+
 ## Documentation
 
 - [Getting Started](docs/getting-started.md) — Installation, first project, imports
