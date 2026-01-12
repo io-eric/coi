@@ -138,7 +138,7 @@ component Hero {
 
     view {
         <div class="hero">
-            <img class="logo" src="images/logo.png" alt="Coi logo" />
+            <img class="logo" src="assets/images/logo.png" alt="Coi logo" />
             <h1>Coi</h1>
             <p class="subtitle">WebAssembly for the Modern Web</p>
             <p class="tagline">A component-based language for high-performance web apps.<br/>Fast. Minimal. Type-safe.</p>
