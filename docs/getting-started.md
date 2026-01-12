@@ -43,35 +43,91 @@ This means you can simply run `./build.sh` after editing `schema.def` and everyt
 
 Use `--rebuild-schema` to force regeneration even when no changes are detected.
 
-## Usage
+## CLI Commands
 
-To compile a `.coi` file:
+The Coi CLI provides commands for creating, building, and running projects.
+
+### `coi init`
+
+Create a new Coi project from template:
+
+```bash
+coi init my-app
+```
+
+This creates a new directory with a complete project structure:
+
+```
+my-app/
+├── assets/
+│   └── images/
+├── src/
+│   ├── App.coi
+│   └── components/
+│       ├── Button.coi
+│       ├── Footer.coi
+│       └── NavBar.coi
+└── README.md
+```
+
+If no name is provided, you'll be prompted to enter one:
+
+```bash
+coi init
+# Project name: my-app
+```
+
+Project names must start with a letter or underscore and contain only letters, numbers, hyphens, and underscores.
+
+### `coi build`
+
+Build the project in the current directory:
+
+```bash
+cd my-app
+coi build
+```
+
+This compiles `src/App.coi` and outputs to `dist/`:
+- `dist/index.html` — Entry HTML file
+- `dist/app.js` — JavaScript runtime
+- `dist/app.wasm` — WebAssembly binary
+
+Assets from the `assets/` folder are automatically copied to `dist/assets/`.
+
+### `coi dev`
+
+Build and start a local development server:
+
+```bash
+coi dev
+```
+
+This builds the project and starts a server at `http://localhost:8000`. Press `Ctrl+C` to stop.
+
+### Direct Compilation
+
+Compile a single `.coi` file directly:
 
 ```bash
 coi App.coi --out ./dist
 ```
 
-This generates:
-- `dist/index.html` — Entry HTML file
-- `dist/app.js` — JavaScript runtime
-- `dist/app.wasm` — WebAssembly binary
+#### Options
 
-To keep the intermediate C++ file for debugging:
+| Option | Description |
+|--------|-------------|
+| `--out, -o <dir>` | Output directory |
+| `--cc-only` | Generate C++ only, skip WASM compilation |
+| `--keep-cc` | Keep generated C++ files for debugging |
+
+To keep the intermediate C++ file:
 
 ```bash
 coi App.coi --out ./dist --keep-cc
 ```
 
 This also generates `dist/App.cc` so you can inspect the generated C++ code.
-
-To run your app locally:
-
-```bash
-cd dist
-python3 -m http.server
-```
-
-Then open `http://localhost:8000` in your browser.
 
 ## Your First Component
 

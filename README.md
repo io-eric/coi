@@ -106,14 +106,24 @@ cd coi
 ./build.sh
 ```
 
-### Compile
+### Create a Project
 
 ```bash
-coi App.coi --out ./dist
-cd dist && python3 -m http.server
+coi init my-app
+cd my-app
+coi dev
 ```
 
 Open `http://localhost:8000` in your browser.
+
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `coi init [name]` | Create a new project |
+| `coi build` | Build the project |
+| `coi dev` | Build and start dev server |
+| `coi <file.coi> --out <dir>` | Compile a single file |
 
 ## Documentation
 

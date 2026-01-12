@@ -1,0 +1,52 @@
+component NavBar {
+    style {
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 32px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #eee;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        .links {
+            display: flex;
+            gap: 24px;
+        }
+        a {
+            color: #666;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        a:hover {
+            color: #9477ff;
+        }
+    }
+
+    view {
+        <nav class="nav">
+            <div class="logo">
+                <span>__PROJECT_NAME__</span>
+            </div>
+            <div class="links">
+                <a href="https://github.com/io-eric/coi" target="_blank">GitHub</a>
+                <a href="https://github.com/io-eric/coi#readme" target="_blank">Docs</a>
+            </div>
+        </nav>
+    }
+}

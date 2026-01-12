@@ -4,6 +4,7 @@
 #include "schema_loader.h"
 #include "type_checker.h"
 #include "coi_schema.h"
+#include "cli.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -14,6 +15,8 @@
 #include <cstdio>
 #include <queue>
 #include <algorithm>
+
+namespace fs = std::filesystem;
 
 // =========================================================
 // INCLUDE DETECTION
@@ -223,8 +226,32 @@ int main(int argc, char **argv)
 
     if (argc < 2)
     {
-        std::cerr << "Usage: " << argv[0] << " <input.coi> [--cc-only] [--keep-cc] [--out <dir> | -o <dir>]" << std::endl;
+        print_help(argv[0]);
         return 1;
+    }
+
+    std::string first_arg = argv[1];
+    
+    // Handle special commands
+    if (first_arg == "help" || first_arg == "--help" || first_arg == "-h") {
+        print_help(argv[0]);
+        return 0;
+    }
+    
+    if (first_arg == "init") {
+        std::string project_name;
+        if (argc >= 3) {
+            project_name = argv[2];
+        }
+        return init_project(project_name);
+    }
+    
+    if (first_arg == "build") {
+        return build_project();
+    }
+    
+    if (first_arg == "dev") {
+        return dev_project();
     }
 
     std::string input_file;
@@ -272,7 +299,6 @@ int main(int argc, char **argv)
     std::set<std::string> processed_files;
     std::queue<std::string> file_queue;
 
-    namespace fs = std::filesystem;
     try
     {
         file_queue.push(fs::canonical(input_file).string());
@@ -353,7 +379,6 @@ int main(int argc, char **argv)
         validate_types(all_components, all_global_enums);
 
         // Determine output filename
-        namespace fs = std::filesystem;
         fs::path input_path(input_file);
         fs::path output_path;
         fs::path final_output_dir;
@@ -514,7 +539,10 @@ int main(int argc, char **argv)
         out << "        events[count++] = e;\n";
         out << "    }\n";
         out << "    dispatch_events(events, count);\n";
-        out << "    if (app) app->tick(dt);\n";
+        // Only call tick if the root component has a tick method
+        if (session.components_with_tick.count(final_app_config.root_component)) {
+            out << "    if (app) app->tick(dt);\n";
+        }
         out << "    webcc::flush();\n";
         out << "}\n\n";
 

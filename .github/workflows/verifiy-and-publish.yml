@@ -41,7 +41,7 @@ jobs:
         run: ./tests/run_tests.sh
 
       - name: Build Example
-        run: ./example/build.sh
+        run: cd example && ../coi build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
