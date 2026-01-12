@@ -294,6 +294,41 @@ static void generate_view_child(ASTNode* child, std::stringstream& ss, const std
     }
 }
 
+// Helper to generate prop update code for loop components
+static void generate_prop_update_code(std::stringstream& ss, ComponentInstantiation* comp, 
+                                      const std::string& inst_ref,
+                                      const std::set<std::string>& method_names) {
+    for(auto& prop : comp->props) {
+        std::string val = prop.value->to_webcc();
+        if(method_names.count(val)) {
+            ss << "            " << inst_ref << "." << prop.name << " = [this]() { this->" << val << "(); };\n";
+        } else if (prop.is_reference) {
+            if (auto* func_call = dynamic_cast<FunctionCall*>(prop.value.get())) {
+                if (func_call->args.empty()) {
+                    ss << "            " << inst_ref << "." << prop.name << " = [this]() { this->" << val << "; };\n";
+                } else {
+                    std::string lambda_params;
+                    for (size_t i = 0; i < func_call->args.size(); i++) {
+                        if (i > 0) lambda_params += ", ";
+                        if (auto* id = dynamic_cast<Identifier*>(func_call->args[i].get())) {
+                            lambda_params += "int32_t " + id->name;
+                        } else {
+                            lambda_params += "int32_t _arg" + std::to_string(i);
+                        }
+                    }
+                    ss << "            " << inst_ref << "." << prop.name << " = [this](" << lambda_params << ") { this->" << val << "; };\n";
+                }
+            } else {
+                ss << "            " << inst_ref << "." << prop.name << " = &(" << val << ");\n";
+                ss << "            " << inst_ref << "._update_" << prop.name << "();\n";
+            }
+        } else {
+            ss << "            " << inst_ref << "." << prop.name << " = " << val << ";\n";
+            ss << "            " << inst_ref << "._update_" << prop.name << "();\n";
+        }
+    }
+}
+
 // ViewIfStatement
 void ViewIfStatement::generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
                   std::vector<EventHandler>& event_handlers,
@@ -313,28 +348,12 @@ void ViewIfStatement::generate_code(std::stringstream& ss, const std::string& pa
         
         ss << "        if (" << condition->to_webcc() << ") {\n";
         for(auto& child : then_children) {
-            if(auto el = dynamic_cast<HTMLElement*>(child.get())){
-                el->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
-            } else if(auto comp = dynamic_cast<ComponentInstantiation*>(child.get())){
-                comp->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
-            } else if(auto viewIf = dynamic_cast<ViewIfStatement*>(child.get())){
-                viewIf->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
-            } else if(auto viewFor = dynamic_cast<ViewForRangeStatement*>(child.get())){
-                viewFor->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
-            }
+            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
         }
         if (!else_children.empty()) {
             ss << "        } else {\n";
             for(auto& child : else_children) {
-                if(auto el = dynamic_cast<HTMLElement*>(child.get())){
-                    el->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
-                } else if(auto comp = dynamic_cast<ComponentInstantiation*>(child.get())){
-                    comp->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
-                } else if(auto viewIf = dynamic_cast<ViewIfStatement*>(child.get())){
-                    viewIf->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
-                } else if(auto viewFor = dynamic_cast<ViewForRangeStatement*>(child.get())){
-                    viewFor->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
-                }
+                generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
             }
         }
         ss << "        }\n";
@@ -368,15 +387,7 @@ void ViewIfStatement::generate_code(std::stringstream& ss, const std::string& pa
     std::stringstream then_ss;
     std::vector<Binding> then_bindings;
     for(auto& child : then_children) {
-        if(auto el = dynamic_cast<HTMLElement*>(child.get())){
-            el->generate_code(then_ss, if_parent, counter, event_handlers, then_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
-        } else if(auto comp = dynamic_cast<ComponentInstantiation*>(child.get())){
-            comp->generate_code(then_ss, if_parent, counter, event_handlers, then_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
-        } else if(auto viewIf = dynamic_cast<ViewIfStatement*>(child.get())){
-            viewIf->generate_code(then_ss, if_parent, counter, event_handlers, then_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
-        } else if(auto viewFor = dynamic_cast<ViewForRangeStatement*>(child.get())){
-            viewFor->generate_code(then_ss, if_parent, counter, event_handlers, then_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
-        }
+        generate_view_child(child.get(), then_ss, if_parent, counter, event_handlers, then_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
     }
     int counter_after_then = counter;
     int loop_id_after_then = loop_counter ? *loop_counter : 0;
@@ -409,15 +420,7 @@ void ViewIfStatement::generate_code(std::stringstream& ss, const std::string& pa
     std::vector<Binding> else_bindings;
     if (!else_children.empty()) {
         for(auto& child : else_children) {
-            if(auto el = dynamic_cast<HTMLElement*>(child.get())){
-                el->generate_code(else_ss, if_parent, counter, event_handlers, else_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
-            } else if(auto comp = dynamic_cast<ComponentInstantiation*>(child.get())){
-                comp->generate_code(else_ss, if_parent, counter, event_handlers, else_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
-            } else if(auto viewIf = dynamic_cast<ViewIfStatement*>(child.get())){
-                viewIf->generate_code(else_ss, if_parent, counter, event_handlers, else_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
-            } else if(auto viewFor = dynamic_cast<ViewForRangeStatement*>(child.get())){
-                viewFor->generate_code(else_ss, if_parent, counter, event_handlers, else_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
-            }
+            generate_view_child(child.get(), else_ss, if_parent, counter, event_handlers, else_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
         }
     }
     int counter_after_else = counter;
@@ -553,36 +556,7 @@ void ViewForRangeStatement::generate_code(std::stringstream& ss, const std::stri
         std::stringstream update_ss;
         std::string vec_name = "_loop_" + region.component_type + "s";
         std::string inst_ref = vec_name + "[" + var_name + "]";
-        
-        for(auto& prop : loop_component->props) {
-            std::string val = prop.value->to_webcc();
-            if(method_names.count(val)) {
-                update_ss << "            " << inst_ref << "." << prop.name << " = [this]() { this->" << val << "(); };\n";
-            } else if (prop.is_reference) {
-                if (auto* func_call = dynamic_cast<FunctionCall*>(prop.value.get())) {
-                    if (func_call->args.empty()) {
-                        update_ss << "            " << inst_ref << "." << prop.name << " = [this]() { this->" << val << "; };\n";
-                    } else {
-                        std::string lambda_params;
-                        for (size_t i = 0; i < func_call->args.size(); i++) {
-                            if (i > 0) lambda_params += ", ";
-                            if (auto* id = dynamic_cast<Identifier*>(func_call->args[i].get())) {
-                                lambda_params += "int32_t " + id->name;
-                            } else {
-                                lambda_params += "int32_t _arg" + std::to_string(i);
-                            }
-                        }
-                        update_ss << "            " << inst_ref << "." << prop.name << " = [this](" << lambda_params << ") { this->" << val << "; };\n";
-                    }
-                } else {
-                    update_ss << "            " << inst_ref << "." << prop.name << " = &(" << val << ");\n";
-                    update_ss << "            " << inst_ref << "._update_" << prop.name << "();\n";
-                }
-            } else {
-                update_ss << "            " << inst_ref << "." << prop.name << " = " << val << ";\n";
-                update_ss << "            " << inst_ref << "._update_" << prop.name << "();\n";
-            }
-        }
+        generate_prop_update_code(update_ss, loop_component, inst_ref, method_names);
         region.item_update_code = update_ss.str();
     }
     
@@ -666,37 +640,7 @@ void ViewForEachStatement::generate_code(std::stringstream& ss, const std::strin
     // Generate item update code
     if (loop_component && !region.component_type.empty()) {
         std::stringstream update_ss;
-        std::string inst_ref = "_inst";
-        
-        for(auto& prop : loop_component->props) {
-            std::string val = prop.value->to_webcc();
-            if(method_names.count(val)) {
-                update_ss << "            " << inst_ref << "." << prop.name << " = [this]() { this->" << val << "(); };\n";
-            } else if (prop.is_reference) {
-                if (auto* func_call = dynamic_cast<FunctionCall*>(prop.value.get())) {
-                    if (func_call->args.empty()) {
-                        update_ss << "            " << inst_ref << "." << prop.name << " = [this]() { this->" << val << "; };\n";
-                    } else {
-                        std::string lambda_params;
-                        for (size_t i = 0; i < func_call->args.size(); i++) {
-                            if (i > 0) lambda_params += ", ";
-                            if (auto* id = dynamic_cast<Identifier*>(func_call->args[i].get())) {
-                                lambda_params += "int32_t " + id->name;
-                            } else {
-                                lambda_params += "int32_t _arg" + std::to_string(i);
-                            }
-                        }
-                        update_ss << "            " << inst_ref << "." << prop.name << " = [this](" << lambda_params << ") { this->" << val << "; };\n";
-                    }
-                } else {
-                    update_ss << "            " << inst_ref << "." << prop.name << " = &(" << val << ");\n";
-                    update_ss << "            " << inst_ref << "._update_" << prop.name << "();\n";
-                }
-            } else {
-                update_ss << "            " << inst_ref << "." << prop.name << " = " << val << ";\n";
-                update_ss << "            " << inst_ref << "._update_" << prop.name << "();\n";
-            }
-        }
+        generate_prop_update_code(update_ss, loop_component, "_inst", method_names);
         region.item_update_code = update_ss.str();
     }
     
