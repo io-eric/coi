@@ -12,13 +12,15 @@ component AudioPlayer {
         // Replace with your own audio file URL
         audio = Audio.createAudio("https://cdn.pixabay.com/audio/2025/06/23/audio_e6a00ad257.mp3");
         audio.setVolume(0.8);
-        System.log("test" + duration);
     }
 
     tick(float dt) {
+        // Fetch duration once it's available (audio needs to load first)
+        if (duration == 0) {
+            duration = audio.getDuration();
+        }
         if (playing) {
             currentTime = audio.getCurrentTime();
-            duration = audio.getDuration();
             if (duration > 0) {
                 progress = (currentTime / duration) * 100;
             }
