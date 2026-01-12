@@ -181,6 +181,7 @@
         { "include": "#comments" },
         { "include": "#keywords" },
         { "include": "#operators" },
+        { "include": "#function-call" },
         { "include": "#strings" },
         { "include": "#types" },
         { "include": "#component-reference" }
@@ -196,6 +197,7 @@
         { "include": "#comments" },
         { "include": "#keywords" },
         { "include": "#operators" },
+        { "include": "#function-call" },
         { "include": "#strings" },
         { "include": "#types" },
         { "include": "#component-reference" }
