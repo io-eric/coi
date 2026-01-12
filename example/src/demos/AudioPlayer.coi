@@ -9,7 +9,6 @@ component AudioPlayer {
     mut int volume = 80;
 
     mount {
-        // Replace with your own audio file URL
         audio = Audio.createAudio("https://cdn.pixabay.com/audio/2025/06/23/audio_e6a00ad257.mp3");
         audio.setVolume(0.8);
     }
