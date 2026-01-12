@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 // =========================================================
-// COI Formatter
+// Coi Formatter
 // =========================================================
 
 class CoiFormatter {
@@ -174,18 +174,18 @@ class CoiFormatter {
 
     formatOperators(line) {
         // Don't format inside strings or braces (could be expressions)
-        const protected = [];
+        const protectedList = [];
         let protectedIndex = 0;
         
         // Protect strings
         line = line.replace(/"[^"]*"/g, (match) => {
-            protected.push(match);
+            protectedList.push(match);
             return `__PROTECTED_${protectedIndex++}__`;
         });
         
         // Protect expressions in braces
         line = line.replace(/\{[^}]*\}/g, (match) => {
-            protected.push(match);
+            protectedList.push(match);
             return `__PROTECTED_${protectedIndex++}__`;
         });
 
@@ -208,7 +208,7 @@ class CoiFormatter {
             .replace(/([^=!<>+\-*/])\s*=\s*([^=])/g, '$1 = $2');
 
         // Restore protected sections
-        protected.forEach((str, i) => {
+        protectedList.forEach((str, i) => {
             line = line.replace(`__PROTECTED_${i}__`, str);
         });
 
@@ -223,7 +223,7 @@ class CoiFormatter {
 }
 
 // =========================================================
-// COI Definition Parser
+// Coi Definition Parser
 // =========================================================
 
 class CoiDefinitions {
@@ -427,10 +427,14 @@ let definitions = new CoiDefinitions();
 const formatter = new CoiFormatter();
 
 function activate(context) {
-    console.log('COI Language extension activated');
+    console.log('Coi Language extension activated');
 
     // Load definitions from bundled def/ folder or custom path
-    loadDefinitions(context);
+    try {
+        loadDefinitions(context);
+    } catch (err) {
+        console.error('Failed to load definitions:', err);
+    }
 
     // Register completion provider
     const completionProvider = vscode.languages.registerCompletionItemProvider(
@@ -530,7 +534,7 @@ function loadDefinitions(context) {
     }
 
     // Also check workspace root for def/ folder
-    if (vscode.workspace.workspaceFolders) {
+    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
         const workspaceDefPath = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'def');
         if (fs.existsSync(workspaceDefPath)) {
             defPath = workspaceDefPath;
@@ -801,7 +805,71 @@ function getDefinition(document, position) {
         return createDefinitionLocation(nsInfo.source, nsInfo.line);
     }
 
+    // Check if it's a component reference (PascalCase word)
+    if (/^[A-Z][A-Za-z0-9_]*$/.test(word)) {
+        const componentLocation = findComponentDefinition(word);
+        if (componentLocation) {
+            return componentLocation;
+        }
+    }
+
     return null;
+}
+
+// Find component definition in workspace .coi files
+function findComponentDefinition(componentName) {
+    if (!vscode.workspace.workspaceFolders) return null;
+
+    const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    
+    // Search for .coi files in workspace
+    const coiFiles = findCoiFiles(workspaceRoot);
+    
+    for (const filePath of coiFiles) {
+        try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            const lines = content.split('\n');
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                // Match: component ComponentName {
+                const match = line.match(/^\s*component\s+(\w+)\s*\{?/);
+                if (match && match[1] === componentName) {
+                    const uri = vscode.Uri.file(filePath);
+                    const pos = new vscode.Position(i, line.indexOf('component'));
+                    return new vscode.Location(uri, pos);
+                }
+            }
+        } catch (err) {
+            // Skip files that can't be read
+        }
+    }
+    
+    return null;
+}
+
+// Recursively find .coi files in a directory
+function findCoiFiles(dir, files = []) {
+    try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        
+        for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            
+            // Skip node_modules, build, .git directories
+            if (entry.isDirectory()) {
+                if (!['node_modules', 'build', '.git', 'dist'].includes(entry.name)) {
+                    findCoiFiles(fullPath, files);
+                }
+            } else if (entry.name.endsWith('.coi') && !entry.name.endsWith('.d.coi')) {
+                files.push(fullPath);
+            }
+        }
+    } catch (err) {
+        // Skip directories that can't be read
+    }
+    
+    return files;
 }
 
 function createDefinitionLocation(sourcePath, line) {

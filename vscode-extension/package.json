@@ -1,8 +1,8 @@
 {
   "name": "coi-language",
-  "displayName": "COI Language",
-  "description": "Language support for COI - syntax highlighting, completions, hover, signature help, and formatting",
-  "version": "0.1.5",
+  "displayName": "Coi Language",
+  "description": "Language support for Coi - syntax highlighting, completions, hover, signature help, and formatting",
+  "version": "0.1.6",
   "publisher": "coi-lang",
   "icon": "logo.png",
   "repository": {
@@ -17,14 +17,15 @@
     "Formatters"
   ],
   "activationEvents": [
-    "onLanguage:coi"
+    "onLanguage:coi",
+    "onStartupFinished"
   ],
   "main": "./extension.js",
   "contributes": {
     "languages": [
       {
         "id": "coi",
-        "aliases": ["COI", "Coi", "coi"],
+        "aliases": ["Coi", "COI", "coi"],
         "extensions": [".coi", ".d.coi"],
         "configuration": "./language-configuration.json"
       }
@@ -38,17 +39,17 @@
     ],
     "configuration": {
       "type": "object",
-      "title": "COI",
+      "title": "Coi",
       "properties": {
         "coi.definitionsPath": {
           "type": "string",
           "default": "",
-          "description": "Path to COI definition files (.d.coi). Leave empty to use bundled definitions."
+          "description": "Path to Coi definition files (.d.coi). Leave empty to use bundled definitions."
         },
         "coi.format.enable": {
           "type": "boolean",
           "default": true,
-          "description": "Enable COI document formatting."
+          "description": "Enable Coi document formatting."
         }
       }
     }
