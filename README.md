@@ -150,7 +150,7 @@ my-app/
 
 ## VS Code Extension
 
-The COI Language extension provides syntax highlighting, auto-completions, hover docs, and signature help.
+The Coi Language extension provides syntax highlighting, auto-completions, hover docs, and signature help.
 
 Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=coi-lang.coi-language) or build manually:
 
