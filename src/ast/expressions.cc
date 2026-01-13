@@ -14,7 +14,7 @@ std::string FloatLiteral::to_webcc() {
         s = s.substr(0, s.find_last_not_of('0')+1);
         if(s.back() == '.') s += "0";
     }
-    return s + "f";
+    return s;  // No 'f' suffix - using double (64-bit)
 }
 
 std::vector<StringLiteral::Part> StringLiteral::parse() {
@@ -25,15 +25,29 @@ std::vector<StringLiteral::Part> StringLiteral::parse() {
             current += value[i+1];
             i++;
         } else if(value[i] == '{') {
-            if(!current.empty()) parts.push_back({false, current});
-            current = "";
-            i++;
-            while(i < value.length() && value[i] != '}') {
-                current += value[i];
+            // Look ahead to find closing brace
+            size_t close_pos = value.find('}', i + 1);
+            if (close_pos == std::string::npos) {
+                // No closing brace found - treat as literal
+                current += '{';
+            } else {
+                // Found closing brace - extract expression
+                if(!current.empty()) parts.push_back({false, current});
+                current = "";
                 i++;
+                while(i < value.length() && value[i] != '}') {
+                    current += value[i];
+                    i++;
+                }
+                // Only treat as expression if content is non-empty
+                if (!current.empty()) {
+                    parts.push_back({true, current});
+                } else {
+                    // Empty braces {} - treat as literal
+                    parts.push_back({false, "{}"});
+                }
+                current = "";
             }
-            parts.push_back({true, current});
-            current = "";
         } else {
             current += value[i];
         }

@@ -6,7 +6,7 @@ enum class TokenType {
     // Keywords
     COMPONENT, DEF, RETURN, STRUCT, VIEW, IF, ELSE, FOR, TICK, INIT, MOUNT, STYLE, MUT, IMPORT, SHARED, IN, PUB, KEY, ENUM,
     // Types
-    INT, FLOAT, STRING, BOOL, VOID,
+    INT, FLOAT, FLOAT32, STRING, BOOL, VOID,
     // Literals
     INT_LITERAL, FLOAT_LITERAL, STRING_LITERAL, TRUE, FALSE,
     // Identifiers

@@ -115,6 +115,7 @@ Token Lexer::read_identifier(){
         {"in", TokenType::IN},
         {"int", TokenType::INT},
         {"float", TokenType::FLOAT},
+        {"float32", TokenType::FLOAT32},
         {"string", TokenType::STRING},
         {"bool", TokenType::BOOL},
         {"void", TokenType::VOID},

@@ -52,7 +52,9 @@ std::string normalize_type(const std::string &type)
     if (type == "int")
         return "int32";
     if (type == "float")
-        return "float32";
+        return "float64";  // default float is 64-bit
+    if (type == "float32")
+        return "float32";  // explicit 32-bit
     if (type == "bool")
         return "bool";
     if (type == "string")
@@ -136,8 +138,12 @@ bool is_compatible_type(const std::string &source, const std::string &target)
     if (SchemaLoader::instance().is_assignable_to(target, source))
         return true;
     // Numeric conversions
-    if (source == "int32" && (target == "float32" || target == "uint8"))
+    if (source == "int32" && (target == "float64" || target == "float32" || target == "uint8"))
         return true;
+    if (source == "float64" && target == "float32")
+        return true;  // Allow narrowing from float64 to float32
+    if (source == "float32" && target == "float64")
+        return true;  // Allow widening from float32 to float64
     // int32 can be used as handle (for raw handle values)
     if (source == "int32" && SchemaLoader::instance().is_handle(target))
         return true;
@@ -158,7 +164,7 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
     if (dynamic_cast<IntLiteral *>(expr))
         return "int32";
     if (dynamic_cast<FloatLiteral *>(expr))
-        return "float32";
+        return "float64";  // float literals are 64-bit by default
     if (dynamic_cast<StringLiteral *>(expr))
         return "string";
     if (dynamic_cast<BoolLiteral *>(expr))
@@ -238,7 +244,7 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
         // Unary +/- only makes sense on numeric types
         if (unary->op == "-" || unary->op == "+")
         {
-            if (operand_type == "int32" || operand_type == "float32")
+            if (operand_type == "int32" || operand_type == "float64" || operand_type == "float32")
             {
                 return operand_type;
             }
@@ -396,6 +402,10 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
         // Arithmetic operators
         if (l == r)
             return l;
+        if (l == "int32" && r == "float64")
+            return "float64";
+        if (l == "float64" && r == "int32")
+            return "float64";
         if (l == "int32" && r == "float32")
             return "float32";
         if (l == "float32" && r == "int32")
@@ -635,7 +645,7 @@ void validate_types(const std::vector<Component> &components, const std::vector<
                     
                     // Also validate index is numeric
                     std::string index_type = infer_expression_type(idx_assign->index.get(), current_scope);
-                    if (index_type != "int32" && index_type != "float32" && index_type != "unknown")
+                    if (index_type != "int32" && index_type != "float64" && index_type != "float32" && index_type != "unknown")
                     {
                         std::cerr << "Type error: Array index must be numeric, got '" << index_type << "'" << std::endl;
                         exit(1);

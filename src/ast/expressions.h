@@ -10,8 +10,8 @@ struct IntLiteral : Expression {
 };
 
 struct FloatLiteral : Expression {
-    float value;
-    FloatLiteral(float v) : value(v){}
+    double value;
+    FloatLiteral(double v) : value(v){}
     std::string to_webcc() override;
     bool is_static() override { return true; }
 };

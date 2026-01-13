@@ -962,7 +962,11 @@ std::string Component::to_webcc(CompilerSession& session) {
 
     // Tick method
     bool has_user_tick = false;
-    for(auto& m : methods) if(m.name == "tick") has_user_tick = true;
+    bool user_tick_has_args = false;
+    for(auto& m : methods) if(m.name == "tick") {
+        has_user_tick = true;
+        if(!m.params.empty()) user_tick_has_args = true;
+    }
     
     bool has_child_with_tick = false;
     for(auto const& [comp_name, count] : component_members) {
@@ -975,9 +979,12 @@ std::string Component::to_webcc(CompilerSession& session) {
     bool needs_tick = has_user_tick || has_child_with_tick;
     if(needs_tick) {
         session.components_with_tick.insert(name);
-        ss << "    void tick(float dt) {\n";
+        ss << "    void tick(double dt) {\n";
         
-        if(has_user_tick) ss << "        _user_tick(dt);\n";
+        if(has_user_tick) {
+             if (user_tick_has_args) ss << "        _user_tick(dt);\n";
+             else ss << "        _user_tick();\n";
+        }
 
         for(auto const& [comp_name, count] : component_members) {
             if(session.components_with_tick.count(comp_name)) {

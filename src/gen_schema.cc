@@ -51,8 +51,8 @@ std::string to_coi_type(const std::string& type, const std::string& handle_type)
     if (type == "int32") return "int";
     if (type == "uint32") return "int";
     if (type == "uint8") return "int";
-    if (type == "float32") return "float";
-    if (type == "float64") return "float";
+    if (type == "float32") return "float32";  // explicit 32-bit
+    if (type == "float64") return "float";    // maps to default float (64-bit)
     if (type == "string") return "string";
     if (type == "bool") return "bool";
     if (type == "func_ptr") return "func";  // Special case
@@ -61,6 +61,9 @@ std::string to_coi_type(const std::string& type, const std::string& handle_type)
 
 int main() {
     std::set<std::string> handles;
+
+    // Force rebuild by touching this file
+    std::cout << "[COI] Regenerating schema..." << std::endl;
 
     // Collect all handle types from commands
     for (const auto* c = webcc::SCHEMA_COMMANDS; !c->ns.empty(); ++c) {
@@ -529,22 +532,24 @@ const SchemaEntry SCHEMA[] = {
         out << "// Primitive Types\n";
         out << "// =========================================================\n";
         out << "//\n";
-        out << "// int     - 32-bit signed integer\n";
-        out << "// float   - 32-bit floating point\n";
-        out << "// string  - UTF-8 string\n";
-        out << "// bool    - Boolean (true/false)\n";
-        out << "// void    - No return value\n";
+        out << "// int       - 32-bit signed integer\n";
+        out << "// float     - 64-bit floating point (double precision, default)\n";
+        out << "// float32   - 32-bit floating point (single precision, explicit)\n";
+        out << "// string    - UTF-8 string\n";
+        out << "// bool      - Boolean (true/false)\n";
+        out << "// void      - No return value\n";
         out << "//\n";
         out << "\n";
         out << "// =========================================================\n";
         out << "// Type Mappings (COI -> WebAssembly)\n";
         out << "// =========================================================\n";
         out << "//\n";
-        out << "// int     -> i32\n";
-        out << "// float   -> f32\n";
-        out << "// string  -> i32 (pointer to memory)\n";
-        out << "// bool    -> i32 (0 or 1)\n";
-        out << "// Handle  -> i32 (handle ID)\n";
+        out << "// int       -> i32\n";
+        out << "// float     -> f64\n";
+        out << "// float32   -> f32\n";
+        out << "// string    -> i32 (pointer to memory)\n";
+        out << "// bool      -> i32 (0 or 1)\n";
+        out << "// Handle    -> i32 (handle ID)\n";
         out << "//\n";
         
         out.close();

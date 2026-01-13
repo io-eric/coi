@@ -185,9 +185,9 @@ std::unique_ptr<Expression> Parser::parse_primary(){
 
     // Float literal
     if(current().type == TokenType::FLOAT_LITERAL){
-        float value;
+        double value;
         try {
-            value = std::stof(current().value);
+            value = std::stod(current().value);
         } catch (const std::out_of_range&) {
             throw std::runtime_error("Float literal '" + current().value + "' is too large at line " + std::to_string(current().line));
         } catch (const std::invalid_argument&) {
@@ -459,7 +459,8 @@ std::unique_ptr<Statement> Parser::parse_statement(){
 
     bool is_type = false;
     if(current().type == TokenType::INT || current().type == TokenType::STRING ||
-       current().type == TokenType::FLOAT || current().type == TokenType::BOOL) {
+       current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
+       current().type == TokenType::BOOL) {
         is_type = true;
     } else if (current().type == TokenType::IDENTIFIER) {
         // Distinguish between Variable Declaration and other statements starting with Identifier
@@ -648,7 +649,8 @@ std::unique_ptr<StructDef> Parser::parse_struct(){
         std::string type = current().value;
         // Handle types
         if(current().type == TokenType::INT || current().type == TokenType::STRING || 
-            current().type == TokenType::FLOAT || current().type == TokenType::BOOL ||
+            current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
+            current().type == TokenType::BOOL ||
             current().type == TokenType::IDENTIFIER){
             advance();
         } else {
@@ -757,14 +759,14 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
                     prop_value = std::make_unique<IntLiteral>(std::stoi(current().value));
                     advance();
                 } else if(current().type == TokenType::FLOAT_LITERAL){
-                    prop_value = std::make_unique<FloatLiteral>(std::stof(current().value));
+                    prop_value = std::make_unique<FloatLiteral>(std::stod(current().value));
                     advance();
                 } else if(match(TokenType::MINUS)){
                     if(current().type == TokenType::INT_LITERAL){
                         prop_value = std::make_unique<IntLiteral>(-std::stoi(current().value));
                         advance();
                     } else if(current().type == TokenType::FLOAT_LITERAL){
-                        prop_value = std::make_unique<FloatLiteral>(-std::stof(current().value));
+                        prop_value = std::make_unique<FloatLiteral>(-std::stod(current().value));
                         advance();
                     } else {
                         throw std::runtime_error("Expected number after '-' in prop value");
@@ -1102,7 +1104,8 @@ Component Parser::parse_component(){
                     while (current().type != TokenType::RPAREN && current().type != TokenType::END_OF_FILE) {
                         std::string param_type = current().value;
                         if(current().type == TokenType::INT || current().type == TokenType::STRING || 
-                            current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
+                            current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
+                            current().type == TokenType::BOOL || 
                             current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
                             advance();
                         } else {
@@ -1132,7 +1135,8 @@ Component Parser::parse_component(){
                 
                 std::string retType = current().value;
                 if(current().type == TokenType::INT || current().type == TokenType::STRING || 
-                    current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
+                    current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
+                    current().type == TokenType::BOOL || 
                     current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
                     advance();
                 } else {
@@ -1149,7 +1153,8 @@ Component Parser::parse_component(){
             } else {
                 param->type = current().value;
                 if(current().type == TokenType::INT || current().type == TokenType::STRING || 
-                    current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
+                    current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
+                    current().type == TokenType::BOOL || 
                     current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
                     advance();
                 } else {
@@ -1215,7 +1220,8 @@ Component Parser::parse_component(){
 
         // Variable declaration
         if(current().type == TokenType::INT || current().type == TokenType::STRING || 
-            current().type == TokenType::FLOAT || current().type == TokenType::BOOL || 
+            current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
+            current().type == TokenType::BOOL || 
             current().type == TokenType::IDENTIFIER){
             auto var_decl = std::make_unique<VarDeclaration>();
             var_decl->type = current().value;
@@ -1291,6 +1297,7 @@ Component Parser::parse_component(){
 
                 std::string paramType = current().value;
                 if(current().type == TokenType::INT || current().type == TokenType::FLOAT || 
+                    current().type == TokenType::FLOAT32 ||
                     current().type == TokenType::STRING || current().type == TokenType::BOOL || 
                     current().type == TokenType::IDENTIFIER){
                     advance();
@@ -1371,47 +1378,51 @@ Component Parser::parse_component(){
             FunctionDef func;
             func.name = "tick";
             func.return_type = "void";
-            expect(TokenType::LPAREN, "Expected '('");
             
-            // Parse parameters
-            while(current().type != TokenType::RPAREN){
-                bool is_mutable = false;
-                if (current().type == TokenType::MUT) {
-                    is_mutable = true;
-                    advance();
-                }
+            // Parameters are optional - tick {} or tick(float dt) {}
+            if(current().type == TokenType::LPAREN) {
+                advance();
+                // Parse parameters
+                while(current().type != TokenType::RPAREN){
+                    bool is_mutable = false;
+                    if (current().type == TokenType::MUT) {
+                        is_mutable = true;
+                        advance();
+                    }
 
-                std::string paramType = current().value;
-                if(current().type == TokenType::INT || current().type == TokenType::FLOAT || 
-                    current().type == TokenType::STRING || current().type == TokenType::BOOL || 
-                    current().type == TokenType::IDENTIFIER){
-                    advance();
-                } else {
-                        throw std::runtime_error("Expected parameter type");
-                }
+                    std::string paramType = current().value;
+                    if(current().type == TokenType::INT || current().type == TokenType::FLOAT || 
+                        current().type == TokenType::FLOAT32 ||
+                        current().type == TokenType::STRING || current().type == TokenType::BOOL || 
+                        current().type == TokenType::IDENTIFIER){
+                        advance();
+                    } else {
+                            throw std::runtime_error("Expected parameter type");
+                    }
 
-                bool is_reference = false;
-                if(current().type == TokenType::AMPERSAND){
-                    is_reference = true;
-                    advance();
-                }
+                    bool is_reference = false;
+                    if(current().type == TokenType::AMPERSAND){
+                        is_reference = true;
+                        advance();
+                    }
 
-                std::string paramName = current().value;
-                // Allow 'key' keyword as parameter name
-                if (current().type == TokenType::IDENTIFIER || current().type == TokenType::KEY) {
-                    advance();
-                } else {
-                    throw std::runtime_error("Expected parameter name at line " + std::to_string(current().line));
-                }
-                
-                func.params.push_back({paramType, paramName, is_mutable, is_reference});
+                    std::string paramName = current().value;
+                    // Allow 'key' keyword as parameter name
+                    if (current().type == TokenType::IDENTIFIER || current().type == TokenType::KEY) {
+                        advance();
+                    } else {
+                        throw std::runtime_error("Expected parameter name at line " + std::to_string(current().line));
+                    }
+                    
+                    func.params.push_back({paramType, paramName, is_mutable, is_reference});
 
-                if(current().type == TokenType::COMMA){
-                    advance();
+                    if(current().type == TokenType::COMMA){
+                        advance();
+                    }
                 }
+                expect(TokenType::RPAREN, "Expected ')'");
             }
-
-            expect(TokenType::RPAREN, "Expected ')'");
+            
             expect(TokenType::LBRACE, "Expected '{'");
 
             while(current().type != TokenType::RBRACE){

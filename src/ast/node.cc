@@ -5,6 +5,8 @@
 
 std::string convert_type(const std::string& type) {
     if (type == "string") return "webcc::string";
+    if (type == "float") return "double";    // float -> 64-bit (default, matches WASM/JS)
+    if (type == "float32") return "float";   // explicit 32-bit
     // Handle Component.EnumName type syntax - convert to Component::EnumName
     if (type.find('.') != std::string::npos) {
         std::string result = type;

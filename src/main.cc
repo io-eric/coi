@@ -53,21 +53,110 @@ static std::string get_base_type(const std::string& type) {
     return type;
 }
 
-// Collect all types used in a component
+// Collect types used in expressions (recursively scan AST)
+static void collect_types_from_expr(Expression* expr, std::set<std::string>& types) {
+    if (!expr) return;
+    
+    // Check for static method calls like FetchRequest.post(), System.log(), etc.
+    if (auto* call = dynamic_cast<FunctionCall*>(expr)) {
+        // The function name might be "FetchRequest.post" or similar
+        size_t dot = call->name.find('.');
+        if (dot != std::string::npos) {
+            types.insert(call->name.substr(0, dot));
+        }
+        for (auto& arg : call->args) {
+            collect_types_from_expr(arg.get(), types);
+        }
+    }
+    else if (auto* member = dynamic_cast<MemberAccess*>(expr)) {
+        // Check if object is an identifier (type name for static calls)
+        if (auto* id = dynamic_cast<Identifier*>(member->object.get())) {
+            types.insert(id->name);
+        }
+        collect_types_from_expr(member->object.get(), types);
+    }
+    else if (auto* binary = dynamic_cast<BinaryOp*>(expr)) {
+        collect_types_from_expr(binary->left.get(), types);
+        collect_types_from_expr(binary->right.get(), types);
+    }
+    else if (auto* unary = dynamic_cast<UnaryOp*>(expr)) {
+        collect_types_from_expr(unary->operand.get(), types);
+    }
+    else if (auto* ternary = dynamic_cast<TernaryOp*>(expr)) {
+        collect_types_from_expr(ternary->condition.get(), types);
+        collect_types_from_expr(ternary->true_expr.get(), types);
+        collect_types_from_expr(ternary->false_expr.get(), types);
+    }
+    else if (auto* postfix = dynamic_cast<PostfixOp*>(expr)) {
+        collect_types_from_expr(postfix->operand.get(), types);
+    }
+    else if (auto* index = dynamic_cast<IndexAccess*>(expr)) {
+        collect_types_from_expr(index->array.get(), types);
+        collect_types_from_expr(index->index.get(), types);
+    }
+}
+
+// Collect types used in statements (recursively scan AST)
+static void collect_types_from_stmt(Statement* stmt, std::set<std::string>& types) {
+    if (!stmt) return;
+    
+    if (auto* expr_stmt = dynamic_cast<ExpressionStatement*>(stmt)) {
+        collect_types_from_expr(expr_stmt->expression.get(), types);
+    }
+    else if (auto* var_decl = dynamic_cast<VarDeclaration*>(stmt)) {
+        types.insert(get_base_type(var_decl->type));
+        collect_types_from_expr(var_decl->initializer.get(), types);
+    }
+    else if (auto* assign = dynamic_cast<Assignment*>(stmt)) {
+        collect_types_from_expr(assign->value.get(), types);
+    }
+    else if (auto* idx_assign = dynamic_cast<IndexAssignment*>(stmt)) {
+        collect_types_from_expr(idx_assign->array.get(), types);
+        collect_types_from_expr(idx_assign->index.get(), types);
+        collect_types_from_expr(idx_assign->value.get(), types);
+    }
+    else if (auto* if_stmt = dynamic_cast<IfStatement*>(stmt)) {
+        collect_types_from_expr(if_stmt->condition.get(), types);
+        collect_types_from_stmt(if_stmt->then_branch.get(), types);
+        collect_types_from_stmt(if_stmt->else_branch.get(), types);
+    }
+    else if (auto* for_stmt = dynamic_cast<ForRangeStatement*>(stmt)) {
+        collect_types_from_expr(for_stmt->start.get(), types);
+        collect_types_from_expr(for_stmt->end.get(), types);
+        collect_types_from_stmt(for_stmt->body.get(), types);
+    }
+    else if (auto* for_each = dynamic_cast<ForEachStatement*>(stmt)) {
+        collect_types_from_expr(for_each->iterable.get(), types);
+        collect_types_from_stmt(for_each->body.get(), types);
+    }
+    else if (auto* block = dynamic_cast<BlockStatement*>(stmt)) {
+        for (auto& s : block->statements) collect_types_from_stmt(s.get(), types);
+    }
+    else if (auto* ret = dynamic_cast<ReturnStatement*>(stmt)) {
+        collect_types_from_expr(ret->value.get(), types);
+    }
+}
+
+// Collect all types used in a component (including method bodies)
 static void collect_used_types(const Component& comp, std::set<std::string>& types) {
     // Collect from state variables
     for (const auto& var : comp.state) {
         types.insert(get_base_type(var->type));
+        collect_types_from_expr(var->initializer.get(), types);
     }
     // Collect from parameters
     for (const auto& param : comp.params) {
         types.insert(get_base_type(param->type));
     }
-    // Collect from method parameters and return types
+    // Collect from method parameters, return types, and bodies
     for (const auto& method : comp.methods) {
         types.insert(get_base_type(method.return_type));
         for (const auto& param : method.params) {
             types.insert(get_base_type(param.type));
+        }
+        // Scan method body for type usage
+        for (const auto& stmt : method.body) {
+            collect_types_from_stmt(stmt.get(), types);
         }
     }
 }
@@ -537,12 +626,12 @@ int main(int argc, char **argv)
         out << "        }\n";
         out << "    }\n";
         out << "}\n\n";
-        out << "void update_wrapper(float time) {\n";
-        out << "    static float last_time = 0;\n";
-        out << "    float dt = (time - last_time) / 1000.0f;\n";
+        out << "void update_wrapper(double time) {\n";
+        out << "    static double last_time = 0;\n";
+        out << "    double dt = (time - last_time) / 1000.0;\n";
         out << "    last_time = time;\n";
-        out << "    if (dt > 0.1f) dt = 0.1f; // Cap dt to avoid huge jumps\n";
-        out << "    static webcc::Event events[64];\n";
+        out << "    if (dt > 0.1) dt = 0.1; // Cap dt to avoid huge jumps\n";
+        out << "    static webcc::Event events[64];\n";;
         out << "    uint32_t count = 0;\n";
         out << "    webcc::Event e;\n";
         out << "    while (webcc::poll_event(e) && count < 64) {\n";
