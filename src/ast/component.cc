@@ -124,7 +124,8 @@ static void emit_loop_region_members(std::stringstream& ss, const std::vector<Lo
     for (const auto& region : loop_regions) {
         ss << "    webcc::handle _loop_" << region.loop_id << "_parent;\n";
         if (region.is_keyed) {
-            ss << "    webcc::unordered_map<" << region.key_type << ", int> _loop_" << region.loop_id << "_map;\n";
+            // Simple count tracking - no map needed for inline sync
+            ss << "    int _loop_" << region.loop_id << "_count = 0;\n";
         } else {
             ss << "    int _loop_" << region.loop_id << "_count = 0;\n";
         }
@@ -177,7 +178,10 @@ static void emit_event_registration(std::stringstream& ss,
 
 void Component::collect_child_components(ASTNode* node, std::map<std::string, int>& counts) {
     if(auto comp = dynamic_cast<ComponentInstantiation*>(node)) {
-        counts[comp->component_name]++;
+        // Don't count member references - they're already declared as member variables
+        if (!comp->is_member_reference) {
+            counts[comp->component_name]++;
+        }
     }
     if(auto el = dynamic_cast<HTMLElement*>(node)) {
         for(auto& child : el->children) {
@@ -197,7 +201,8 @@ void Component::collect_child_components(ASTNode* node, std::map<std::string, in
 // Collect component types used inside for loops
 static void collect_loop_components(ASTNode* node, std::set<std::string>& loop_components, bool in_loop = false) {
     if(auto comp = dynamic_cast<ComponentInstantiation*>(node)) {
-        if (in_loop) {
+        // Don't collect member references - they're already declared as member variables
+        if (in_loop && !comp->is_member_reference) {
             loop_components.insert(comp->component_name);
         }
     }
@@ -228,7 +233,13 @@ static void collect_loop_components(ASTNode* node, std::set<std::string>& loop_c
 
 void Component::collect_child_updates(ASTNode* node, std::map<std::string, std::vector<std::string>>& updates, std::map<std::string, int>& counters) {
     if(auto comp = dynamic_cast<ComponentInstantiation*>(node)) {
-        std::string instance_name = comp->component_name + "_" + std::to_string(counters[comp->component_name]++);
+        // For member references, use member_name; otherwise construct instance name
+        std::string instance_name;
+        if (comp->is_member_reference) {
+            instance_name = comp->member_name;
+        } else {
+            instance_name = comp->component_name + "_" + std::to_string(counters[comp->component_name]++);
+        }
         
         for(const auto& prop : comp->props) {
             if(prop.is_reference) {
@@ -343,6 +354,31 @@ std::string Component::to_webcc(CompilerSession& session) {
     
     // State variables
     for(auto& var : state){
+        // Special handling for array literals
+        if (auto arr_lit = dynamic_cast<ArrayLiteral*>(var->initializer.get())) {
+            if (var->type.ends_with("[]")) {
+                std::string elem_type = var->type.substr(0, var->type.length() - 2);
+                size_t count = arr_lit->elements.size();
+                
+                if (var->is_mutable) {
+                    // Mutable: use vector with brace init
+                    std::string vec_type = "webcc::vector<" + convert_type(elem_type) + ">";
+                    ss << "    " << vec_type;
+                    if (var->is_reference) ss << "&";
+                    ss << " " << var->name << " = " << arr_lit->to_webcc() << ";\n";
+                    
+                    if (var->is_public) {
+                        ss << "    webcc::function<void()> " << make_callback_name(var->name) << ";\n";
+                    }
+                } else {
+                    // Const: use fixed-size array (more efficient, size known at compile time)
+                    std::string arr_type = "webcc::array<" + convert_type(elem_type) + ", " + std::to_string(count) + ">";
+                    ss << "    const " << arr_type << " " << var->name << " = " << arr_lit->to_webcc() << ";\n";
+                }
+                continue;
+            }
+        }
+        
         ss << "    " << (var->is_mutable ? "" : "const ") << convert_type(var->type);
         if(var->is_reference) ss << "&";
         ss << " " << var->name;
@@ -526,49 +562,40 @@ std::string Component::to_webcc(CompilerSession& session) {
         ss << "    void _sync_loop_" << region.loop_id << "() {\n";
         
         if (region.is_keyed) {
-            std::string map_name = "_loop_" + std::to_string(region.loop_id) + "_map";
-            std::string vec_name = "_loop_" + region.component_type + "s";
-            std::string key_field = region.key_expr.substr(region.var_name.length() + 1);
+            std::string vec_name = region.is_member_ref_loop ? region.iterable_expr : ("_loop_" + region.component_type + "s");
+            std::string count_var = "_loop_" + std::to_string(region.loop_id) + "_count";
+            std::string parent_var = "_loop_" + std::to_string(region.loop_id) + "_parent";
             
-            ss << "        webcc::vector<int32_t> _new_keys;\n";
+            ss << "        int _new_count = (int)" << vec_name << ".size();\n";
+            ss << "        if (_new_count == " << count_var << ") {\n";
+            // Same count - just update props inline
+            if (!region.item_update_code.empty()) {
+                ss << "            int _idx = 0;\n";
+                ss << "            for (auto& " << region.var_name << " : " << region.iterable_expr << ") {\n";
+                // Indent the update code properly
+                std::string update_code = region.item_update_code;
+                std::istringstream update_iss(update_code);
+                std::string update_line;
+                while (std::getline(update_iss, update_line)) {
+                    if (!update_line.empty()) {
+                        ss << "            " << update_line << "\n";
+                    }
+                }
+                ss << "                _idx++;\n";
+                ss << "            }\n";
+            }
+            ss << "            return;\n";
+            ss << "        }\n";
+            ss << "        \n";
+            
+            // Clear existing DOM children
+            ss << "        if (" << count_var << " > 0) {\n";
+            ss << "            webcc::dom::set_inner_html(" << parent_var << ", \"\");\n";
+            ss << "        }\n";
+            ss << "        \n";
+            
+            // Recreate all items
             ss << "        for (auto& " << region.var_name << " : " << region.iterable_expr << ") {\n";
-            ss << "            _new_keys.push_back(" << region.key_expr << ");\n";
-            ss << "        }\n";
-            ss << "        \n";
-            
-            ss << "        webcc::vector<int32_t> _keys_to_remove;\n";
-            ss << "        for (int _i = 0; _i < (int)" << vec_name << ".size(); _i++) {\n";
-            ss << "            int32_t _old_key = " << vec_name << "[_i]." << key_field << ";\n";
-            ss << "            bool _found = false;\n";
-            ss << "            for (int _j = 0; _j < (int)_new_keys.size(); _j++) {\n";
-            ss << "                if (_new_keys[_j] == _old_key) { _found = true; break; }\n";
-            ss << "            }\n";
-            ss << "            if (!_found) _keys_to_remove.push_back(_old_key);\n";
-            ss << "        }\n";
-            ss << "        \n";
-            
-            ss << "        bool _did_remove = false;\n";
-            ss << "        for (int _r = 0; _r < (int)_keys_to_remove.size(); _r++) {\n";
-            ss << "            int32_t _key_to_remove = _keys_to_remove[_r];\n";
-            ss << "            for (int _i = (int)" << vec_name << ".size() - 1; _i >= 0; _i--) {\n";
-            ss << "                if (" << vec_name << "[_i]." << key_field << " == _key_to_remove) {\n";
-            ss << "                    " << vec_name << "[_i]._destroy();\n";
-            ss << "                    " << vec_name << ".erase(_i);\n";
-            ss << "                    " << map_name << ".erase(_key_to_remove);\n";
-            ss << "                    _did_remove = true;\n";
-            ss << "                    break;\n";
-            ss << "                }\n";
-            ss << "            }\n";
-            ss << "        }\n";
-            ss << "        if (_did_remove) {\n";
-            ss << "            for (int _i = 0; _i < (int)" << vec_name << ".size(); _i++) " << vec_name << "[_i]._rebind();\n";
-            ss << "        }\n";
-            ss << "        \n";
-            
-            ss << "        int _old_size = (int)" << vec_name << ".size();\n";
-            ss << "        for (auto& " << region.var_name << " : " << region.iterable_expr << ") {\n";
-            ss << "            auto _key = " << region.key_expr << ";\n";
-            ss << "            if (" << map_name << ".contains(_key)) continue;\n";
             
             std::string item_code = region.item_creation_code;
             std::stringstream indented;
@@ -581,13 +608,8 @@ std::string Component::to_webcc(CompilerSession& session) {
             }
             ss << indented.str();
             
-            if (!region.component_type.empty()) {
-                ss << "            " << map_name << "[_key] = 1;\n";
-            }
             ss << "        }\n";
-            ss << "        if ((int)" << vec_name << ".size() > _old_size) {\n";
-            ss << "            for (int _i = 0; _i < _old_size; _i++) " << vec_name << "[_i]._rebind();\n";
-            ss << "        }\n";
+            ss << "        " << count_var << " = _new_count;\n";
             
         } else {
             ss << "        int new_count = " << region.end_expr << " - " << region.start_expr << ";\n";
@@ -694,6 +716,10 @@ std::string Component::to_webcc(CompilerSession& session) {
         for (const auto& [comp_name, inst_id] : region.else_components) {
             ss << "            " << comp_name << "_" << inst_id << "._destroy();\n";
         }
+        // Remove view from member references (keeps component state, just removes DOM)
+        for (const auto& member_name : region.else_member_refs) {
+            ss << "            " << member_name << "._remove_view();\n";
+        }
         for (int loop_id : region.else_loop_ids) {
             for (const auto& lr : loop_regions) {
                 if (lr.loop_id == loop_id) {
@@ -750,6 +776,10 @@ std::string Component::to_webcc(CompilerSession& session) {
         }
         for (const auto& [comp_name, inst_id] : region.then_components) {
             ss << "            " << comp_name << "_" << inst_id << "._destroy();\n";
+        }
+        // Remove view from member references (keeps component state, just removes DOM)
+        for (const auto& member_name : region.then_member_refs) {
+            ss << "            " << member_name << "._remove_view();\n";
         }
         for (int loop_id : region.then_loop_ids) {
             for (const auto& lr : loop_regions) {
@@ -951,10 +981,105 @@ std::string Component::to_webcc(CompilerSession& session) {
     
     // Destroy method
     ss << "    void _destroy() {\n";
+    
+    // Determine if the view has if/else regions that control root elements
+    // If so, we need to conditionally remove elements based on _if_N_state
+    std::set<int> then_els, else_els;
+    int root_if_id = -1;
+    for (const auto& region : if_regions) {
+        // Check if this if region contains root-level elements (el[0] or similar low indices)
+        for (int el_id : region.then_element_ids) {
+            then_els.insert(el_id);
+            if (el_id == 0) root_if_id = region.if_id;
+        }
+        for (int el_id : region.else_element_ids) {
+            else_els.insert(el_id);
+            if (root_if_id < 0) {
+                // Check if first else element could be a root 
+                for (int tel_id : region.then_element_ids) {
+                    if (tel_id == 0) {
+                        root_if_id = region.if_id;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    // If we have if/else at root level, generate conditional destroy
+    if (root_if_id >= 0 && !if_regions.empty()) {
+        // Find the root if region
+        const IfRegion* root_region = nullptr;
+        for (const auto& region : if_regions) {
+            if (region.if_id == root_if_id) {
+                root_region = &region;
+                break;
+            }
+        }
+        
+        if (root_region) {
+            // Remove event handlers conditionally based on which branch is active
+            ss << "        if (_if_" << root_if_id << "_state) {\n";
+            // Remove handlers for then-branch elements
+            for (int el_id : root_region->then_element_ids) {
+                if (masks.click && (masks.click & (1ULL << el_id))) 
+                    ss << "            g_dispatcher.remove(el[" << el_id << "]);\n";
+                if (masks.input && (masks.input & (1ULL << el_id)))
+                    ss << "            g_input_dispatcher.remove(el[" << el_id << "]);\n";
+                if (masks.change && (masks.change & (1ULL << el_id)))
+                    ss << "            g_change_dispatcher.remove(el[" << el_id << "]);\n";
+                if (masks.keydown && (masks.keydown & (1ULL << el_id)))
+                    ss << "            g_keydown_dispatcher.remove(el[" << el_id << "]);\n";
+            }
+            // Remove the then-branch root element
+            if (!root_region->then_element_ids.empty()) {
+                ss << "            webcc::dom::remove_element(el[" << root_region->then_element_ids[0] << "]);\n";
+            }
+            ss << "        } else {\n";
+            // Remove handlers for else-branch elements
+            for (int el_id : root_region->else_element_ids) {
+                if (masks.click && (masks.click & (1ULL << el_id)))
+                    ss << "            g_dispatcher.remove(el[" << el_id << "]);\n";
+                if (masks.input && (masks.input & (1ULL << el_id)))
+                    ss << "            g_input_dispatcher.remove(el[" << el_id << "]);\n";
+                if (masks.change && (masks.change & (1ULL << el_id)))
+                    ss << "            g_change_dispatcher.remove(el[" << el_id << "]);\n";
+                if (masks.keydown && (masks.keydown & (1ULL << el_id)))
+                    ss << "            g_keydown_dispatcher.remove(el[" << el_id << "]);\n";
+            }
+            // Remove the else-branch root element
+            if (!root_region->else_element_ids.empty()) {
+                ss << "            webcc::dom::remove_element(el[" << root_region->else_element_ids[0] << "]);\n";
+            }
+            ss << "        }\n";
+        }
+    } else {
+        // No if/else at root level, use the original simple approach
+        if (masks.click) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_click_mask & (1ULL << i)) g_dispatcher.remove(el[i]);\n";
+        if (masks.input) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_input_mask & (1ULL << i)) g_input_dispatcher.remove(el[i]);\n";
+        if (masks.change) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_change_mask & (1ULL << i)) g_change_dispatcher.remove(el[i]);\n";
+        if (masks.keydown) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_keydown_mask & (1ULL << i)) g_keydown_dispatcher.remove(el[i]);\n";
+        if (element_count > 0) {
+            ss << "        webcc::dom::remove_element(el[0]);\n";
+        }
+    }
+    ss << "    }\n";
+    
+    // Remove view method - removes DOM elements but keeps component state intact
+    // Used for member references inside if-statements that toggle visibility
+    ss << "    void _remove_view() {\n";
+    // Remove all event handlers
     if (masks.click) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_click_mask & (1ULL << i)) g_dispatcher.remove(el[i]);\n";
     if (masks.input) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_input_mask & (1ULL << i)) g_input_dispatcher.remove(el[i]);\n";
     if (masks.change) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_change_mask & (1ULL << i)) g_change_dispatcher.remove(el[i]);\n";
     if (masks.keydown) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_keydown_mask & (1ULL << i)) g_keydown_dispatcher.remove(el[i]);\n";
+    // Remove child component views recursively
+    for (auto const& [comp_name, count] : component_members) {
+        for (int i = 0; i < count; ++i) {
+            ss << "        " << comp_name << "_" << i << "._remove_view();\n";
+        }
+    }
+    // Remove root element (which removes all children)
     if (element_count > 0) {
         ss << "        webcc::dom::remove_element(el[0]);\n";
     }

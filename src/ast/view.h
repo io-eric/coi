@@ -54,6 +54,7 @@ struct LoopRegion {
     std::string root_element_var;
     bool is_html_loop = false;
     bool is_keyed = false;
+    bool is_member_ref_loop = false;  // True when iterating over component array with <varName/>
     std::string key_expr;
     std::string key_type;
     std::string iterable_expr;
@@ -77,14 +78,19 @@ struct IfRegion {
     std::vector<int> else_loop_ids;
     std::vector<int> then_if_ids;
     std::vector<int> else_if_ids;
+    std::vector<std::string> then_member_refs;  // Member component references in then branch
+    std::vector<std::string> else_member_refs;  // Member component references in else branch
 };
 
 struct ComponentInstantiation : ASTNode {
     std::string component_name;
     std::vector<ComponentProp> props;
+    bool is_member_reference = false;  // True if this refers to a member variable (e.g., <a/> for "mut Test a;")
+    std::string member_name;           // Name of the member variable if is_member_reference is true
     
     std::string to_webcc() override;
 
+    // loop_var_name: iterator name for efficient lambda captures (e.g. "row" in for-each)
     void generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
                       std::vector<EventHandler>& event_handlers,
                       std::vector<Binding>& bindings,
@@ -95,7 +101,8 @@ struct ComponentInstantiation : ASTNode {
                       std::vector<LoopRegion>* loop_regions = nullptr,
                       int* loop_counter = nullptr,
                       std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr);
+                      int* if_counter = nullptr,
+                      const std::string& loop_var_name = "");
     
     void collect_dependencies(std::set<std::string>& deps) override;
 };
@@ -118,7 +125,8 @@ struct HTMLElement : ASTNode {
                       std::vector<LoopRegion>* loop_regions = nullptr,
                       int* loop_counter = nullptr,
                       std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr);
+                      int* if_counter = nullptr,
+                      const std::string& loop_var_name = "");
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -140,7 +148,8 @@ struct ViewIfStatement : ASTNode {
                       std::vector<LoopRegion>* loop_regions = nullptr,
                       int* loop_counter = nullptr,
                       std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr);
+                      int* if_counter = nullptr,
+                      const std::string& loop_var_name = "");
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -163,7 +172,8 @@ struct ViewForRangeStatement : ASTNode {
                       std::vector<LoopRegion>* loop_regions = nullptr,
                       int* loop_counter = nullptr,
                       std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr);
+                      int* if_counter = nullptr,
+                      const std::string& loop_var_name = "");
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -186,6 +196,7 @@ struct ViewForEachStatement : ASTNode {
                       std::vector<LoopRegion>* loop_regions = nullptr,
                       int* loop_counter = nullptr,
                       std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr);
+                      int* if_counter = nullptr,
+                      const std::string& loop_var_name = "");
     void collect_dependencies(std::set<std::string>& deps) override;
 };

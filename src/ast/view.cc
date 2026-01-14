@@ -21,6 +21,39 @@ static std::string build_lambda_params(FunctionCall *func_call)
     return params;
 }
 
+// Build minimal lambda capture: [this] outside loops, [this, var] inside loops.
+static std::string build_lambda_capture(const std::string &loop_var_name)
+{
+    if (loop_var_name.empty())  // Not in a loop - just capture this
+    {
+        return "[this]";
+    }
+    // In loop: capture loop var by value so lambda survives loop iteration
+    return "[this, " + loop_var_name + "]";
+}
+
+// Collect member reference names from view children (recursive)
+static void collect_member_refs(ASTNode* node, std::vector<std::string>& refs) {
+    if (auto comp = dynamic_cast<ComponentInstantiation*>(node)) {
+        if (comp->is_member_reference) {
+            refs.push_back(comp->member_name);
+        }
+    }
+    if (auto el = dynamic_cast<HTMLElement*>(node)) {
+        for (auto& child : el->children) {
+            collect_member_refs(child.get(), refs);
+        }
+    }
+    if (auto viewIf = dynamic_cast<ViewIfStatement*>(node)) {
+        for (auto& child : viewIf->then_children) {
+            collect_member_refs(child.get(), refs);
+        }
+        for (auto& child : viewIf->else_children) {
+            collect_member_refs(child.get(), refs);
+        }
+    }
+}
+
 std::string TextNode::to_webcc() { return "\"" + text + "\""; }
 
 std::string ComponentInstantiation::to_webcc() { return ""; }
@@ -35,11 +68,56 @@ void ComponentInstantiation::generate_code(std::stringstream &ss, const std::str
                                            std::vector<LoopRegion> *loop_regions,
                                            int *loop_counter,
                                            std::vector<IfRegion> *if_regions,
-                                           int *if_counter)
+                                           int *if_counter,
+                                           const std::string &loop_var_name)
 {
+    std::string instance_name;
+
+    // Handle member reference (e.g., <a/> where "a" is a member variable of component type)
+    if (is_member_reference)
+    {
+        instance_name = member_name;
+        
+        // Set props on the existing member
+        for (auto &prop : props)
+        {
+            std::string val = prop.value->to_webcc();
+            if (method_names.count(val))
+            {
+                ss << "        " << instance_name << "." << prop.name << " = [this]() { this->" << val << "(); };\n";
+            }
+            else if (prop.is_reference)
+            {
+                if (auto *func_call = dynamic_cast<FunctionCall *>(prop.value.get()))
+                {
+                    std::string lambda_params = build_lambda_params(func_call);
+                    std::string capture = build_lambda_capture(loop_var_name);
+                    ss << "        " << instance_name << "." << prop.name << " = " << capture << "(" << lambda_params << ") { this->" << val << "; };\n";
+                }
+                else
+                {
+                    ss << "        " << instance_name << "." << prop.name << " = &(" << val << ");\n";
+                }
+            }
+            else
+            {
+                ss << "        " << instance_name << "." << prop.name << " = " << val << ";\n";
+            }
+        }
+
+        // Call view on the existing member (component persists, only view is re-rendered)
+        if (!parent.empty())
+        {
+            ss << "        " << instance_name << ".view(" << parent << ");\n";
+        }
+        else
+        {
+            ss << "        " << instance_name << ".view();\n";
+        }
+        return;
+    }
 
     int id = component_counters[component_name]++;
-    std::string instance_name;
 
     if (in_loop)
     {
@@ -67,7 +145,8 @@ void ComponentInstantiation::generate_code(std::stringstream &ss, const std::str
             if (auto *func_call = dynamic_cast<FunctionCall *>(prop.value.get()))
             {
                 std::string lambda_params = build_lambda_params(func_call);
-                ss << "        " << instance_name << "." << prop.name << " = [this](" << lambda_params << ") { this->" << val << "; };\n";
+                std::string capture = build_lambda_capture(loop_var_name);
+                ss << "        " << instance_name << "." << prop.name << " = " << capture << "(" << lambda_params << ") { this->" << val << "; };\n";
             }
             else
             {
@@ -140,6 +219,7 @@ void ComponentInstantiation::collect_dependencies(std::set<std::string> &deps)
 std::string HTMLElement::to_webcc() { return ""; }
 
 // Helper to generate code for a view child node
+// loop_var_name: empty at top-level, set to iterator name (e.g. "row") inside for-loops
 static void generate_view_child(ASTNode *child, std::stringstream &ss, const std::string &parent, int &counter,
                                 std::vector<EventHandler> &event_handlers,
                                 std::vector<Binding> &bindings,
@@ -150,27 +230,28 @@ static void generate_view_child(ASTNode *child, std::stringstream &ss, const std
                                 std::vector<LoopRegion> *loop_regions = nullptr,
                                 int *loop_counter = nullptr,
                                 std::vector<IfRegion> *if_regions = nullptr,
-                                int *if_counter = nullptr)
+                                int *if_counter = nullptr,
+                                const std::string &loop_var_name = "")  // Propagated for lambda captures
 {
     if (auto el = dynamic_cast<HTMLElement *>(child))
     {
-        el->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
+        el->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
     }
     else if (auto comp = dynamic_cast<ComponentInstantiation *>(child))
     {
-        comp->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
+        comp->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
     }
     else if (auto viewIf = dynamic_cast<ViewIfStatement *>(child))
     {
-        viewIf->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
+        viewIf->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
     }
     else if (auto viewFor = dynamic_cast<ViewForRangeStatement *>(child))
     {
-        viewFor->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
+        viewFor->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
     }
     else if (auto viewForEach = dynamic_cast<ViewForEachStatement *>(child))
     {
-        viewForEach->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
+        viewForEach->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
     }
 }
 
@@ -184,7 +265,8 @@ void HTMLElement::generate_code(std::stringstream &ss, const std::string &parent
                                 std::vector<LoopRegion> *loop_regions,
                                 int *loop_counter,
                                 std::vector<IfRegion> *if_regions,
-                                int *if_counter)
+                                int *if_counter,
+                                const std::string &loop_var_name)
 {
     int my_id = counter++;
     std::string var;
@@ -273,7 +355,7 @@ void HTMLElement::generate_code(std::stringstream &ss, const std::string &parent
     {
         for (auto &child : children)
         {
-            generate_view_child(child.get(), ss, var, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
+            generate_view_child(child.get(), ss, var, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
         }
     }
     else
@@ -374,10 +456,12 @@ void HTMLElement::collect_dependencies(std::set<std::string> &deps)
     }
 }
 
-// Helper to generate prop update code for loop components
+// Generate prop assignments for components inside loops (used in sync functions)
+// loop_var_name passed to capture loop iterator in callback lambdas
 static void generate_prop_update_code(std::stringstream &ss, ComponentInstantiation *comp,
                                       const std::string &inst_ref,
-                                      const std::set<std::string> &method_names)
+                                      const std::set<std::string> &method_names,
+                                      const std::string &loop_var_name = "")
 {
     for (auto &prop : comp->props)
     {
@@ -393,7 +477,8 @@ static void generate_prop_update_code(std::stringstream &ss, ComponentInstantiat
             if (auto *func_call = dynamic_cast<FunctionCall *>(prop.value.get()))
             {
                 std::string params = build_lambda_params(func_call);
-                ss << prefix << "[this](" << params << ") { this->" << val << "; };\n";
+                std::string capture = build_lambda_capture(loop_var_name);
+                ss << prefix << capture << "(" << params << ") { this->" << val << "; };\n";
             }
             else
             {
@@ -420,7 +505,8 @@ void ViewIfStatement::generate_code(std::stringstream &ss, const std::string &pa
                                     std::vector<LoopRegion> *loop_regions,
                                     int *loop_counter,
                                     std::vector<IfRegion> *if_regions,
-                                    int *if_counter)
+                                    int *if_counter,
+                                    const std::string &loop_var_name)
 {
 
     // Simple static if for nested loops
@@ -431,14 +517,14 @@ void ViewIfStatement::generate_code(std::stringstream &ss, const std::string &pa
         ss << "        if (" << condition->to_webcc() << ") {\n";
         for (auto &child : then_children)
         {
-            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
+            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
         }
         if (!else_children.empty())
         {
             ss << "        } else {\n";
             for (auto &child : else_children)
             {
-                generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter);
+                generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
             }
         }
         ss << "        }\n";
@@ -475,7 +561,7 @@ void ViewIfStatement::generate_code(std::stringstream &ss, const std::string &pa
     std::vector<Binding> then_bindings;
     for (auto &child : then_children)
     {
-        generate_view_child(child.get(), then_ss, if_parent, counter, event_handlers, then_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
+        generate_view_child(child.get(), then_ss, if_parent, counter, event_handlers, then_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
     }
     int counter_after_then = counter;
     int loop_id_after_then = loop_counter ? *loop_counter : 0;
@@ -501,6 +587,11 @@ void ViewIfStatement::generate_code(std::stringstream &ss, const std::string &pa
             region.then_components.push_back({comp_name, i});
         }
     }
+    
+    // Collect member references in then branch
+    for (auto &child : then_children) {
+        collect_member_refs(child.get(), region.then_member_refs);
+    }
 
     region.then_creation_code = then_ss.str();
 
@@ -515,7 +606,7 @@ void ViewIfStatement::generate_code(std::stringstream &ss, const std::string &pa
     {
         for (auto &child : else_children)
         {
-            generate_view_child(child.get(), else_ss, if_parent, counter, event_handlers, else_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter);
+            generate_view_child(child.get(), else_ss, if_parent, counter, event_handlers, else_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
         }
     }
     int counter_after_else = counter;
@@ -541,6 +632,11 @@ void ViewIfStatement::generate_code(std::stringstream &ss, const std::string &pa
         {
             region.else_components.push_back({comp_name, i});
         }
+    }
+    
+    // Collect member references in else branch
+    for (auto &child : else_children) {
+        collect_member_refs(child.get(), region.else_member_refs);
     }
 
     region.else_creation_code = else_ss.str();
@@ -598,7 +694,8 @@ void ViewForRangeStatement::generate_code(std::stringstream &ss, const std::stri
                                           std::vector<LoopRegion> *loop_regions,
                                           int *loop_counter,
                                           std::vector<IfRegion> *if_regions,
-                                          int *if_counter)
+                                          int *if_counter,
+                                          const std::string &loop_var_name)
 {
 
     if (in_loop || !loop_regions || !loop_counter)
@@ -607,7 +704,7 @@ void ViewForRangeStatement::generate_code(std::stringstream &ss, const std::stri
            << var_name << " < " << end->to_webcc() << "; " << var_name << "++) {\n";
         for (auto &child : children)
         {
-            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr);
+            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr, var_name);
         }
         ss << "        }\n";
         return;
@@ -652,7 +749,7 @@ void ViewForRangeStatement::generate_code(std::stringstream &ss, const std::stri
 
     for (auto &child : children)
     {
-        generate_view_child(child.get(), item_ss, loop_parent_var, temp_counter, event_handlers, bindings, temp_comp_counters, method_names, parent_component_name, true, nullptr, nullptr);
+        generate_view_child(child.get(), item_ss, loop_parent_var, temp_counter, event_handlers, bindings, temp_comp_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr, var_name);
     }
     region.item_creation_code = item_ss.str();
 
@@ -667,7 +764,7 @@ void ViewForRangeStatement::generate_code(std::stringstream &ss, const std::stri
         std::stringstream update_ss;
         std::string vec_name = "_loop_" + region.component_type + "s";
         std::string inst_ref = vec_name + "[" + var_name + "]";
-        generate_prop_update_code(update_ss, loop_component, inst_ref, method_names);
+        generate_prop_update_code(update_ss, loop_component, inst_ref, method_names, var_name);
         region.item_update_code = update_ss.str();
     }
 
@@ -696,7 +793,8 @@ void ViewForEachStatement::generate_code(std::stringstream &ss, const std::strin
                                          std::vector<LoopRegion> *loop_regions,
                                          int *loop_counter,
                                          std::vector<IfRegion> *if_regions,
-                                         int *if_counter)
+                                         int *if_counter,
+                                         const std::string &loop_var_name)
 {
 
     if (in_loop || !key_expr || !loop_regions || !loop_counter)
@@ -704,7 +802,7 @@ void ViewForEachStatement::generate_code(std::stringstream &ss, const std::strin
         ss << "        for (auto& " << var_name << " : " << iterable->to_webcc() << ") {\n";
         for (auto &child : children)
         {
-            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr);
+            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr, var_name);
         }
         ss << "        }\n";
         return;
@@ -730,6 +828,11 @@ void ViewForEachStatement::generate_code(std::stringstream &ss, const std::strin
         if (auto comp = dynamic_cast<ComponentInstantiation *>(child.get()))
         {
             region.component_type = comp->component_name;
+            // Check if this is a member reference loop (e.g., <row/> where row is loop var)
+            if (comp->is_member_reference && comp->member_name == var_name)
+            {
+                region.is_member_ref_loop = true;
+            }
             loop_component = comp;
             break;
         }
@@ -749,7 +852,7 @@ void ViewForEachStatement::generate_code(std::stringstream &ss, const std::strin
 
     for (auto &child : children)
     {
-        generate_view_child(child.get(), item_ss, loop_parent_var, temp_counter, event_handlers, bindings, temp_comp_counters, method_names, parent_component_name, true, nullptr, nullptr);
+        generate_view_child(child.get(), item_ss, loop_parent_var, temp_counter, event_handlers, bindings, temp_comp_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr, var_name);
     }
     region.item_creation_code = item_ss.str();
 
@@ -762,7 +865,7 @@ void ViewForEachStatement::generate_code(std::stringstream &ss, const std::strin
     if (loop_component && !region.component_type.empty())
     {
         std::stringstream update_ss;
-        generate_prop_update_code(update_ss, loop_component, "_inst", method_names);
+        generate_prop_update_code(update_ss, loop_component, var_name, method_names, var_name);
         region.item_update_code = update_ss.str();
     }
 
