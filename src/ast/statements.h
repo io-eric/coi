@@ -47,6 +47,16 @@ struct IndexAssignment : Statement {
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
+struct MemberAssignment : Statement {
+    std::unique_ptr<Expression> object;
+    std::string member;
+    std::unique_ptr<Expression> value;
+    std::string compound_op;
+
+    std::string to_webcc() override;
+    void collect_dependencies(std::set<std::string>& deps) override;
+};
+
 struct ReturnStatement : Statement {
     std::unique_ptr<Expression> value;
     std::string to_webcc() override;

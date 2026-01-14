@@ -87,6 +87,20 @@ void IndexAssignment::collect_dependencies(std::set<std::string>& deps) {
     value->collect_dependencies(deps);
 }
 
+std::string MemberAssignment::to_webcc() {
+    if (compound_op.empty()) {
+        return object->to_webcc() + "." + member + " = " + value->to_webcc() + ";";
+    } else {
+        std::string obj = object->to_webcc();
+        return obj + "." + member + " = " + obj + "." + member + " " + compound_op + " " + value->to_webcc() + ";";
+    }
+}
+
+void MemberAssignment::collect_dependencies(std::set<std::string>& deps) {
+    object->collect_dependencies(deps);
+    value->collect_dependencies(deps);
+}
+
 std::string ReturnStatement::to_webcc() {
     if (value) return "return " + value->to_webcc() + ";";
     return "return;";
@@ -162,6 +176,16 @@ void collect_mods_recursive(Statement* stmt, std::set<std::string>& mods) {
     }
     else if(auto idxAssign = dynamic_cast<IndexAssignment*>(stmt)) {
         if(auto id = dynamic_cast<Identifier*>(idxAssign->array.get())) {
+            mods.insert(id->name);
+        }
+    }
+    else if(auto memberAssign = dynamic_cast<MemberAssignment*>(stmt)) {
+        // Track the root object being modified
+        Expression* obj = memberAssign->object.get();
+        while(auto member = dynamic_cast<MemberAccess*>(obj)) {
+            obj = member->object.get();
+        }
+        if(auto id = dynamic_cast<Identifier*>(obj)) {
             mods.insert(id->name);
         }
     }
