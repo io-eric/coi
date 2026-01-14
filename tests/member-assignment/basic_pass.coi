@@ -1,0 +1,22 @@
+// Test: basic member assignment
+struct Point {
+    int x;
+    int y;
+}
+
+component MemberAssignmentTest {
+    mut Point pos = Point(10, 20);
+
+    init {
+        pos.x = 100;
+        pos.y = 200;
+    }
+
+    view {
+        <div>X: {pos.x}, Y: {pos.y}</div>
+    }
+}
+
+app {
+    root = MemberAssignmentTest;
+}

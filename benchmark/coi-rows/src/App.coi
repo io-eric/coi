@@ -1,0 +1,172 @@
+import "components/Row.coi";
+
+component App {
+    // Word lists for generating random labels
+    string[] adjectives = ["pretty", "large", "big", "small", "tall", "short", "long", "handsome", "plain", "quaint", "clean", "elegant", "easy", "angry", "crazy", "helpful", "mushy", "odd", "unsightly", "adorable", "important", "inexpensive", "cheap", "expensive", "fancy"];
+    string[] colours = ["red", "yellow", "blue", "green", "pink", "brown", "purple", "brown", "white", "black", "orange"];
+    string[] nouns = ["table", "chair", "house", "bbq", "desk", "car", "pony", "cookie", "sandwich", "burger", "pizza", "mouse", "keyboard"];
+
+    mut Row[] rows;
+    mut int nextId = 1;
+    mut int selectedId = -1;
+    mut string result = "";
+    mut float startTime = 0.0;
+
+    def randomLabel() : string {
+        int adjIdx = nextId % 25;
+        int colIdx = nextId % 11;
+        int nounIdx = nextId % 13;
+        return adjectives[adjIdx] + " " + colours[colIdx] + " " + nouns[nounIdx];
+    }
+
+    def measureEnd(string operation) : void {
+        float duration = System.getTime() - startTime;
+        result = operation + ": " + duration + "ms";
+        System.log(result);
+    }
+
+    def create1000() : void {
+        startTime = System.getTime();
+        mut Row[] newRows;
+        for i in 0:1000 {
+            newRows.push(Row(nextId, randomLabel(), false));
+            nextId++;
+        }
+        rows = newRows;
+        measureEnd("Create 1000 rows");
+    }
+
+    def updateRows() : void {
+        startTime = System.getTime();
+        int len = rows.size();
+        for i in 0:len {
+            rows[i].setLabel(rows[i].label + " !!!");
+        }
+        measureEnd("Update 1,000 rows");
+    }
+
+    def clearRows() : void {
+        startTime = System.getTime();
+        rows.clear();
+        measureEnd("Clear all rows");
+    }
+
+    def swapRows() : void {
+        if (rows.size() < 999) {
+            return;
+        }
+        startTime = System.getTime();
+        Row temp = rows[1];
+        rows[1] = rows[998];
+        rows[998] = temp;
+        measureEnd("Swap rows");
+    }
+
+    def selectRow(int id) : void {
+        startTime = System.getTime();
+        // Deselect old
+        int len = rows.size();
+        for i in 0:len {
+            if (rows[i].id == selectedId) {
+                rows[i].setSelected(false);
+            }
+            if (rows[i].id == id) {
+                rows[i].setSelected(true);
+            }
+        }
+        selectedId = id;
+        measureEnd("Select row");
+    }
+
+    def removeRow(int id) : void {
+        startTime = System.getTime();
+        mut Row[] newRows;
+        for row in rows {
+            if (row.id != id) {
+                newRows.push(row);
+            }
+        }
+        rows = newRows;
+        measureEnd("Remove row");
+    }
+
+    style {
+        * {
+            box-sizing: border-box;
+        }
+        .container {
+            padding: 16px;
+            max-width: 800px;
+            margin: 0 auto;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        h1 {
+            color: #9477ff;
+            margin-bottom: 16px;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding: 16px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        .controls button {
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background: #9477ff;
+            color: white;
+            transition: background 0.2s;
+        }
+        .controls button:hover {
+            background: #7c5fd6;
+        }
+        .results {
+            margin-bottom: 16px;
+            padding: 12px;
+            background: #f3e8ff;
+            border-radius: 8px;
+            font-family: monospace;
+        }
+        .row-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+    }
+
+    view {
+        <div class="container">
+            <h1>Coi Rows Benchmark</h1>
+            <div class="controls">
+                <button id="create1000" onclick={create1000}>Create 1,000 rows</button>
+                <button id="update" onclick={updateRows}>Update 1,000 rows</button>
+                <button id="swap" onclick={swapRows}>Swap rows</button>
+                <button id="clear" onclick={clearRows}>Clear</button>
+            </div>
+            <if result != "">
+                <div class="results" id="result">{result}</div>
+            </if>
+            <ul class="row-list">
+                <for row in rows key={row.id}>
+                    <row 
+                        &onSelect={selectRow(row.id)}
+                        &onRemove={removeRow(row.id)}
+                    />
+                </for>
+            </ul>
+        </div>
+    }
+}
+
+app {
+    root = App;
+    title = "Coi Rows Benchmark";
+    description = "DOM benchmark for Coi";
+    lang = "en";
+}

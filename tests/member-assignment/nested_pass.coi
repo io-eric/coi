@@ -1,0 +1,24 @@
+// Test: nested/chained member assignment
+struct Inner {
+    int value;
+}
+
+struct Outer {
+    Inner inner;
+}
+
+component NestedMemberAssignTest {
+    mut Outer obj = Outer(Inner(0));
+
+    init {
+        obj.inner.value = 42;
+    }
+
+    view {
+        <div>Value: {obj.inner.value}</div>
+    }
+}
+
+app {
+    root = NestedMemberAssignTest;
+}

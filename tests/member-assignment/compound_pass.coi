@@ -1,0 +1,22 @@
+// Test: compound member assignment (+=, -=, etc.)
+struct Counter {
+    int value;
+}
+
+component CompoundMemberAssignTest {
+    mut Counter c = Counter(10);
+
+    init {
+        c.value += 5;
+        c.value -= 2;
+        c.value *= 3;
+    }
+
+    view {
+        <div>Value: {c.value}</div>
+    }
+}
+
+app {
+    root = CompoundMemberAssignTest;
+}
