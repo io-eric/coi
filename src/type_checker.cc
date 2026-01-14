@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <set>
 #include <functional>
+#include <cctype>
 
 // Global set of known enum type names (populated during validation)
 static std::set<std::string> g_enum_types;
@@ -309,6 +310,33 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
         {
             obj_name = full_name.substr(0, dot_pos);
             method_name = full_name.substr(dot_pos + 1);
+        }
+
+        // Handle array/vector/string methods BEFORE schema lookup
+        // These are built-in methods that shouldn't be confused with schema functions
+        if (!obj_name.empty() && scope.count(obj_name))
+        {
+            std::string obj_type = scope.at(obj_name);
+            
+            // Array/vector methods
+            if (obj_type.ends_with("[]"))
+            {
+                if (method_name == "push" && func->args.size() == 1) return "void";
+                if (method_name == "pop" && func->args.size() == 0) return "void";
+                if (method_name == "size" && func->args.size() == 0) return "int32";
+                if (method_name == "clear" && func->args.size() == 0) return "void";
+                if (method_name == "isEmpty" && func->args.size() == 0) return "bool";
+            }
+            
+            // String methods
+            if (obj_type == "string")
+            {
+                if (method_name == "length" && func->args.size() == 0) return "int32";
+                if (method_name == "at" && func->args.size() == 1) return "string";
+                if (method_name == "substr" && (func->args.size() == 1 || func->args.size() == 2)) return "string";
+                if (method_name == "contains" && func->args.size() == 1) return "bool";
+                if (method_name == "isEmpty" && func->args.size() == 0) return "bool";
+            }
         }
 
         std::string snake_method = SchemaLoader::to_snake_case(method_name);
@@ -650,6 +678,48 @@ void validate_types(const std::vector<Component> &components, const std::vector<
                         std::cerr << "Type error: Array index must be numeric, got '" << index_type << "'" << std::endl;
                         exit(1);
                     }
+                }
+                else if (auto member_assign = dynamic_cast<MemberAssignment *>(stmt.get()))
+                {
+                    // Type check member assignment: obj.member = value
+                    // Check if we're trying to assign to a child component's member (not allowed)
+                    // This includes both direct access (comp.member) and indexed access (arr[i].member)
+                    
+                    // Get the immediate object being accessed (before the final .member)
+                    Expression* immediate_obj = member_assign->object.get();
+                    
+                    // Infer the type of the immediate object
+                    std::string obj_type = infer_expression_type(immediate_obj, current_scope);
+                    
+                    // Check if the object is a component type
+                    if (component_names.count(obj_type)) {
+                        // Build a descriptive error message
+                        std::string access_desc;
+                        if (auto id = dynamic_cast<Identifier*>(immediate_obj)) {
+                            access_desc = id->name;
+                        } else if (auto idx = dynamic_cast<IndexAccess*>(immediate_obj)) {
+                            if (auto arr_id = dynamic_cast<Identifier*>(idx->array.get())) {
+                                access_desc = arr_id->name + "[...]";
+                            } else {
+                                access_desc = "array element";
+                            }
+                        } else if (auto ma = dynamic_cast<MemberAccess*>(immediate_obj)) {
+                            access_desc = "nested member";
+                        } else {
+                            access_desc = "expression";
+                        }
+                        
+                        std::cerr << "Error: Cannot assign to member '" << member_assign->member 
+                                  << "' of component '" << obj_type << "' (via " << access_desc << "). "
+                                  << "Component state can only be modified from within the component itself. "
+                                  << "Use a public method like 'set" 
+                                  << (char)std::toupper(member_assign->member[0]) 
+                                  << member_assign->member.substr(1) << "()' instead." << std::endl;
+                        exit(1);
+                    }
+                    
+                    // Validate the value type
+                    infer_expression_type(member_assign->value.get(), current_scope);
                 }
                 else if (auto ret_stmt = dynamic_cast<ReturnStatement *>(stmt.get()))
                 {
