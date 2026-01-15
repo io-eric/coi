@@ -38,7 +38,7 @@ jobs:
         run: echo "$PWD/deps/webcc" >> $GITHUB_PATH
 
       - name: Run Tests
-        run: ./tests/run_tests.sh
+        run: ./tests/run.sh
 
       - name: Build Example
         run: cd example && ../coi build
