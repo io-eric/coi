@@ -197,7 +197,7 @@ component TodoList {
     view {
         <div>
             <for todo in todos key={todo.id}>
-                <TodoItem id={todo.id} text={todo.text} />
+                <{todo} />
             </for>
         </div>
     }
