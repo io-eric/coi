@@ -286,7 +286,6 @@ component TodoList {
 ```
 
 With `<{todo}/>`, props like `id`, `text`, and `done` are automatically bound from the component instance. You only need to pass additional props like callbacks.
-```
 
 ## Dynamic Styles
 
