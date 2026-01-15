@@ -141,7 +141,7 @@ component TodoList \{
 
     view \{
         <for todo in todos key=\{todo.id\}>
-            <{todo}
+            <\{todo\}
                 &onRemove=\{removeTodo(todo.id)\}
             />
         </for>
