@@ -73,6 +73,7 @@ component TodoItem(pub int id, pub string text, pub mut bool done, def onRemove(
     view {
         <div class="item">
             <if done>
+                <button class="remove" onclick={onRemove(id)}>×</button>
                 <div class="checkbox checked" onclick={toggle}>
                     <span class="checkmark">✓</span>
                 </div>
@@ -80,9 +81,9 @@ component TodoItem(pub int id, pub string text, pub mut bool done, def onRemove(
             <else>
                 <div class="checkbox" onclick={toggle}></div>
                 <span class="text">{text}</span>
+                <button class="remove" onclick={onRemove(id)}>×</button>
             </else>
             </if>
-            <button class="remove" onclick={onRemove(id)}>×</button>
         </div>
     }
 }
