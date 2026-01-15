@@ -271,7 +271,7 @@ component App {
         <div>
             <button onclick={toggle}>Toggle</button>
             <if showEditor>
-                <editor />  // Uses existing member
+                <{editor} />  // Uses existing member
             </if>
         </div>
     }
