@@ -145,11 +145,8 @@ component TodoList {
             </div>
             <div class="items">
                 <for todo in todos key={todo.id}>
-                    <TodoItem
-                        id={todo.id}
-                        text={todo.text}
-                        done={todo.done}
-                        &onRemove={removeTodo(id)}
+                    <{todo}
+                        &onRemove={removeTodo(todo.id)}
                     />
                 </for>
             </div>

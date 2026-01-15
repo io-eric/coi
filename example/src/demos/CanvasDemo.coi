@@ -143,7 +143,7 @@ component CanvasDemo {
         <div class="wrapper">
             <div class="label">Canvas Demo</div>
             <div class="canvas-container">
-                <canvas &={canvas} id="demo-canvas"></canvas>
+                <canvas id="demo-canvas" &={canvas}></canvas>
             </div>
             <div class="controls">
                 <Button label="Reset" type="secondary" &onclick={reset} />

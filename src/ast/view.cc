@@ -21,6 +21,30 @@ static std::string build_lambda_params(FunctionCall *func_call)
     return params;
 }
 
+// Helper to build function call using lambda params instead of original args
+// This ensures callbacks use the passed-in values rather than captured loop variables
+static std::string build_lambda_call(FunctionCall *func_call)
+{
+    // Extract function name (before the arguments)
+    std::string name = func_call->name;
+    std::string result = name + "(";
+    for (size_t i = 0; i < func_call->args.size(); i++)
+    {
+        if (i > 0)
+            result += ", ";
+        if (auto *id = dynamic_cast<Identifier *>(func_call->args[i].get()))
+        {
+            result += id->name;
+        }
+        else
+        {
+            result += "_arg" + std::to_string(i);
+        }
+    }
+    result += ")";
+    return result;
+}
+
 // Build minimal lambda capture: [this] outside loops, [this, var] inside loops.
 static std::string build_lambda_capture(const std::string &loop_var_name)
 {
@@ -91,8 +115,8 @@ void ComponentInstantiation::generate_code(std::stringstream &ss, const std::str
                 if (auto *func_call = dynamic_cast<FunctionCall *>(prop.value.get()))
                 {
                     std::string lambda_params = build_lambda_params(func_call);
-                    std::string capture = build_lambda_capture(loop_var_name);
-                    ss << "        " << instance_name << "." << prop.name << " = " << capture << "(" << lambda_params << ") { this->" << val << "; };\n";
+                    std::string lambda_call = build_lambda_call(func_call);
+                    ss << "        " << instance_name << "." << prop.name << " = [this](" << lambda_params << ") { this->" << lambda_call << "; };\n";
                 }
                 else
                 {
@@ -145,8 +169,8 @@ void ComponentInstantiation::generate_code(std::stringstream &ss, const std::str
             if (auto *func_call = dynamic_cast<FunctionCall *>(prop.value.get()))
             {
                 std::string lambda_params = build_lambda_params(func_call);
-                std::string capture = build_lambda_capture(loop_var_name);
-                ss << "        " << instance_name << "." << prop.name << " = " << capture << "(" << lambda_params << ") { this->" << val << "; };\n";
+                std::string lambda_call = build_lambda_call(func_call);
+                ss << "        " << instance_name << "." << prop.name << " = [this](" << lambda_params << ") { this->" << lambda_call << "; };\n";
             }
             else
             {
@@ -477,8 +501,8 @@ static void generate_prop_update_code(std::stringstream &ss, ComponentInstantiat
             if (auto *func_call = dynamic_cast<FunctionCall *>(prop.value.get()))
             {
                 std::string params = build_lambda_params(func_call);
-                std::string capture = build_lambda_capture(loop_var_name);
-                ss << prefix << capture << "(" << params << ") { this->" << val << "; };\n";
+                std::string lambda_call = build_lambda_call(func_call);
+                ss << prefix << "[this](" << params << ") { this->" << lambda_call << "; };\n";
             }
             else
             {

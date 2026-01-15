@@ -154,7 +154,7 @@ component App {
             </if>
             <ul class="row-list">
                 <for row in rows key={row.id}>
-                    <row 
+                    <{row} 
                         &onSelect={selectRow(row.id)}
                         &onRemove={removeRow(row.id)}
                     />

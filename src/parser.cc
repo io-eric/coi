@@ -857,24 +857,104 @@ std::string Parser::parse_style_block() {
 std::unique_ptr<ASTNode> Parser::parse_html_element(){
     expect(TokenType::LT, "Expected '<'");
     int start_line = current().line;
+    
+    // Check for component variable syntax: <{varName} props... />
+    // Used to project component variables into the view
+    if (current().type == TokenType::LBRACE) {
+        advance(); // consume '{'
+        
+        // Parse the expression (typically just an identifier)
+        auto expr = parse_expression();
+        expect(TokenType::RBRACE, "Expected '}' after component variable expression");
+        
+        // Get the variable name from the expression
+        std::string member_name;
+        std::string component_type;
+        
+        if (auto* ident = dynamic_cast<Identifier*>(expr.get())) {
+            member_name = ident->name;
+            // Look up the component type
+            auto it = component_member_types.find(member_name);
+            if (it != component_member_types.end()) {
+                component_type = it->second;
+            } else {
+                throw std::runtime_error("Variable '" + member_name + "' is not a known component member. Use <{var}/> only for component-typed variables.");
+            }
+        } else {
+            throw std::runtime_error("Expected identifier in <{...}/> syntax at line " + std::to_string(start_line));
+        }
+        
+        auto comp = std::make_unique<ComponentInstantiation>();
+        comp->line = start_line;
+        comp->is_member_reference = true;
+        comp->member_name = member_name;
+        comp->component_name = component_type;
+        
+        // Parse props (same as regular component props)
+        while(current().type == TokenType::IDENTIFIER || current().type == TokenType::AMPERSAND){
+            bool is_ref_prop = false;
+            if(match(TokenType::AMPERSAND)){
+                is_ref_prop = true;
+            }
+            std::string prop_name = current().value;
+            advance();
+            
+            std::unique_ptr<Expression> prop_value;
+            if(match(TokenType::ASSIGN)){
+                if(current().type == TokenType::STRING_LITERAL){
+                    prop_value = std::make_unique<StringLiteral>(current().value);
+                    advance();
+                } else if(current().type == TokenType::INT_LITERAL){
+                    prop_value = std::make_unique<IntLiteral>(std::stoi(current().value));
+                    advance();
+                } else if(current().type == TokenType::FLOAT_LITERAL){
+                    prop_value = std::make_unique<FloatLiteral>(std::stod(current().value));
+                    advance();
+                } else if(match(TokenType::MINUS)){
+                    if(current().type == TokenType::INT_LITERAL){
+                        prop_value = std::make_unique<IntLiteral>(-std::stoi(current().value));
+                        advance();
+                    } else if(current().type == TokenType::FLOAT_LITERAL){
+                        prop_value = std::make_unique<FloatLiteral>(-std::stod(current().value));
+                        advance();
+                    } else {
+                        throw std::runtime_error("Expected number after '-' in prop value");
+                    }
+                } else if(match(TokenType::LBRACE)){
+                    prop_value = parse_expression();
+                    expect(TokenType::RBRACE, "Expected '}'");
+                } else {
+                    throw std::runtime_error("Expected prop value");
+                }
+            } else {
+                prop_value = std::make_unique<StringLiteral>("true");
+            }
+            ComponentProp cprop;
+            cprop.name = prop_name;
+            cprop.value = std::move(prop_value);
+            cprop.is_reference = is_ref_prop;
+            comp->props.push_back(std::move(cprop));
+        }
+        
+        // Must be self-closing: <{var}/>
+        expect(TokenType::SLASH, "Expected '/>' - component variable projection must be self-closing: <{" + member_name + "}/>");
+        expect(TokenType::GT, "Expected '>'");
+        
+        return comp;
+    }
+    
     std::string tag = current().value;
     expect(TokenType::IDENTIFIER, "Expected tag name");
 
-    // Check if component (uppercase) or member reference to a component (lowercase but in component_member_types)
+    // Components must start with uppercase
+    // Lowercase tags are always HTML elements
+    // Use <{var}/> syntax for component variables
     bool is_component = std::isupper(tag[0]);
-    bool is_member_ref = !is_component && component_member_types.count(tag) > 0;
     
-    if(is_component || is_member_ref){
+    if(is_component){
         auto comp = std::make_unique<ComponentInstantiation>();
         comp->line = start_line;
-        
-        if (is_member_ref) {
-            comp->is_member_reference = true;
-            comp->member_name = tag;
-            comp->component_name = component_member_types[tag];
-        } else {
-            comp->component_name = tag;
-        }
+        comp->component_name = tag;
 
         // Props
         while(current().type == TokenType::IDENTIFIER || current().type == TokenType::AMPERSAND){
@@ -1225,6 +1305,12 @@ Component Parser::parse_component(){
 
     expect(TokenType::COMPONENT, "Expected 'component'");
     comp.name = current().value;
+    
+    // Validate component name starts with uppercase
+    if (!comp.name.empty() && !std::isupper(comp.name[0])) {
+        throw std::runtime_error("Component name '" + comp.name + "' must start with an uppercase letter at line " + std::to_string(current().line));
+    }
+    
     expect(TokenType::IDENTIFIER, "Expected component name");
     
     // Parse component parameters (constructor-style): component Name(pub mut int& value = 0)

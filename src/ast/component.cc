@@ -588,6 +588,13 @@ std::string Component::to_webcc(CompilerSession& session) {
             ss << "        }\n";
             ss << "        \n";
             
+            // Destroy existing items to unregister event handlers before clearing DOM
+            if (region.is_member_ref_loop) {
+                ss << "        for (auto& " << region.var_name << " : " << region.iterable_expr << ") {\n";
+                ss << "            " << region.var_name << "._destroy();\n";
+                ss << "        }\n";
+            }
+            
             // Clear existing DOM children
             ss << "        if (" << count_var << " > 0) {\n";
             ss << "            webcc::dom::set_inner_html(" << parent_var << ", \"\");\n";
