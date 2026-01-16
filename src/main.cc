@@ -741,12 +741,111 @@ int main(int argc, char **argv)
                     }
                     
                     // Scoped CSS: prefix selectors with [coi-scope="ComponentName"]
+                    // Handle @keyframes and @media specially
                     if (!comp.css.empty())
                     {
                         std::string raw = comp.css;
                         size_t pos = 0;
+                        
+                        // Helper lambda to scope a single selector
+                        auto scope_selector = [&](const std::string& sel) -> std::string {
+                            size_t start = sel.find_first_not_of(" \t\n\r");
+                            size_t end = sel.find_last_not_of(" \t\n\r");
+                            if (start == std::string::npos) return sel;
+                            std::string trimmed = sel.substr(start, end - start + 1);
+                            size_t colon = trimmed.find(':');
+                            if (colon != std::string::npos) {
+                                return trimmed.substr(0, colon) + "[coi-scope=\"" + comp.name + "\"]" + trimmed.substr(colon);
+                            } else {
+                                return trimmed + "[coi-scope=\"" + comp.name + "\"]";
+                            }
+                        };
+                        
                         while (pos < raw.length())
                         {
+                            // Skip whitespace
+                            while (pos < raw.length() && std::isspace(raw[pos])) {
+                                css_out << raw[pos];
+                                pos++;
+                            }
+                            if (pos >= raw.length()) break;
+                            
+                            // Check for @keyframes
+                            if (raw.substr(pos, 10) == "@keyframes") {
+                                size_t kf_start = pos;
+                                size_t kf_brace = raw.find('{', pos);
+                                if (kf_brace == std::string::npos) {
+                                    css_out << raw.substr(pos);
+                                    break;
+                                }
+                                // Output @keyframes name as-is (no scoping)
+                                css_out << raw.substr(pos, kf_brace - pos + 1);
+                                pos = kf_brace + 1;
+                                
+                                // Find matching closing brace for @keyframes block
+                                int brace_depth = 1;
+                                size_t kf_end = pos;
+                                while (kf_end < raw.length() && brace_depth > 0) {
+                                    if (raw[kf_end] == '{') brace_depth++;
+                                    else if (raw[kf_end] == '}') brace_depth--;
+                                    kf_end++;
+                                }
+                                // Output keyframes content as-is (from, to, percentages don't get scoped)
+                                css_out << raw.substr(pos, kf_end - pos);
+                                pos = kf_end;
+                                continue;
+                            }
+                            
+                            // Check for @media
+                            if (raw.substr(pos, 6) == "@media") {
+                                size_t media_brace = raw.find('{', pos);
+                                if (media_brace == std::string::npos) {
+                                    css_out << raw.substr(pos);
+                                    break;
+                                }
+                                // Output @media query as-is
+                                css_out << raw.substr(pos, media_brace - pos + 1) << "\n";
+                                pos = media_brace + 1;
+                                
+                                // Find matching closing brace for @media block
+                                int brace_depth = 1;
+                                size_t media_end = pos;
+                                while (media_end < raw.length() && brace_depth > 0) {
+                                    if (raw[media_end] == '{') brace_depth++;
+                                    else if (raw[media_end] == '}') brace_depth--;
+                                    media_end++;
+                                }
+                                media_end--; // Back up to the closing brace
+                                
+                                // Process selectors inside @media
+                                while (pos < media_end) {
+                                    size_t brace = raw.find('{', pos);
+                                    if (brace == std::string::npos || brace >= media_end) break;
+                                    
+                                    std::string selector_group = raw.substr(pos, brace - pos);
+                                    std::stringstream ss_sel(selector_group);
+                                    std::string selector;
+                                    bool first = true;
+                                    while (std::getline(ss_sel, selector, ',')) {
+                                        if (!first) css_out << ",";
+                                        css_out << scope_selector(selector);
+                                        first = false;
+                                    }
+                                    
+                                    size_t end_brace = raw.find('}', brace);
+                                    if (end_brace == std::string::npos || end_brace >= media_end) {
+                                        css_out << raw.substr(brace, media_end - brace);
+                                        break;
+                                    }
+                                    css_out << raw.substr(brace, end_brace - brace + 1) << "\n";
+                                    pos = end_brace + 1;
+                                }
+                                css_out << "}\n";
+                                pos = media_end + 1;
+                                continue;
+                            }
+                            
+                            // Regular selector
                             size_t brace = raw.find('{', pos);
                             if (brace == std::string::npos)
                             {
@@ -760,23 +859,8 @@ int main(int argc, char **argv)
                             bool first = true;
                             while (std::getline(ss_sel, selector, ','))
                             {
-                                if (!first)
-                                    css_out << ",";
-                                size_t start = selector.find_first_not_of(" \t\n\r");
-                                size_t end = selector.find_last_not_of(" \t\n\r");
-                                if (start != std::string::npos)
-                                {
-                                    std::string trimmed = selector.substr(start, end - start + 1);
-                                    size_t colon = trimmed.find(':');
-                                    if (colon != std::string::npos)
-                                    {
-                                        css_out << trimmed.substr(0, colon) << "[coi-scope=\"" << comp.name << "\"]" << trimmed.substr(colon);
-                                    }
-                                    else
-                                    {
-                                        css_out << trimmed << "[coi-scope=\"" << comp.name << "\"]";
-                                    }
-                                }
+                                if (!first) css_out << ",";
+                                css_out << scope_selector(selector);
                                 first = false;
                             }
 

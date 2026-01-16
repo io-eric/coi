@@ -1017,8 +1017,8 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
     el->line = start_line;
     el->tag = tag;
 
-    // Attributes
-    while(current().type == TokenType::IDENTIFIER || current().type == TokenType::STYLE || current().type == TokenType::AMPERSAND){
+    // Attributes - accept any token as attribute name except those that end the tag
+    while(current().type != TokenType::SLASH && current().type != TokenType::GT && current().type != TokenType::END_OF_FILE){
         // Check for element ref binding: &={varName}
         if(match(TokenType::AMPERSAND)){
             expect(TokenType::ASSIGN, "Expected '=' after '&' for element binding");
@@ -1034,6 +1034,14 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
         
         std::string attrName = current().value;
         advance();
+        
+        // Handle hyphenated attribute names (e.g., fill-opacity, stroke-width, data-id)
+        while(current().type == TokenType::MINUS && peek().type == TokenType::IDENTIFIER){
+            attrName += "-";
+            advance(); // consume '-'
+            attrName += current().value;
+            advance(); // consume identifier part
+        }
         
         std::unique_ptr<Expression> attrValue;
         if(match(TokenType::ASSIGN)){
