@@ -454,6 +454,12 @@ void HTMLElement::generate_code(std::stringstream &ss, const std::string &parent
 
     if (has_elements)
     {
+        // Check if there's exactly one child and it's a for-each loop
+        if (children.size() == 1) {
+            if (auto forEach = dynamic_cast<ViewForEachStatement *>(children[0].get())) {
+                forEach->is_only_child = true;
+            }
+        }
         for (auto &child : children)
         {
             generate_view_child(child.get(), ss, var, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
@@ -926,6 +932,7 @@ void ViewForEachStatement::generate_code(std::stringstream &ss, const std::strin
     region.loop_id = my_loop_id;
     region.parent_element = parent;
     region.is_keyed = true;
+    region.is_only_child = is_only_child;
     region.key_expr = key_expr->to_webcc();
     region.var_name = var_name;
     region.iterable_expr = iterable->to_webcc();

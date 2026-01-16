@@ -57,6 +57,7 @@ struct LoopRegion {
     bool is_html_loop = false;
     bool is_keyed = false;
     bool is_member_ref_loop = false;  // True when iterating over component array with <varName/>
+    bool is_only_child = false;       // True when loop is the only child of its parent element
     std::string key_expr;
     std::string key_type;
     std::string iterable_expr;
@@ -186,6 +187,7 @@ struct ViewForEachStatement : ASTNode {
     std::unique_ptr<Expression> key_expr;
     std::vector<std::unique_ptr<ASTNode>> children;
     int loop_id = -1;
+    bool is_only_child = false;  // Set by parent HTMLElement if this loop is its only child
 
     std::string to_webcc() override { return ""; }
     void generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
