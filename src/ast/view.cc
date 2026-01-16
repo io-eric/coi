@@ -38,6 +38,42 @@ static std::string build_forward_args(size_t count)
     return args;
 }
 
+// Helper to transform append_child calls to insert_before for anchor-based if regions
+// Transforms: webcc::dom::append_child(_if_X_parent, el[N]);
+// To:         webcc::dom::insert_before(_if_X_parent, el[N], _if_X_anchor);
+static std::string transform_to_insert_before(const std::string& code, const std::string& if_parent, const std::string& if_anchor) {
+    std::string result;
+    std::string search_pattern = "webcc::dom::append_child(" + if_parent + ", ";
+    size_t pos = 0;
+    size_t last_pos = 0;
+    
+    while ((pos = code.find(search_pattern, last_pos)) != std::string::npos) {
+        // Copy everything up to this point
+        result += code.substr(last_pos, pos - last_pos);
+        
+        // Find the closing ");
+        size_t end_pos = code.find(");", pos);
+        if (end_pos == std::string::npos) {
+            // Malformed, just copy the rest
+            result += code.substr(pos);
+            return result;
+        }
+        
+        // Extract the element being appended
+        size_t elem_start = pos + search_pattern.length();
+        std::string elem = code.substr(elem_start, end_pos - elem_start);
+        
+        // Generate insert_before call
+        result += "webcc::dom::insert_before(" + if_parent + ", " + elem + ", " + if_anchor + ");";
+        
+        last_pos = end_pos + 2; // Skip past ");"
+    }
+    
+    // Copy remaining content
+    result += code.substr(last_pos);
+    return result;
+}
+
 // Helper to build lambda parameter list from function call args
 static std::string build_lambda_params(FunctionCall *func_call)
 {
@@ -334,13 +370,17 @@ void HTMLElement::generate_code(std::stringstream &ss, const std::string &parent
 
     if (in_loop)
     {
+        // In loops, use local variable but still deferred creation
         var = "_el_" + std::to_string(my_id);
-        ss << "        webcc::handle " << var << " = webcc::dom::create_element(\"" << tag << "\");\n";
+        ss << "        webcc::handle " << var << " = webcc::next_deferred_handle();\n";
+        ss << "        webcc::dom::create_element_deferred(" << var << ", \"" << tag << "\");\n";
     }
     else
     {
+        // Outside loops, store in el[] array with deferred creation
         var = "el[" + std::to_string(my_id) + "]";
-        ss << "        " << var << " = webcc::dom::create_element(\"" << tag << "\");\n";
+        ss << "        " << var << " = webcc::DOMElement(webcc::next_deferred_handle());\n";
+        ss << "        webcc::dom::create_element_deferred(" << var << ", \"" << tag << "\");\n";
     }
 
     ss << "        webcc::dom::set_attribute(" << var << ", \"coi-scope\", \"" << parent_component_name << "\");\n";
@@ -700,7 +740,10 @@ void ViewIfStatement::generate_code(std::stringstream &ss, const std::string &pa
         collect_member_refs(child.get(), region.else_member_refs);
     }
 
-    region.else_creation_code = else_ss.str();
+    // Transform creation code to use insert_before with anchor for _sync operations
+    std::string if_anchor = "_if_" + std::to_string(my_if_id) + "_anchor";
+    region.then_creation_code = transform_to_insert_before(then_ss.str(), if_parent, if_anchor);
+    region.else_creation_code = transform_to_insert_before(else_ss.str(), if_parent, if_anchor);
 
     for (auto &b : then_bindings)
     {
@@ -715,14 +758,21 @@ void ViewIfStatement::generate_code(std::stringstream &ss, const std::string &pa
         bindings.push_back(b);
     }
 
+    // Create anchor comment and append to parent
     ss << "        _if_" << my_if_id << "_parent = " << parent << ";\n";
+    // Use deferred creation for comment anchors
+    ss << "        _if_" << my_if_id << "_anchor = webcc::DOMElement(webcc::next_deferred_handle());\n";
+    ss << "        webcc::dom::create_comment_deferred(_if_" << my_if_id << "_anchor, \"coi-⚓\");\n";
     ss << "        if (" << region.condition_code << ") {\n";
     ss << "        _if_" << my_if_id << "_state = true;\n";
+    // Use original append_child for initial render (before anchor is in DOM)
     ss << then_ss.str();
     ss << "        } else {\n";
     ss << "        _if_" << my_if_id << "_state = false;\n";
     ss << else_ss.str();
     ss << "        }\n";
+    // Append anchor after the conditional content
+    ss << "        webcc::dom::append_child(" << parent << ", _if_" << my_if_id << "_anchor);\n";
 
     if (loop_counter && loop_regions)
     {

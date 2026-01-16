@@ -54,23 +54,12 @@ component Row(pub int id, pub mut string label, pub mut bool selected, def onSel
     }
 
     view {
-        <if selected>
-            <div class="row selected">
-                <span class="row-id">{id}</span>
-                <span class="row-label" onclick={handleSelect}>{label}</span>
-                <span class="row-actions">
-                    <button onclick={handleRemove}>×</button>
-                </span>
-            </div>
-        <else>
-            <div class="row">
-                <span class="row-id">{id}</span>
-                <span class="row-label" onclick={handleSelect}>{label}</span>
-                <span class="row-actions">
-                    <button onclick={handleRemove}>×</button>
-                </span>
-            </div>
-        </else>
-        </if>
+        <div class={"row" + (selected ? " selected" : "")}>
+            <span class="row-id">{id}</span>
+            <span class="row-label" onclick={handleSelect}>{label}</span>
+             <span class="row-actions">
+                <button onclick={handleRemove}>×</button>
+            </span>
+    </div>
     }
 }

@@ -155,8 +155,8 @@ component App {
             <ul class="row-list">
                 <for row in rows key={row.id}>
                     <{row} 
-                        &onSelect={selectRow(row.id)}
-                        &onRemove={removeRow(row.id)}
+                        &onSelect={selectRow}
+                        &onRemove={removeRow}
                     />
                 </for>
             </ul>

@@ -576,7 +576,8 @@ int main(int argc, char **argv)
         out << "Dispatcher<webcc::function<void()>, 128> g_dispatcher;\n";
         out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_input_dispatcher;\n";
         out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_change_dispatcher;\n";
-        out << "Dispatcher<webcc::function<void(int)>> g_keydown_dispatcher;\n\n";
+        out << "Dispatcher<webcc::function<void(int)>> g_keydown_dispatcher;\n";
+        out << "int g_view_depth = 0;\n\n";
 
         // Sort components topologically so dependencies come first
         auto sorted_components = topological_sort_components(all_components);

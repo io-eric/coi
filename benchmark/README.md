@@ -1,50 +1,54 @@
 # Coi vs React vs Vue Benchmark
 
-This directory contains a benchmark comparing **Coi**, **React**, and **Vue** for a simple Counter application.
+This directory contains benchmarks comparing **Coi**, **React**, and **Vue**.
 
-The benchmark builds a counter application in all three frameworks and measures:
-- **Bundle Size**: Total size of the production build (HTML + JS + CSS + WASM).
+## What's Measured
+
+| Benchmark | Apps Used | Measures |
+|-----------|-----------|----------|
+| **Bundle Size** | Counter apps | Total production build size (HTML + JS + CSS + WASM) |
+| **DOM Performance** | Rows apps | Create, update, swap, and clear 1,000 rows |
 
 ## Prerequisites
 
-- **Python 3**: For the runner script.
-- **Node.js & npm**: Required to build the React and Vue benchmarks.
-- **Coi**: The project itself (`coi` command must be in PATH or built locally).
+- **Python 3**: For the runner script
+- **Node.js & npm**: Required to build React and Vue
+- **Coi**: The `coi` command must be in PATH
+- **Playwright** (optional): For DOM benchmarks (`pip install playwright && playwright install chromium`)
 
 ## Running the Benchmark
 
-To build all projects and run the benchmark:
-
 ```bash
-./run_benchmark.sh
+./run.sh
 ```
 
-This script will:
-1. Build the Coi project (`coi-counter/`).
-2. Build the React project (`react-counter/`).
-3. Build the Vue project (`vue-counter/`).
-4. Run `runner.py`, which starts a local server and opens the benchmarks in your default browser.
-5. Collect results and generate a report.
-
-If you have already built the projects and just want to run the benchmark:
+### Options
 
 ```bash
-python3 runner.py --no-build
+./run.sh --no-build    # Skip building, use existing dist folders
+./run.sh --size-only   # Only measure bundle sizes
+./run.sh --dom-only    # Only run DOM performance benchmarks
 ```
 
 ## Results
 
-The runner generates two files:
-- `benchmark_results.json`: Raw data including file sizes and runtime metrics.
-- `benchmark_results.svg`: A visual comparison chart.
+The benchmark generates:
+- `benchmark_results.json` — Raw data
+- `benchmark_results.svg` — Visual comparison chart
 
 ![Benchmark Results](benchmark_results.svg)
 
-## Structure
+## Project Structure
 
-- `coi-counter/`: Source code for the Coi implementation.
-- `react-counter/`: Source code for the React implementation.
-- `vue-counter/`: Source code for the Vue implementation.
-- `runner.py`: Python script that orchestrates the benchmark, collects data, and generates reports.
-- `run_benchmark.sh`: Bash script to build everything.
+```
+benchmark/
+├── coi-counter/     # Coi counter app (bundle size)
+├── react-counter/   # React counter app (bundle size)
+├── vue-counter/     # Vue counter app (bundle size)
+├── coi-rows/        # Coi rows app (DOM performance)
+├── react-rows/      # React rows app (DOM performance)
+├── vue-rows/        # Vue rows app (DOM performance)
+├── benchmark.py     # Main benchmark runner
+└── run.sh           # Entry point script
+```
 

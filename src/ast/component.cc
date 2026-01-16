@@ -8,6 +8,17 @@
 // Per-component context for tracking reference props
 std::set<std::string> g_ref_props;
 
+// Info for inlining DOM operations on component arrays used in for-each loops
+struct ComponentArrayLoopInfo {
+    int loop_id;
+    std::string component_type;
+    std::string parent_var;         // e.g., "_loop_0_parent"
+    std::string var_name;           // Loop variable name (e.g., "row")
+    std::string item_creation_code; // Code to render one item
+    bool is_member_ref_loop;        // True if <varName/> syntax is used
+};
+std::map<std::string, ComponentArrayLoopInfo> g_component_array_loops;
+
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -15,6 +26,35 @@ std::set<std::string> g_ref_props;
 // Generate callback name from variable name (e.g., "count" -> "onCountChange")
 static std::string make_callback_name(const std::string& var_name) {
     return "on" + std::string(1, std::toupper(var_name[0])) + var_name.substr(1) + "Change";
+}
+
+// Transform append_child calls to insert_before for anchor-based regions
+// Transforms: webcc::dom::append_child(parent_var, el[N]);
+// To:         webcc::dom::insert_before(parent_var, el[N], anchor_var);
+static std::string transform_to_insert_before(const std::string& code, const std::string& parent_var, const std::string& anchor_var) {
+    std::string result;
+    std::string search_pattern = "webcc::dom::append_child(" + parent_var + ", ";
+    size_t pos = 0;
+    size_t last_pos = 0;
+    
+    while ((pos = code.find(search_pattern, last_pos)) != std::string::npos) {
+        result += code.substr(last_pos, pos - last_pos);
+        
+        size_t end_pos = code.find(");", pos);
+        if (end_pos == std::string::npos) {
+            result += code.substr(pos);
+            return result;
+        }
+        
+        size_t elem_start = pos + search_pattern.length();
+        std::string elem = code.substr(elem_start, end_pos - elem_start);
+        
+        result += "webcc::dom::insert_before(" + parent_var + ", " + elem + ", " + anchor_var + ");";
+        last_pos = end_pos + 2;
+    }
+    
+    result += code.substr(last_pos);
+    return result;
 }
 
 // Trim whitespace from both ends of a string
@@ -138,6 +178,7 @@ static void emit_loop_region_members(std::stringstream& ss, const std::vector<Lo
 static void emit_if_region_members(std::stringstream& ss, const std::vector<IfRegion>& if_regions) {
     for (const auto& region : if_regions) {
         ss << "    webcc::handle _if_" << region.if_id << "_parent;\n";
+        ss << "    webcc::handle _if_" << region.if_id << "_anchor;\n";
         ss << "    bool _if_" << region.if_id << "_state = false;\n";
     }
 }
@@ -317,6 +358,21 @@ std::string Component::to_webcc(CompilerSession& session) {
             viewFor->generate_code(ss_render, "parent", element_count, event_handlers, bindings, component_counters, method_names, name, false, &loop_regions, &loop_counter, &if_regions, &if_counter);
         } else if(auto viewForEach = dynamic_cast<ViewForEachStatement*>(root.get())){
             viewForEach->generate_code(ss_render, "parent", element_count, event_handlers, bindings, component_counters, method_names, name, false, &loop_regions, &loop_counter, &if_regions, &if_counter);
+        }
+    }
+
+    // Populate global context for component array loops (for inline DOM operations)
+    g_component_array_loops.clear();
+    for (const auto& region : loop_regions) {
+        if (region.is_keyed && region.is_member_ref_loop) {
+            ComponentArrayLoopInfo info;
+            info.loop_id = region.loop_id;
+            info.component_type = region.component_type;
+            info.parent_var = "_loop_" + std::to_string(region.loop_id) + "_parent";
+            info.var_name = region.var_name;
+            info.item_creation_code = region.item_creation_code;
+            info.is_member_ref_loop = true;
+            g_component_array_loops[region.iterable_expr] = info;
         }
     }
 
@@ -567,26 +623,6 @@ std::string Component::to_webcc(CompilerSession& session) {
             std::string parent_var = "_loop_" + std::to_string(region.loop_id) + "_parent";
             
             ss << "        int _new_count = (int)" << vec_name << ".size();\n";
-            ss << "        if (_new_count == " << count_var << ") {\n";
-            // Same count - just update props inline
-            if (!region.item_update_code.empty()) {
-                ss << "            int _idx = 0;\n";
-                ss << "            for (auto& " << region.var_name << " : " << region.iterable_expr << ") {\n";
-                // Indent the update code properly
-                std::string update_code = region.item_update_code;
-                std::istringstream update_iss(update_code);
-                std::string update_line;
-                while (std::getline(update_iss, update_line)) {
-                    if (!update_line.empty()) {
-                        ss << "            " << update_line << "\n";
-                    }
-                }
-                ss << "                _idx++;\n";
-                ss << "            }\n";
-            }
-            ss << "            return;\n";
-            ss << "        }\n";
-            ss << "        \n";
             
             // Destroy existing items to unregister event handlers before clearing DOM
             if (region.is_member_ref_loop) {
@@ -601,7 +637,8 @@ std::string Component::to_webcc(CompilerSession& session) {
             ss << "        }\n";
             ss << "        \n";
             
-            // Recreate all items
+            // Recreate all items in current array order
+            ss << "        g_view_depth++;\n";
             ss << "        for (auto& " << region.var_name << " : " << region.iterable_expr << ") {\n";
             
             std::string item_code = region.item_creation_code;
@@ -616,6 +653,7 @@ std::string Component::to_webcc(CompilerSession& session) {
             ss << indented.str();
             
             ss << "        }\n";
+            ss << "        if (--g_view_depth == 0) webcc::flush();\n";
             ss << "        " << count_var << " = _new_count;\n";
             
         } else {
@@ -870,8 +908,12 @@ std::string Component::to_webcc(CompilerSession& session) {
                 }
             }
             if(var_to_loop_ids.count(mod) && !is_init_method) {
-                for(int loop_id : var_to_loop_ids[mod]) {
-                    updates += "        _sync_loop_" + std::to_string(loop_id) + "();\n";
+                // Skip _sync_loop for component arrays with inline operations
+                // Those are handled inline in statements (push/pop/clear) or in Assignment (full reassignment)
+                if (g_component_array_loops.find(mod) == g_component_array_loops.end()) {
+                    for(int loop_id : var_to_loop_ids[mod]) {
+                        updates += "        _sync_loop_" + std::to_string(loop_id) + "();\n";
+                    }
                 }
             }
         }
@@ -933,6 +975,7 @@ std::string Component::to_webcc(CompilerSession& session) {
 
     // View method
     ss << "    void view(webcc::handle parent = webcc::dom::get_body()) {\n";
+    ss << "        g_view_depth++;\n";
     bool has_init = false;
     bool has_mount = false;
     for(auto& m : methods) {
@@ -943,6 +986,8 @@ std::string Component::to_webcc(CompilerSession& session) {
     if(!render_roots.empty()){
         ss << ss_render.str();
     }
+    // End view - flushes only at outermost level, then register event handlers
+    ss << "        if (--g_view_depth == 0) webcc::flush();\n";
     // Register event handlers
     if (masks.click) {
         emit_event_registration(ss, element_count, event_handlers, "click", "_click_mask", "g_dispatcher", "", "");
@@ -1075,20 +1120,87 @@ std::string Component::to_webcc(CompilerSession& session) {
     // Remove view method - removes DOM elements but keeps component state intact
     // Used for member references inside if-statements that toggle visibility
     ss << "    void _remove_view() {\n";
-    // Remove all event handlers
-    if (masks.click) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_click_mask & (1ULL << i)) g_dispatcher.remove(el[i]);\n";
-    if (masks.input) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_input_mask & (1ULL << i)) g_input_dispatcher.remove(el[i]);\n";
-    if (masks.change) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_change_mask & (1ULL << i)) g_change_dispatcher.remove(el[i]);\n";
-    if (masks.keydown) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_keydown_mask & (1ULL << i)) g_keydown_dispatcher.remove(el[i]);\n";
-    // Remove child component views recursively
-    for (auto const& [comp_name, count] : component_members) {
-        for (int i = 0; i < count; ++i) {
-            ss << "        " << comp_name << "_" << i << "._remove_view();\n";
+    
+    // If we have if/else at root level, handle both branches
+    if (root_if_id >= 0 && !if_regions.empty()) {
+        const IfRegion* root_region = nullptr;
+        for (const auto& region : if_regions) {
+            if (region.if_id == root_if_id) {
+                root_region = &region;
+                break;
+            }
+        }
+        if (root_region) {
+            ss << "        if (_if_" << root_if_id << "_state) {\n";
+            // Remove handlers for then-branch elements
+            for (int el_id : root_region->then_element_ids) {
+                if (masks.click && (masks.click & (1ULL << el_id))) 
+                    ss << "            g_dispatcher.remove(el[" << el_id << "]);\n";
+            }
+            // Remove the then-branch root element
+            if (!root_region->then_element_ids.empty()) {
+                ss << "            webcc::dom::remove_element(el[" << root_region->then_element_ids[0] << "]);\n";
+            }
+            ss << "        } else {\n";
+            // Remove handlers for else-branch elements
+            for (int el_id : root_region->else_element_ids) {
+                if (masks.click && (masks.click & (1ULL << el_id)))
+                    ss << "            g_dispatcher.remove(el[" << el_id << "]);\n";
+            }
+            // Remove the else-branch root element
+            if (!root_region->else_element_ids.empty()) {
+                ss << "            webcc::dom::remove_element(el[" << root_region->else_element_ids[0] << "]);\n";
+            }
+            ss << "        }\n";
+            // Also remove the anchor
+            ss << "        webcc::dom::remove_element(_if_" << root_if_id << "_anchor);\n";
+        }
+    } else {
+        // No if/else at root level, use the original simple approach
+        // Remove all event handlers
+        if (masks.click) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_click_mask & (1ULL << i)) g_dispatcher.remove(el[i]);\n";
+        if (masks.input) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_input_mask & (1ULL << i)) g_input_dispatcher.remove(el[i]);\n";
+        if (masks.change) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_change_mask & (1ULL << i)) g_change_dispatcher.remove(el[i]);\n";
+        if (masks.keydown) ss << "        for (int i = 0; i < " << element_count << "; i++) if (_keydown_mask & (1ULL << i)) g_keydown_dispatcher.remove(el[i]);\n";
+        // Remove child component views recursively
+        for (auto const& [comp_name, count] : component_members) {
+            for (int i = 0; i < count; ++i) {
+                ss << "        " << comp_name << "_" << i << "._remove_view();\n";
+            }
+        }
+        // Remove root element (which removes all children)
+        if (element_count > 0) {
+            ss << "        webcc::dom::remove_element(el[0]);\n";
         }
     }
-    // Remove root element (which removes all children)
-    if (element_count > 0) {
-        ss << "        webcc::dom::remove_element(el[0]);\n";
+    ss << "    }\n";
+
+    // _get_root_element method - returns the root DOM element for this component
+    // Handles if/else at root level by checking _if_X_state
+    ss << "    webcc::handle _get_root_element() {\n";
+    if (root_if_id >= 0) {
+        // Has if/else at root level
+        auto& root_region = if_regions[root_if_id];
+        ss << "        if (_if_" << root_if_id << "_state) {\n";
+        if (!root_region.then_element_ids.empty()) {
+            ss << "            return el[" << root_region.then_element_ids[0] << "];\n";
+        } else {
+            ss << "            return webcc::handle{0};\n";
+        }
+        ss << "        } else {\n";
+        if (!root_region.else_element_ids.empty()) {
+            ss << "            return el[" << root_region.else_element_ids[0] << "];\n";
+        } else {
+            ss << "            return webcc::handle{0};\n";
+        }
+        ss << "        }\n";
+    } else {
+        // No if/else at root, just return el[0]
+        if (element_count > 0) {
+            ss << "        return el[0];\n";
+        } else {
+            ss << "        return webcc::handle{0};\n";
+        }
     }
     ss << "    }\n";
 
