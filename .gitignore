@@ -9,3 +9,4 @@ src/coi_schema.cc
 node_modules/
 *.vsix
 **/.coi_cache
+**/__pycache__
