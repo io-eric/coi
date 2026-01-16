@@ -21,6 +21,7 @@
 static const std::set<std::string> EXCLUDED_FUNCTIONS = {
     "set_main_loop",       // Handled by tick {}
     "add_click_listener",  // Handled by onClick attribute
+    "init_keyboard",       // Called internally when Input.isKeyDown is used
     // Add more as needed
 };
 
@@ -435,6 +436,21 @@ const SchemaEntry SCHEMA[] = {
                 
                 out << "): " << return_type << " {\n";
                 out << "        // maps to: " << ns << "::" << cmd->func_name << "\n";
+                out << "    }\n";
+            }
+            
+            // Special: inject state-checking functions into Input type
+            // These are derived from KEY_DOWN/KEY_UP events and provide runtime state queries
+            if (ns == "input") {
+                out << "\n";
+                out << "    // Keyboard state queries (runtime state from KEY_DOWN/KEY_UP events)\n";
+                out << "    shared def isKeyDown(keyCode: int): bool {\n";
+                out << "        // Returns true if the specified key is currently pressed\n";
+                out << "        // keyCode: JavaScript key code (e.g., 37=Left, 38=Up, 39=Right, 40=Down)\n";
+                out << "    }\n";
+                out << "    shared def isKeyUp(keyCode: int): bool {\n";
+                out << "        // Returns true if the specified key is currently released\n";
+                out << "        // Equivalent to !isKeyDown(keyCode)\n";
                 out << "    }\n";
             }
             

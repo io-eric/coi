@@ -233,19 +233,44 @@ Keyboard and mouse input handling.
 
 ```tsx
 component Game {
+    mut Canvas canvas;
+    mut CanvasContext2D ctx;
+
     mut float x = 400;
     mut float y = 300;
-    mut float speed = 200;
+    mut float speed = 300;
+    
+    float width = 800;
+    float height = 600;
+    float radius = 20;
+
+    mount {
+        canvas.setSize(width, height);
+        ctx = canvas.getContext2d();
+    }
 
     tick(float dt) {
+        // Movement
         if (Input.isKeyDown(37)) x -= speed * dt;  // Left
         if (Input.isKeyDown(39)) x += speed * dt;  // Right
         if (Input.isKeyDown(38)) y -= speed * dt;  // Up
         if (Input.isKeyDown(40)) y += speed * dt;  // Down
+
+        ctx.clearRect(0, 0, width, height);
+        
+        // Background
+        ctx.setFillStyleStr("#1a1a1a");
+        ctx.fillRect(0, 0, 800, 600);
+        // Player
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 6.28);
+        ctx.setFillStyleStr("#4ade80");
+        ctx.fill();
     }
 
+
     view {
-        <div style="left: {x}px; top: {y}px;"></div>
+            <canvas &={canvas}></canvas>
     }
 }
 ```

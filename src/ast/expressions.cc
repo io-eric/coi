@@ -169,6 +169,24 @@ std::string FunctionCall::args_to_string() {
 }
 
 std::string FunctionCall::to_webcc() {
+    // Handle Input state methods (isKeyDown, isKeyUp, isMouseDown, etc.)
+    {
+        size_t dot_pos = name.rfind('.');
+        if (dot_pos != std::string::npos && dot_pos > 0 && dot_pos < name.length() - 1) {
+            std::string obj = name.substr(0, dot_pos);
+            std::string method = name.substr(dot_pos + 1);
+            
+            if (obj == "Input") {
+                if (method == "isKeyDown" && args.size() == 1) {
+                    return "g_key_state[" + args[0]->to_webcc() + "]";
+                }
+                if (method == "isKeyUp" && args.size() == 1) {
+                    return "!g_key_state[" + args[0]->to_webcc() + "]";
+                }
+            }
+        }
+    }
+
     // Handle string methods
     {
         size_t dot_pos = name.rfind('.');

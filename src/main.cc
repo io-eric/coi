@@ -171,9 +171,10 @@ static std::set<std::string> get_required_headers(const std::vector<Component>& 
     }
     
     std::set<std::string> headers;
-    // Always include dom and system (needed for basic DOM operations and main loop)
+    // Always include dom, system, and input (needed for basic DOM operations, main loop, and key state)
     headers.insert("dom");
     headers.insert("system");
+    headers.insert("input");
     
     for (const auto& type : used_types) {
         auto it = type_to_header.find(type);
@@ -577,6 +578,7 @@ int main(int argc, char **argv)
         out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_input_dispatcher;\n";
         out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_change_dispatcher;\n";
         out << "Dispatcher<webcc::function<void(int)>> g_keydown_dispatcher;\n";
+        out << "bool g_key_state[256] = {};\n";
         out << "int g_view_depth = 0;\n\n";
 
         // Sort components topologically so dependencies come first
@@ -624,6 +626,10 @@ int main(int argc, char **argv)
         out << "            if (auto evt = e.as<webcc::dom::ChangeEvent>()) g_change_dispatcher.dispatch(evt->handle, webcc::string(evt->value));\n";
         out << "        } else if (e.opcode == webcc::dom::KeydownEvent::OPCODE) {\n";
         out << "            if (auto evt = e.as<webcc::dom::KeydownEvent>()) g_keydown_dispatcher.dispatch(evt->handle, evt->keycode);\n";
+        out << "        } else if (e.opcode == webcc::input::KeyDownEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::input::KeyDownEvent>()) { if (evt->key_code >= 0 && evt->key_code < 256) g_key_state[evt->key_code] = true; }\n";
+        out << "        } else if (e.opcode == webcc::input::KeyUpEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::input::KeyUpEvent>()) { if (evt->key_code >= 0 && evt->key_code < 256) g_key_state[evt->key_code] = false; }\n";
         out << "        }\n";
         out << "    }\n";
         out << "}\n\n";
@@ -652,6 +658,7 @@ int main(int argc, char **argv)
         out << "    // We use webcc::malloc to ensure memory is tracked by the framework.\n";
         out << "    void* app_mem = webcc::malloc(sizeof(" << final_app_config.root_component << "));\n";
         out << "    app = new (app_mem) " << final_app_config.root_component << "();\n";
+        out << "    webcc::input::init_keyboard();\n";
 
         out << "    app->view();\n";
         out << "    webcc::system::set_main_loop(update_wrapper);\n";
