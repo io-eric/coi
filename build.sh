@@ -18,28 +18,28 @@ for arg in "$@"; do
             echo ""
             echo "Options:"
             echo "  --rebuild-webcc   Force rebuild the webcc toolchain"
-            echo "  --rebuild-schema  Force regenerate COI schema files (coi_schema.h/cc and def/*.d.coi)"
+            echo "  --rebuild-schema  Force regenerate Coi schema files (coi_schema.h/cc and def/*.d.coi)"
             echo "  --help            Show this help message"
             exit 0
             ;;
-    esac
+    esacs
 done
 
 # Force rebuild webcc if requested
 if [ "$REBUILD_WEBCC" = true ]; then
-    echo "[COI] Force rebuilding webcc toolchain..."
+    echo "[Coi] Force rebuilding webcc toolchain..."
     if [ -d "deps/webcc" ]; then
         pushd deps/webcc > /dev/null
         ./build.sh --force && WEBCC_EXIT=0 || WEBCC_EXIT=$?
         popd > /dev/null
         # Exit 2 = rebuilt, Exit 0 = up to date, anything else = error
         if [ $WEBCC_EXIT -ne 0 ] && [ $WEBCC_EXIT -ne 2 ]; then
-            echo "[COI] Error: webcc build failed"
+            echo "[Coi] Error: webcc build failed"
             exit 1
         fi
         REBUILD_SCHEMA=true  # webcc rebuilt, so regenerate coi schema
     else
-        echo "[COI] Error: deps/webcc not found"
+        echo "[Coi] Error: deps/webcc not found"
         exit 1
     fi
 fi
@@ -52,10 +52,10 @@ if [ -d "deps/webcc" ]; then
     
     # Exit 2 = rebuilt, Exit 0 = up to date, anything else = error
     if [ $WEBCC_EXIT -eq 2 ]; then
-        echo "[COI] WebCC schema changed, regenerating COI schema..."
+        echo "[Coi] WebCC schema changed, regenerating Coi schema..."
         REBUILD_SCHEMA=true
     elif [ $WEBCC_EXIT -ne 0 ]; then
-        echo "[COI] Error: webcc build failed"
+        echo "[Coi] Error: webcc build failed"
         exit 1
     fi
     
@@ -65,7 +65,7 @@ fi
 
 # Force rebuild schema if requested
 if [ "$REBUILD_SCHEMA" = true ]; then
-    echo "[COI] Rebuilding COI schema..."
+    echo "[Coi] Rebuilding Coi schema..."
     # Remove generated schema files to force regeneration
     rm -f src/coi_schema.h src/coi_schema.cc
     rm -f build/gen_schema build/obj/gen_schema.o
@@ -74,11 +74,11 @@ if [ "$REBUILD_SCHEMA" = true ]; then
 fi
 
 if ! command -v ninja >/dev/null 2>&1; then
-    echo "[COI] Ninja not found. Please install ninja-build."
+    echo "[Coi] Ninja not found. Please install ninja-build."
     exit 1
 fi
 
-echo "[COI] Running Ninja..."
+echo "[Coi] Running Ninja..."
 ninja
 
 # Check if coi is already linked correctly
