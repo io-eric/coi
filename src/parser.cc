@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "schema_loader.h"
 #include <stdexcept>
 #include <iostream>
 #include <limits>
@@ -877,8 +878,13 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
             auto it = component_member_types.find(member_name);
             if (it != component_member_types.end()) {
                 component_type = it->second;
+                
+                // Error if type is a built-in handle (not a component)
+                if (SchemaLoader::instance().is_handle(component_type)) {
+                    throw std::runtime_error("Variable '" + member_name + "' has type '" + component_type + "' which is a built-in type, not a component. Usage: <{" + member_name + "}/> is only for components at line " + std::to_string(start_line));
+                }
             } else {
-                throw std::runtime_error("Variable '" + member_name + "' is not a known component member. Use <{var}/> only for component-typed variables.");
+                throw std::runtime_error("Variable '" + member_name + "' is not a known component member. Use <{var}/> only for component-typed variables at line " + std::to_string(start_line));
             }
         } else {
             throw std::runtime_error("Expected identifier in <{...}/> syntax at line " + std::to_string(start_line));
@@ -952,6 +958,11 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
     bool is_component = std::isupper(tag[0]);
     
     if(is_component){
+        // Error if tag is a built-in handle type
+        if (SchemaLoader::instance().is_handle(tag)) {
+            throw std::runtime_error("Type '" + tag + "' cannot be used as a component tag at line " + std::to_string(start_line));
+        }
+
         auto comp = std::make_unique<ComponentInstantiation>();
         comp->line = start_line;
         comp->component_name = tag;
@@ -1313,7 +1324,13 @@ Component Parser::parse_component(){
 
     expect(TokenType::COMPONENT, "Expected 'component'");
     comp.name = current().value;
-    
+    comp.line = current().line;
+
+    // Check for collisions with built-in types
+    if (SchemaLoader::instance().is_handle(comp.name)) {
+        throw std::runtime_error("Component name '" + comp.name + "' conflicts with a built-in type name at line " + std::to_string(current().line));
+    }
+
     // Validate component name starts with uppercase
     if (!comp.name.empty() && !std::isupper(comp.name[0])) {
         throw std::runtime_error("Component name '" + comp.name + "' must start with an uppercase letter at line " + std::to_string(current().line));

@@ -435,7 +435,17 @@ int main(int argc, char **argv)
             Parser parser(tokens);
             parser.parse_file();
 
-            all_components.insert(all_components.end(), std::make_move_iterator(parser.components.begin()), std::make_move_iterator(parser.components.end()));
+            // Add components with duplicate name check
+            for (auto& comp : parser.components) {
+                bool duplicate = false;
+                for (const auto& existing : all_components) {
+                    if (existing.name == comp.name) {
+                        std::cerr << colors::RED << "Error:" << colors::RESET << " Component '" << comp.name << "' is defined multiple times (found in " << current_file_path << " at line " << comp.line << ")" << std::endl;
+                        return 1;
+                    }
+                }
+                all_components.push_back(std::move(comp));
+            }
             
             // Collect global enums
             for (auto& enum_def : parser.global_enums) {
