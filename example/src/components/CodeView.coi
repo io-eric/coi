@@ -23,6 +23,7 @@ component CodeView(
         if (word == "def") return true;
         if (word == "prop") return true;
         if (word == "init") return true;
+        if (word == "mount") return true;
         if (word == "tick") return true;
         if (word == "view") return true;
         if (word == "style") return true;
