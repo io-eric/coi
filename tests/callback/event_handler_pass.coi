@@ -13,8 +13,8 @@ component TestEventHandlerPass {
         text = value;
     }
 
-    def handleKey(string key) : void {
-        text = key;
+    def handleKey(int key) : void {
+        text = "" + key;
     }
 
     view {
