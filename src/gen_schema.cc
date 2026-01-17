@@ -19,9 +19,16 @@
 
 // Functions that are handled by Coi language constructs (not exposed directly)
 static const std::set<std::string> EXCLUDED_FUNCTIONS = {
-    "set_main_loop",       // Handled by tick {}
-    "add_click_listener",  // Handled by onClick attribute
-    "init_keyboard",       // Called internally when Input.isKeyDown is used
+    "set_main_loop",            // Handled by tick {}
+    "add_click_listener",       // Handled by onClick attribute
+    "init_keyboard",            // Called internally when Input.isKeyDown is used
+    "init_mouse",               // Handled by onMouseDown/onMouseMove/onMouseUp attributes
+    "create_element_deferred",  // Internal compiler function
+    "create_comment_deferred",  // Internal compiler function
+    "add_input_listener",       // Handled by onInput attribute
+    "add_change_listener",      // Handled by onChange attribute
+    "add_keydown_listener",     // Handled by onKeydown attribute
+    "random",                   // System.random() - built-in wasm random
     // Add more as needed
 };
 
@@ -361,7 +368,7 @@ const SchemaEntry SCHEMA[] = {
                         first = false;
                         std::string param_type = to_coi_type(p.type, p.handle_type);
                         std::string param_name = p.name.empty() ? "arg" : p.name;
-                        out << param_name << ": " << param_type;
+                        out << param_type << " " << param_name;
                     }
                     
                     out << "): " << return_type << " {\n";
@@ -389,7 +396,7 @@ const SchemaEntry SCHEMA[] = {
                         first = false;
                         std::string param_type = to_coi_type(p.type, p.handle_type);
                         std::string param_name = p.name.empty() ? "arg" : p.name;
-                        out << param_name << ": " << param_type;
+                        out << param_type << " " << param_name;
                     }
                     
                     out << "): " << return_type << " {\n";
@@ -431,7 +438,7 @@ const SchemaEntry SCHEMA[] = {
                     first = false;
                     std::string param_type = to_coi_type(p.type, p.handle_type);
                     std::string param_name = p.name.empty() ? "arg" : p.name;
-                    out << param_name << ": " << param_type;
+                    out << param_type << " " << param_name;
                 }
                 
                 out << "): " << return_type << " {\n";
@@ -444,13 +451,29 @@ const SchemaEntry SCHEMA[] = {
             if (ns == "input") {
                 out << "\n";
                 out << "    // Keyboard state queries (runtime state from KEY_DOWN/KEY_UP events)\n";
-                out << "    shared def isKeyDown(keyCode: int): bool {\n";
+                out << "    shared def isKeyDown(int keyCode): bool {\n";
                 out << "        // Returns true if the specified key is currently pressed\n";
                 out << "        // keyCode: JavaScript key code (e.g., 37=Left, 38=Up, 39=Right, 40=Down)\n";
                 out << "    }\n";
-                out << "    shared def isKeyUp(keyCode: int): bool {\n";
+                out << "    shared def isKeyUp(int keyCode): bool {\n";
                 out << "        // Returns true if the specified key is currently released\n";
                 out << "        // Equivalent to !isKeyDown(keyCode)\n";
+                out << "    }\n";
+            }
+            
+            // Special: inject random number generator into System type
+            // This is generated on the wasm side, not retrieved from JS
+            if (ns == "system") {
+                out << "\n";
+                out << "    // Random number generation (wasm-side)\n";
+                out << "    shared def random(int seed = __auto_seed__): float {\n";
+                out << "        // Returns a random float between 0.0 and 1.0\n";
+                out << "        // \n";
+                out << "        // seed: Random seed value, or __auto_seed__ for time-based (default)\n";
+                out << "        // \n";
+                out << "        // Usage:\n";
+                out << "        //   System.random()     - Auto-seeded (time-based)\n";
+                out << "        //   System.random(123)  - Manual seed for reproducibility\n";
                 out << "    }\n";
             }
             
