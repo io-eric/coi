@@ -4,7 +4,6 @@ import "components/Button.coi";
 
 component App {
     mut int count = 0;
-    mut bool dark = false;
 
     def increment() : void {
         count = count + 1;
@@ -12,10 +11,6 @@ component App {
 
     def decrement() : void {
         count = count - 1;
-    }
-
-    def toggleTheme() : void {
-        dark = !dark;
     }
 
     style {
