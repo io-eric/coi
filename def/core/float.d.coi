@@ -1,12 +1,21 @@
-// Coi Built-in Float Type
-// 64-bit floating point (default, maps to f64 in WebAssembly)
+// Coi Built-in Floating Point Types
+// Explicit bit-width floating point numbers
 
+// float is an alias for float64 (default float type)
 @builtin
+@alias("float64")
 type float {
     // No methods currently - use operators (+, -, *, /)
 }
 
+// 32-bit floating point (single precision)
 @builtin
-type float64{
+type float32 {
+    // No methods currently - use operators (+, -, *, /)
+}
+
+// 64-bit floating point (double precision)
+@builtin
+type float64 {
     // No methods currently - use operators (+, -, *, /)
 }

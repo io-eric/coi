@@ -5,8 +5,26 @@
 
 std::string convert_type(const std::string& type) {
     if (type == "string") return "webcc::string";
-    if (type == "float") return "double";    // float -> 64-bit (default, matches WASM/JS)
-    if (type == "float32") return "float";   // explicit 32-bit
+    
+    // Resolve type aliases from schema (e.g., int -> int32, float -> float64)
+    std::string resolved = DefSchema::instance().resolve_alias(type);
+    
+    // Integer types - explicit bit widths
+    if (resolved == "int8") return "int8_t";
+    if (resolved == "int16") return "int16_t";
+    if (resolved == "int32") return "int32_t";
+    if (resolved == "int64") return "int64_t";
+    
+    // Unsigned integer types
+    if (resolved == "uint8") return "uint8_t";
+    if (resolved == "uint16") return "uint16_t";
+    if (resolved == "uint32") return "uint32_t";
+    if (resolved == "uint64") return "uint64_t";
+    
+    // Floating point types
+    if (resolved == "float32") return "float";
+    if (resolved == "float64") return "double";
+    
     // Handle Component.EnumName type syntax - convert to Component::EnumName
     if (type.find('.') != std::string::npos) {
         std::string result = type;

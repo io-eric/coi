@@ -34,7 +34,7 @@ type array<T> {
 
 // Fixed-size array (T[N]) - maps to webcc::array<T, N>
 @builtin
-type array<T, const N: int> {
+type array<T, N> {
     @inline("(int)${this}.size()")
     def size(): int
 

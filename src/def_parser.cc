@@ -397,11 +397,17 @@ std::optional<TypeDef> DefParser::parse_type()
     type_def.name = current_.value;
     advance();
 
-    // Handle generic types (e.g., array<T>)
+    // Handle generic types (e.g., array<T> or array<T, N>)
     if (current_.type == Token::Less)
     {
         advance(); // skip '<'
-        advance(); // skip type parameter
+        advance(); // skip first type parameter
+        // Handle multiple type parameters separated by commas
+        while (current_.type == Token::Comma)
+        {
+            advance(); // skip ','
+            advance(); // skip next type parameter
+        }
         if (current_.type == Token::Greater)
             advance();
     }
@@ -420,6 +426,10 @@ std::optional<TypeDef> DefParser::parse_type()
         if (name == "builtin")
         {
             type_def.is_builtin = true;
+        }
+        else if (name == "alias")
+        {
+            type_def.alias_of = value;
         }
     }
 
@@ -647,6 +657,7 @@ bool DefSchema::load_cache(const std::string &cache_path)
         type_def.name = read_string();
         type_def.is_builtin = file.get() != 0;
         type_def.extends = read_string();
+        type_def.alias_of = read_string();
 
         uint32_t method_count;
         file.read(reinterpret_cast<char *>(&method_count), sizeof(method_count));
@@ -703,6 +714,7 @@ bool DefSchema::save_cache(const std::string &cache_path)
         write_string(type_def.name);
         file.put(type_def.is_builtin ? 1 : 0);
         write_string(type_def.extends);
+        write_string(type_def.alias_of);
 
         uint32_t method_count = type_def.methods.size();
         file.write(reinterpret_cast<const char *>(&method_count), sizeof(method_count));
@@ -801,6 +813,21 @@ bool DefSchema::is_handle(const std::string &type_name) const
     }
 
     return false;
+}
+
+std::string DefSchema::resolve_alias(const std::string &type_name) const
+{
+    auto type_it = types_.find(type_name);
+    if (type_it == types_.end())
+        return type_name;
+    
+    if (!type_it->second.alias_of.empty())
+    {
+        // Recursively resolve in case of alias chains
+        return resolve_alias(type_it->second.alias_of);
+    }
+    
+    return type_name;
 }
 
 std::string DefSchema::get_namespace_for_type(const std::string &type_name) const

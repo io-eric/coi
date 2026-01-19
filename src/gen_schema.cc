@@ -55,11 +55,13 @@ std::string to_coi_type(const std::string& type, const std::string& handle_type)
     if (type == "handle" && !handle_type.empty()) {
         return handle_type;
     }
-    if (type == "int32") return "int";
-    if (type == "uint32") return "int";
-    if (type == "uint8") return "int";
-    if (type == "float32") return "float32";  // explicit 32-bit
-    if (type == "float64") return "float";    // maps to default float (64-bit)
+    if (type == "int32") return "int32";
+    if (type == "uint32") return "uint32";
+    if (type == "uint8") return "uint8";
+    if (type == "int64") return "int64";
+    if (type == "uint64") return "uint64";
+    if (type == "float32") return "float32";
+    if (type == "float64") return "float64";
     if (type == "string") return "string";
     if (type == "bool") return "bool";
     if (type == "func_ptr") return "func";  // Special case

@@ -7,10 +7,27 @@ Coi is a statically-typed language. This guide covers the core language features
 ### Primitive Types
 
 ```tsx
-int count = 42;          // Integer (32-bit signed)
-float speed = 3.14;      // Floating point (32-bit)
-string name = "Coi";     // String
-bool active = true;      // Boolean
+// Integers - signed
+int8 tiny = 127;           // 8-bit signed (-128 to 127)
+int16 small = 32000;       // 16-bit signed
+int32 count = 42;          // 32-bit signed (default)
+int64 big = 9000000000;    // 64-bit signed
+int num = 42;              // Alias for int32
+
+// Integers - unsigned
+uint8 byte = 255;          // 8-bit unsigned (0 to 255)
+uint16 port = 8080;        // 16-bit unsigned
+uint32 id = 4000000000;    // 32-bit unsigned
+uint64 huge = 10000000000; // 64-bit unsigned
+
+// Floating point
+float32 precise = 3.14;    // 32-bit float (single precision)
+float64 speed = 3.14159;   // 64-bit float (double precision)
+float ratio = 0.5;         // Alias for float64
+
+// Other primitives
+string name = "Coi";       // String
+bool active = true;        // Boolean
 ```
 
 ### Arrays

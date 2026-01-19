@@ -26,9 +26,14 @@ static bool is_enum_type(const std::string &t) {
 // Convert normalized type back to user-friendly display name for error messages
 static std::string display_type_name(const std::string &normalized_type)
 {
-    if (normalized_type == "int32") return "int";
-    if (normalized_type == "float64") return "float";
-    // float32 stays as float32 (explicit)
+    // Check all types to find one that aliases to this normalized type
+    for (const auto &[name, type_def] : DefSchema::instance().types())
+    {
+        if (!type_def.alias_of.empty() && type_def.alias_of == normalized_type)
+        {
+            return name;  // Return the alias name (e.g., "int" instead of "int32")
+        }
+    }
     return normalized_type;
 }
 
@@ -59,17 +64,12 @@ std::string normalize_type(const std::string &type)
             return normalize_type(elem_type) + "[" + size_str + "]";
         }
     }
-    if (type == "int")
-        return "int32";
-    if (type == "float")
-        return "float64";  // default float is 64-bit
-    if (type == "float32")
-        return "float32";  // explicit 32-bit
-    if (type == "bool")
-        return "bool";
-    if (type == "string")
-        return "string";
-    return type;
+    
+    // Resolve type aliases from schema (e.g., int -> int32, float -> float64)
+    std::string resolved = DefSchema::instance().resolve_alias(type);
+    
+    // Return the resolved type (canonical form)
+    return resolved;
 }
 
 bool is_compatible_type(const std::string &source, const std::string &target)
