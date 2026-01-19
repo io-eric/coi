@@ -28,7 +28,7 @@ Compiles to WASM, JS, and HTML with tiny binaries and efficient updates for DOM,
 - **Integrated DOM & Styling**: Write HTML elements and scoped CSS directly in components.
 - **View Control Flow**: Declarative `<if>`, `<else>`, and `<for>` tags for conditional rendering and iteration.
 - **Component Lifecycle**: Built-in `init {}`, `mount {}`, and `tick {}` blocks for setup and animations.
-- **Auto-Generated APIs**: Browser APIs (Canvas, Storage, Audio, etc.) generated from [WebCC](https://github.com/io-eric/webcc) schema.
+- **Type-Safe Platform APIs**: Browser APIs (Canvas, Storage, Audio, etc.) defined in `.d.coi` files, auto-generated from [WebCC](https://github.com/io-eric/webcc) schema.
 - **VS Code Extension**: Syntax highlighting, completions, hover docs, and formatting.
 
 ## Benchmarks
