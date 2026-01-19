@@ -1,5 +1,5 @@
 #include "node.h"
-#include "../schema_loader.h"
+#include "../def_parser.h"
 #include <cctype>
 #include <algorithm>
 
@@ -31,7 +31,7 @@ std::string convert_type(const std::string& type) {
         }
     }
     // Check if type is a webcc handle type and add prefix
-    if (SchemaLoader::instance().is_handle(type)) {
+    if (DefSchema::instance().is_handle(type)) {
         return "webcc::" + type;
     }
     return type;

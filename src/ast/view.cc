@@ -1,6 +1,5 @@
 #include "view.h"
 #include "formatter.h"
-#include "../schema_loader.h"
 
 // Helper to map Coi types to C++ types for lambda params
 static std::string coi_type_to_cpp(const std::string& type) {

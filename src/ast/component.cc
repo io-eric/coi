@@ -1,6 +1,6 @@
 #include "component.h"
 #include "formatter.h"
-#include "../schema_loader.h"
+#include "../def_parser.h"
 #include <cctype>
 #include <algorithm>
 #include <sstream>
@@ -561,7 +561,7 @@ std::string Component::to_webcc(CompilerSession &session)
         ss << " " << var->name;
         if (var->initializer)
         {
-            if (SchemaLoader::instance().is_handle(var->type))
+            if (DefSchema::instance().is_handle(var->type))
             {
                 ss << "{" << var->initializer->to_webcc() << "}";
             }
@@ -649,7 +649,7 @@ std::string Component::to_webcc(CompilerSession &session)
         std::string name;  // attribute name (or "" for text)
         int if_region_id;
         bool in_then_branch;
-        
+
         bool operator<(const ElementAttrKey &other) const
         {
             if (element_id != other.element_id) return element_id < other.element_id;
@@ -659,14 +659,14 @@ std::string Component::to_webcc(CompilerSession &session)
             return in_then_branch < other.in_then_branch;
         }
     };
-    
+
     struct ElementAttrBinding
     {
         std::string update_code;
         std::set<std::string> dependencies;
         std::string method_name;
     };
-    
+
     std::map<ElementAttrKey, ElementAttrBinding> element_attr_bindings;
 
     // Collect bindings grouped by element+attribute
@@ -678,7 +678,7 @@ std::string Component::to_webcc(CompilerSession &session)
         key.name = binding.name;
         key.if_region_id = binding.if_region_id;
         key.in_then_branch = binding.in_then_branch;
-        
+
         std::string el_var = "el[" + std::to_string(binding.element_id) + "]";
         std::string update_line;
         std::string dom_call = (binding.type == "attr")
@@ -728,7 +728,7 @@ std::string Component::to_webcc(CompilerSession &session)
             }
         }
     }
-    
+
     // Generate shared element+attribute update methods
     int shared_update_counter = 0;
     for (auto &[key, binding] : element_attr_bindings)
@@ -746,9 +746,9 @@ std::string Component::to_webcc(CompilerSession &session)
         {
             method_name = "_update_shared_" + std::to_string(shared_update_counter++);
         }
-        
+
         binding.method_name = method_name;
-        
+
         // Add this shared method to each dependency's update list
         for (const auto &dep : binding.dependencies)
         {
@@ -759,7 +759,7 @@ std::string Component::to_webcc(CompilerSession &session)
             var_update_entries[dep].push_back(entry);
         }
     }
-    
+
     // Generate shared element+attribute update methods first
     for (const auto &[key, binding] : element_attr_bindings)
     {
@@ -1479,7 +1479,7 @@ std::string Component::to_webcc(CompilerSession &session)
             emit_event_registration(ss, element_count, event_handlers, "keydown", "_keydown_mask", "g_keydown_dispatcher", "int k", "k");
         }
     }
-    
+
     // Re-wire nested component reactivity after reallocation
     for (const auto &param : params)
     {
@@ -1493,7 +1493,7 @@ std::string Component::to_webcc(CompilerSession &session)
             }
         }
     }
-    
+
     ss << "    }\n";
 
     // Destroy method

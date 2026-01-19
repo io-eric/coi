@@ -1,0 +1,24 @@
+// Coi Built-in String Type
+// This file defines mappings for string methods
+
+@builtin
+type string {
+    // String methods - these inline directly to C++ std::string methods
+    @inline("${this}.length()")
+    def length(): int
+
+    @inline("${this}.at(${0})")
+    def at(int index): int
+
+    @inline("${this}.substr(${0})")
+    def substr(int start): string
+
+    @inline("${this}.substr(${0}, ${1})")
+    def substr(int start, int length): string
+
+    @inline("${this}.contains(${0})")
+    def contains(string needle): bool
+
+    @inline("${this}.empty()")
+    def isEmpty(): bool
+}

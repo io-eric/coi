@@ -1,7 +1,7 @@
 coi
 **/dist/
 **/build/
-/def/
+/def/web/
 .vscode
 .ninja_log
 src/coi_schema.h
@@ -9,4 +9,5 @@ src/coi_schema.cc
 node_modules/
 *.vsix
 **/.coi_cache
+def/.cache/
 **/__pycache__

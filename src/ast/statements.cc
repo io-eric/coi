@@ -1,5 +1,5 @@
 #include "statements.h"
-#include "../schema_loader.h"
+#include "../def_parser.h"
 
 // Reference to per-component context for reference props
 extern std::set<std::string> g_ref_props;
@@ -56,14 +56,14 @@ std::string VarDeclaration::to_webcc()
 
     // Don't make component types const by default (they need to call mutating methods on members)
     // Component types start with uppercase and are not handles
-    bool is_component = !type.empty() && std::isupper(type[0]) && !type.ends_with("[]") && !SchemaLoader::instance().is_handle(type);
+    bool is_component = !type.empty() && std::isupper(type[0]) && !type.ends_with("[]") && !DefSchema::instance().is_handle(type);
     std::string result = (is_mutable || is_component ? "" : "const ") + convert_type(type);
     if (is_reference)
         result += "&";
     result += " " + name;
     if (initializer)
     {
-        if (SchemaLoader::instance().is_handle(type))
+        if (DefSchema::instance().is_handle(type))
         {
             result += "{" + initializer->to_webcc() + "}";
         }
@@ -91,7 +91,7 @@ std::string Assignment::to_webcc()
 
     std::string rhs = value->to_webcc();
 
-    if (!target_type.empty() && SchemaLoader::instance().is_handle(target_type))
+    if (!target_type.empty() && DefSchema::instance().is_handle(target_type))
     {
         rhs = convert_type(target_type) + "((int32_t)" + rhs + ")";
     }

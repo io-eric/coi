@@ -1,7 +1,6 @@
-// Generates a minimal schema header for the coi compiler
-// Only includes fields coi actually needs (no JS action strings)
-// Uses the already-parsed webcc_schema.h for consistency
-// Also generates .coi definition files for LSP/documentation support
+// Generates .coi definition files for the coi compiler
+// Reads webcc's schema definitions and produces def/*.d.coi files
+// These are the source of truth for type information, method mappings, etc.
 
 #include <iostream>
 #include <fstream>
@@ -152,137 +151,13 @@ int main() {
         handles.insert(kv->second);
     }
 
-    // Generate Header
-    {
-        std::ofstream out("src/coi_schema.h");
-        if (!out) {
-            std::cerr << "[Coi] Error: Cannot create src/coi_schema.h" << std::endl;
-            return 1;
-        }
-
-        out << R"(// GENERATED FILE - DO NOT EDIT
-// Minimal schema for coi compiler (no JS action strings)
-#pragma once
-#include <string>
-#include <vector>
-
-namespace coi {
-
-struct SchemaParam {
-    std::string type;        // For handles, this is the actual handle type (e.g., "DOMElement")
-    std::string name;
-};
-
-struct SchemaEntry {
-    std::string ns;
-    std::string func_name;
-    std::vector<SchemaParam> params;
-    std::string return_type; // For handles, this is the actual handle type (e.g., "Canvas")
-};
-
-extern const SchemaEntry SCHEMA[];
-extern const size_t SCHEMA_COUNT;
-
-extern const char* HANDLES[];
-extern const size_t HANDLE_COUNT;
-
-// Handle inheritance: maps derived type -> base type
-// e.g., Canvas -> DOMElement means Canvas can be used where DOMElement is expected
-extern const std::pair<const char*, const char*> HANDLE_INHERITANCE[];
-
-// Type to namespace mapping: maps type names (e.g., "DOMElement", "System") to their namespace
-// This allows validation of Type.method() calls (e.g., DOMElement.getBody() -> dom::get_body)
-extern const std::pair<const char*, const char*> TYPE_TO_NAMESPACE[];
-
-} // namespace coi
-)";
-        out.close();
-    }
-
-    // Generate Source
-    {
-        std::ofstream out("src/coi_schema.cc");
-        if (!out) {
-            std::cerr << "[Coi] Error: Cannot create src/coi_schema.cc" << std::endl;
-            return 1;
-        }
-
-        out << R"(// GENERATED FILE - DO NOT EDIT
-#include "coi_schema.h"
-
-namespace coi {
-
-const SchemaEntry SCHEMA[] = {
-)";
-
-        size_t count = 0;
-        for (const auto* c = webcc::SCHEMA_COMMANDS; !c->ns.empty(); ++c) {
-            out << "    {\"" << c->ns << "\", \"" << c->func_name << "\", {";
-            
-            bool first = true;
-            for (const auto& p : c->params) {
-                if (!first) out << ", ";
-                first = false;
-                
-                // Use handle_type if it's a handle, otherwise use the base type
-                std::string type = p.type;
-                if (p.type == "handle" && !p.handle_type.empty()) {
-                    type = p.handle_type;
-                }
-                out << "{\"" << type << "\", \"" << p.name << "\"}";
-            }
-            out << "}, ";
-            
-            // Return type: use handle_type if it's a handle return
-            std::string ret_type = c->return_type;
-            if (c->return_type == "handle" && !c->return_handle_type.empty()) {
-                ret_type = c->return_handle_type;
-            }
-            out << "\"" << ret_type << "\"},\n";
-            
-            count++;
-        }
-
-        out << "};\n\n";
-        out << "const size_t SCHEMA_COUNT = " << count << ";\n\n";
-
-        out << "const char* HANDLES[] = {\n";
-        for (const auto& h : handles) {
-            out << "    \"" << h << "\",\n";
-        }
-        out << "};\n\n";
-        out << "const size_t HANDLE_COUNT = " << handles.size() << ";\n\n";
-
-        // Generate inheritance table
-        out << "const std::pair<const char*, const char*> HANDLE_INHERITANCE[] = {\n";
-        for (const auto* kv = webcc::HANDLE_INHERITANCE; kv->first != nullptr; ++kv) {
-            out << "    { \"" << kv->first << "\", \"" << kv->second << "\" },\n";
-        }
-        out << "    { nullptr, nullptr }\n";
-        out << "};\n\n";
-
-        // Generate type-to-namespace mapping
-        out << "const std::pair<const char*, const char*> TYPE_TO_NAMESPACE[] = {\n";
-        for (const auto& [type_name, ns] : type_to_ns) {
-            out << "    { \"" << type_name << "\", \"" << ns << "\" },\n";
-        }
-        out << "    { nullptr, nullptr }\n";
-        out << "};\n\n";
-
-        out << "} // namespace coi\n";
-        out.close();
-        
-        std::cout << "[Coi] Generated coi_schema.h and coi_schema.cc with " << count << " entries, " 
-                  << handles.size() << " handles, and " << type_to_ns.size() << " type mappings" << std::endl;
-    }
-
     // =========================================================
-    // Generate .coi definition files in /def folder
+    // Generate .coi definition files in /def/web folder
     // =========================================================
     namespace fs = std::filesystem;
     
-    // Create def directory
-    fs::create_directories("def");
+    // Create def/web directory
+    fs::create_directories("def/web");
     
     // Group commands by namespace
     std::map<std::string, std::vector<const webcc::SchemaCommand*>> commands_by_ns;
@@ -311,21 +186,6 @@ const SchemaEntry SCHEMA[] = {
         }
     }
     
-    // Map namespaces to webcc header files
-    std::map<std::string, std::string> ns_to_header = {
-        {"dom", "webcc/dom.h"},
-        {"canvas", "webcc/canvas.h"},
-        {"audio", "webcc/audio.h"},
-        {"input", "webcc/input.h"},
-        {"system", "webcc/system.h"},
-        {"storage", "webcc/storage.h"},
-        {"fetch", "webcc/fetch.h"},
-        {"websocket", "webcc/websocket.h"},
-        {"image", "webcc/image.h"},
-        {"webgl", "webcc/webgl.h"},
-        {"wgpu", "webcc/wgpu.h"},
-    };
-    
     // Group commands by their "receiver" handle type (first param if it's a handle)
     // This lets us show methods on handle types properly
     struct MethodInfo {
@@ -335,14 +195,14 @@ const SchemaEntry SCHEMA[] = {
     
     // Generate a .coi file for each namespace
     for (const auto& [ns, commands] : commands_by_ns) {
-        std::string filename = "def/" + ns + ".d.coi";
+        std::string filename = "def/web/" + ns + ".d.coi";
         std::ofstream out(filename);
         if (!out) {
             std::cerr << "[Coi] Error: Cannot create " << filename << std::endl;
             continue;
         }
         
-        std::string header_file = ns_to_header.count(ns) ? ns_to_header[ns] : "webcc/" + ns + ".h";
+        std::string header_file = "webcc/" + ns + ".h";
         std::string ns_type = capitalize(ns);  // e.g., "storage" -> "Storage"
         
         out << "// GENERATED FILE - DO NOT EDIT\n";
@@ -406,7 +266,11 @@ const SchemaEntry SCHEMA[] = {
             out << "\n";
             out << "// =========================================================\n\n";
             
-            out << "type " << handle_type << " {\n";
+            out << "type " << handle_type;
+            if (!extends.empty()) {
+                out << " extends " << extends;
+            }
+            out << " {\n";
             
             // Shared (static) factory methods first
             if (factories_by_type.count(handle_type)) {
@@ -415,6 +279,7 @@ const SchemaEntry SCHEMA[] = {
                     std::string coi_name = to_camel_case(cmd->func_name);
                     std::string return_type = to_coi_type(cmd->return_type, cmd->return_handle_type);
                     
+                    out << "    @map(\"" << ns << "::" << cmd->func_name << "\")\n";
                     out << "    shared def " << coi_name << "(";
                     
                     bool first = true;
@@ -426,11 +291,8 @@ const SchemaEntry SCHEMA[] = {
                         out << param_type << " " << param_name;
                     }
                     
-                    out << "): " << return_type << " {\n";
-                    out << "        // maps to: " << ns << "::" << cmd->func_name << "\n";
-                    out << "    }\n";
+                    out << "): " << return_type << "\n\n";
                 }
-                out << "\n";
             }
             
             // Instance methods
@@ -441,6 +303,7 @@ const SchemaEntry SCHEMA[] = {
                     std::string return_type = to_coi_type(cmd->return_type, cmd->return_handle_type);
                     if (return_type.empty()) return_type = "void";
                     
+                    out << "    @map(\"" << ns << "::" << cmd->func_name << "\")\n";
                     out << "    def " << coi_name << "(";
                     
                     // Skip first param (it's the receiver/this)
@@ -454,9 +317,7 @@ const SchemaEntry SCHEMA[] = {
                         out << param_type << " " << param_name;
                     }
                     
-                    out << "): " << return_type << " {\n";
-                    out << "        // maps to: " << ns << "::" << cmd->func_name << "\n";
-                    out << "    }\n";
+                    out << "): " << return_type << "\n\n";
                 }
             }
             
@@ -485,6 +346,7 @@ const SchemaEntry SCHEMA[] = {
                 std::string return_type = to_coi_type(cmd->return_type, cmd->return_handle_type);
                 if (return_type.empty()) return_type = "void";
                 
+                out << "    @map(\"" << ns << "::" << cmd->func_name << "\")\n";
                 out << "    shared def " << coi_name << "(";
                 
                 bool first = true;
@@ -496,40 +358,24 @@ const SchemaEntry SCHEMA[] = {
                     out << param_type << " " << param_name;
                 }
                 
-                out << "): " << return_type << " {\n";
-                out << "        // maps to: " << ns << "::" << cmd->func_name << "\n";
-                out << "    }\n";
+                out << "): " << return_type << "\n\n";
             }
             
-            // Special: inject state-checking functions into Input type
-            // These are derived from KEY_DOWN/KEY_UP events and provide runtime state queries
+            // Inject intrinsics directly into generated files for documentation
             if (ns == "input") {
-                out << "\n";
-                out << "    // Keyboard state queries (runtime state from KEY_DOWN/KEY_UP events)\n";
-                out << "    shared def isKeyDown(int keyCode): bool {\n";
-                out << "        // Returns true if the specified key is currently pressed\n";
-                out << "        // keyCode: JavaScript key code (e.g., 37=Left, 38=Up, 39=Right, 40=Down)\n";
-                out << "    }\n";
-                out << "    shared def isKeyUp(int keyCode): bool {\n";
-                out << "        // Returns true if the specified key is currently released\n";
-                out << "        // Equivalent to !isKeyDown(keyCode)\n";
-                out << "    }\n";
+                out << "\n    // Keyboard state queries (compiler intrinsics)\n";
+                out << "    @intrinsic(\"key_down\")\n";
+                out << "    shared def isKeyDown(int keyCode): bool\n";
+                out << "    @intrinsic(\"key_up\")\n";
+                out << "    shared def isKeyUp(int keyCode): bool\n";
             }
             
-            // Special: inject random number generator into System type
-            // This is generated on the wasm side, not retrieved from JS
             if (ns == "system") {
-                out << "\n";
-                out << "    // Random number generation (wasm-side)\n";
-                out << "    shared def random(int seed = __auto_seed__): float {\n";
-                out << "        // Returns a random float between 0.0 and 1.0\n";
-                out << "        // \n";
-                out << "        // seed: Random seed value, or __auto_seed__ for time-based (default)\n";
-                out << "        // \n";
-                out << "        // Usage:\n";
-                out << "        //   System.random()     - Auto-seeded (time-based)\n";
-                out << "        //   System.random(123)  - Manual seed for reproducibility\n";
-                out << "    }\n";
+                out << "\n    // Random number generation (compiler intrinsics)\n";
+                out << "    @intrinsic(\"random\")\n";
+                out << "    shared def random(): float\n";
+                out << "    @intrinsic(\"random_seeded\")\n";
+                out << "    shared def random(int seed): float\n";
             }
             
             if (!all_handle_types.count(ns_type)) {
@@ -542,12 +388,12 @@ const SchemaEntry SCHEMA[] = {
     }
     
     // =========================================================
-    // Generate main index file (def/index.d.coi)
+    // Generate main index file (def/web/index.d.coi)
     // =========================================================
     {
-        std::ofstream out("def/index.d.coi");
+        std::ofstream out("def/web/index.d.coi");
         if (!out) {
-            std::cerr << "[Coi] Error: Cannot create def/index.d.coi" << std::endl;
+            std::cerr << "[Coi] Error: Cannot create def/web/index.d.coi" << std::endl;
             return 1;
         }
         
@@ -580,10 +426,11 @@ const SchemaEntry SCHEMA[] = {
             
             if (!extends.empty()) {
                 out << "// " << handle << " extends " << extends << "\n";
+                out << "type " << handle << " extends " << extends << " {}\n\n";
             } else {
                 out << "// " << handle << "\n";
+                out << "type " << handle << " {}\n\n";
             }
-            out << "type " << handle << " {}\n\n";
         }
         
         out << "// =========================================================\n";
@@ -596,7 +443,7 @@ const SchemaEntry SCHEMA[] = {
         out << "// - tick { ... }          : Main loop (replaces setMainLoop)\n";
         out << "// - style { ... }         : Scoped CSS styles for this component\n";
         out << "// - style global { ... }  : Global CSS styles (not scoped)\n";
-        out << "// - onClick={handler}     : Click events (replaces addEventListener)\n";
+        out << "// - onclick={handler}     : Click events (replaces addEventListener)\n";
         out << "// - view { ... }          : DOM generation\n";
         out << "// - component Name { }    : Component definition\n";
         out << "// - prop Type name        : Component properties\n";
@@ -604,50 +451,7 @@ const SchemaEntry SCHEMA[] = {
         out << "//\n";
         
         out.close();
-        std::cout << "[Coi] Generated def/index.d.coi" << std::endl;
-    }
-    
-    // =========================================================
-    // Generate types definition file (def/types.d.coi)
-    // =========================================================
-    {
-        std::ofstream out("def/types.d.coi");
-        if (!out) {
-            std::cerr << "[Coi] Error: Cannot create def/types.d.coi" << std::endl;
-            return 1;
-        }
-        
-        out << "// GENERATED FILE - DO NOT EDIT\n";
-        out << "// Coi Built-in Types\n";
-        out << "//\n";
-        out << "// These are the primitive types available in Coi.\n";
-        out << "\n";
-        out << "// =========================================================\n";
-        out << "// Primitive Types\n";
-        out << "// =========================================================\n";
-        out << "//\n";
-        out << "// int       - 32-bit signed integer\n";
-        out << "// float     - 64-bit floating point (double precision, default)\n";
-        out << "// float32   - 32-bit floating point (single precision, explicit)\n";
-        out << "// string    - UTF-8 string\n";
-        out << "// bool      - Boolean (true/false)\n";
-        out << "// void      - No return value\n";
-        out << "//\n";
-        out << "\n";
-        out << "// =========================================================\n";
-        out << "// Type Mappings (Coi -> WebAssembly)\n";
-        out << "// =========================================================\n";
-        out << "//\n";
-        out << "// int       -> i32\n";
-        out << "// float     -> f64\n";
-        out << "// float32   -> f32\n";
-        out << "// string    -> i32 (pointer to memory)\n";
-        out << "// bool      -> i32 (0 or 1)\n";
-        out << "// Handle    -> i32 (handle ID)\n";
-        out << "//\n";
-        
-        out.close();
-        std::cout << "[Coi] Generated def/types.d.coi" << std::endl;
+        std::cout << "[Coi] Generated def/web/index.d.coi" << std::endl;
     }
 
     return 0;

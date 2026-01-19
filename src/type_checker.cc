@@ -1,5 +1,5 @@
 #include "type_checker.h"
-#include "schema_loader.h"
+#include "def_parser.h"
 #include <iostream>
 #include <algorithm>
 #include <set>
@@ -140,12 +140,12 @@ bool is_compatible_type(const std::string &source, const std::string &target)
     }
 
     // Allow upcast (derived -> base), e.g., Canvas -> DOMElement
-    if (SchemaLoader::instance().is_assignable_to(source, target))
+    if (DefSchema::instance().inherits_from(source, target))
         return true;
     // Allow downcast from base to derived types (e.g., DOMElement -> Canvas)
     // This is needed for getElementById which returns DOMElement but you know it's a Canvas/etc
     // Uses the HANDLE_INHERITANCE table to check if target derives from source
-    if (SchemaLoader::instance().is_assignable_to(target, source))
+    if (DefSchema::instance().inherits_from(target, source))
         return true;
     // Numeric conversions
     if (source == "int32" && (target == "float64" || target == "float32" || target == "uint8"))
@@ -155,7 +155,7 @@ bool is_compatible_type(const std::string &source, const std::string &target)
     if (source == "float32" && target == "float64")
         return true;  // Allow widening from float32 to float64
     // int32 can be used as handle (for raw handle values)
-    if (source == "int32" && SchemaLoader::instance().is_handle(target))
+    if (source == "int32" && DefSchema::instance().is_handle(target))
         return true;
     
     // Enum <-> int implicit conversions (only for known enum types)
@@ -226,7 +226,7 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
     {
         if (scope.count(id->name))
             return scope.at(id->name);
-        if (SchemaLoader::instance().is_handle(id->name))
+        if (DefSchema::instance().is_handle(id->name))
             return id->name;
         return "unknown";
     }
@@ -339,29 +339,29 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
             if (is_simple_identifier && !obj_name.empty() && scope.find(obj_name) == scope.end())
             {
                 // Check if it's a handle type or enum - those are validated by schema lookup below
-                bool is_handle = SchemaLoader::instance().is_handle(obj_name);
+                bool is_handle = DefSchema::instance().is_handle(obj_name);
                 bool is_enum = is_enum_type(obj_name);
                 
                 // Check if obj_name is a valid type with a namespace mapping (e.g., DOMElement -> dom, System -> system)
                 // Also walk the inheritance chain (e.g., Canvas -> DOMElement means check canvas:: then dom::)
-                std::string snake_method = SchemaLoader::to_snake_case(method_name);
+                std::string snake_method = DefSchema::to_snake_case(method_name);
                 bool is_valid_schema_call = false;
                 
                 std::string current_type = obj_name;
                 while (!current_type.empty() && !is_valid_schema_call) {
-                    std::string type_ns = SchemaLoader::instance().get_namespace_for_type(current_type);
+                    std::string type_ns = DefSchema::instance().get_namespace_for_type(current_type);
                     if (!type_ns.empty()) {
-                        const auto *entry = SchemaLoader::instance().lookup(snake_method);
+                        const auto *entry = DefSchema::instance().lookup_func(snake_method);
                         if (entry && entry->ns == type_ns) {
                             // Found method in this namespace - but is it callable statically?
                             // Instance methods have a handle as first param and can't be called on the type name
-                            bool is_instance_method = !entry->params.empty() && 
-                                                      SchemaLoader::instance().is_handle(entry->params[0].type);
+                            bool is_instance_method = !entry->method->params.empty() && 
+                                                      DefSchema::instance().is_handle(entry->method->params[0].type);
                             
                             if (is_instance_method) {
                                 // Instance method called statically - error with helpful message
                                 std::cerr << "\033[1;31mError:\033[0m '" << method_name 
-                                          << "' is an instance method on '" << entry->params[0].type 
+                                          << "' is an instance method on '" << entry->method->params[0].type 
                                           << "' and cannot be called on '" << obj_name 
                                           << "'. Use instance." << method_name << "(...) instead at line " 
                                           << func->line << std::endl;
@@ -372,17 +372,10 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
                         }
                     }
                     // Walk up inheritance chain (e.g., Canvas -> DOMElement)
-                    // Check if current_type has a parent in HANDLE_INHERITANCE
                     std::string parent_type;
-                    if (SchemaLoader::instance().is_handle(current_type)) {
-                        // Try to find parent - is_assignable_to won't help directly, 
-                        // we need to check inheritance table
-                        for (const auto* kv = coi::HANDLE_INHERITANCE; kv->first != nullptr; ++kv) {
-                            if (current_type == kv->first) {
-                                parent_type = kv->second;
-                                break;
-                            }
-                        }
+                    auto* type_def = DefSchema::instance().lookup_type(current_type);
+                    if (type_def && !type_def->extends.empty()) {
+                        parent_type = type_def->extends;
                     }
                     current_type = parent_type;
                 }
@@ -424,12 +417,12 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
             }
         }
 
-        std::string snake_method = SchemaLoader::to_snake_case(method_name);
-        const auto *entry = SchemaLoader::instance().lookup(snake_method);
+        std::string snake_method = DefSchema::to_snake_case(method_name);
+        const auto *entry = DefSchema::instance().lookup_func(snake_method);
 
         if (entry)
         {
-            size_t expected_args = entry->params.size();
+            size_t expected_args = entry->method->params.size();
             size_t actual_args = func->args.size();
             size_t param_offset = 0;
 
@@ -439,10 +432,10 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
                 if (scope.count(obj_name))
                 {
                     // Only treat as implicit object if function actually expects a handle as first arg
-                    if (!entry->params.empty())
+                    if (!entry->method->params.empty())
                     {
-                        std::string first_param_type = entry->params[0].type;
-                        if (SchemaLoader::instance().is_handle(first_param_type))
+                        std::string first_param_type = entry->method->params[0].type;
+                        if (DefSchema::instance().is_handle(first_param_type))
                         {
                             std::string obj_type = scope.at(obj_name);
                             if (is_compatible_type(obj_type, first_param_type))
@@ -460,13 +453,13 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
                     bool is_valid_call = false;
                     
                     // Check if obj_name is a known handle type
-                    bool is_handle_type = SchemaLoader::instance().is_handle(obj_name);
+                    bool is_handle_type = DefSchema::instance().is_handle(obj_name);
                     
-                    if (!entry->params.empty() && SchemaLoader::instance().is_handle(entry->params[0].type))
+                    if (!entry->method->params.empty() && DefSchema::instance().is_handle(entry->method->params[0].type))
                     {
                         // Method expects a handle as first param (instance method)
                         // Only allow if obj_name matches the expected handle type
-                        if (is_handle_type && is_compatible_type(obj_name, entry->params[0].type))
+                        if (is_handle_type && is_compatible_type(obj_name, entry->method->params[0].type))
                         {
                             // Valid: DOMElement.createElement() where first param is DOMElement
                             is_valid_call = true;
@@ -475,7 +468,7 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
                         {
                             // Invalid: trying to call instance method statically with wrong type
                             std::cerr << "\033[1;31mError:\033[0m '" << method_name << "' is an instance method on '" 
-                                      << entry->params[0].type << "' and cannot be called on '" << obj_name 
+                                      << entry->method->params[0].type << "' and cannot be called on '" << obj_name 
                                       << "'. Use instance." << method_name << "(...) instead at line " << func->line << std::endl;
                             exit(1);
                         }
@@ -495,8 +488,8 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
                             // Case 1: namespace.method()
                             is_valid_call = true;
                         }
-                        else if (is_handle_type && !entry->return_type.empty() && 
-                                 is_compatible_type(entry->return_type, obj_name))
+                        else if (is_handle_type && !entry->method->return_type.empty() && 
+                                 is_compatible_type(entry->method->return_type, obj_name))
                         {
                             // Case 2: HandleType.method() where method returns that handle type
                             // This is a "shared def" / static factory method pattern
@@ -527,7 +520,7 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
             for (size_t i = 0; i < actual_args; ++i)
             {
                 std::string arg_type = infer_expression_type(func->args[i].get(), scope);
-                std::string expected_type = entry->params[i + param_offset].type;
+                std::string expected_type = entry->method->params[i + param_offset].type;
 
                 if (!is_compatible_type(arg_type, expected_type))
                 {
@@ -537,14 +530,14 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
                 }
             }
 
-            return entry->return_type.empty() ? "void" : entry->return_type;
+            return entry->method->return_type.empty() ? "void" : entry->method->return_type;
         }
         else
         {
             if (!obj_name.empty() && scope.count(obj_name))
             {
                 std::string type = scope.at(obj_name);
-                if (SchemaLoader::instance().is_handle(type))
+                if (DefSchema::instance().is_handle(type))
                 {
                     std::cerr << "\033[1;31mError:\033[0m Method '" << method_name << "' not found for type '" << type << "' at line " << func->line << std::endl;
                     exit(1);

@@ -1,0 +1,12 @@
+// Coi Built-in Float Type
+// 64-bit floating point (default, maps to f64 in WebAssembly)
+
+@builtin
+type float {
+    // No methods currently - use operators (+, -, *, /)
+}
+
+@builtin
+type float64{
+    // No methods currently - use operators (+, -, *, /)
+}

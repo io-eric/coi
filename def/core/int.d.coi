@@ -1,0 +1,7 @@
+// Coi Built-in Integer Type
+// 32-bit signed integer
+
+@builtin
+type int {
+    // No methods currently - use operators (+, -, *, /, %)
+}

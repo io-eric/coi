@@ -1,5 +1,5 @@
 #include "parser.h"
-#include "schema_loader.h"
+#include "def_parser.h"
 #include <stdexcept>
 #include <iostream>
 #include <limits>
@@ -36,7 +36,7 @@ std::unique_ptr<Expression> Parser::parse_expression(){
 
 std::unique_ptr<Expression> Parser::parse_ternary(){
     auto expr = parse_or();
-    
+
     if (current().type == TokenType::QUESTION) {
         advance(); // skip '?'
         auto true_expr = parse_expression();  // Allow nested ternary
@@ -44,7 +44,7 @@ std::unique_ptr<Expression> Parser::parse_ternary(){
         auto false_expr = parse_ternary();  // Right-associative
         expr = std::make_unique<TernaryOp>(std::move(expr), std::move(true_expr), std::move(false_expr));
     }
-    
+
     return expr;
 }
 
@@ -100,7 +100,7 @@ std::unique_ptr<Expression> Parser::parse_equality(){
 std::unique_ptr<Expression> Parser::parse_comparison(){
     auto left = parse_additive();
 
-    while(current().type == TokenType::LT || 
+    while(current().type == TokenType::LT ||
           (current().type == TokenType::GT && allow_gt_comparison) ||
             current().type == TokenType::LTE || current().type == TokenType::GTE){
         std::string op = current().value;
@@ -127,7 +127,7 @@ std::unique_ptr<Expression> Parser::parse_additive(){
 
 std::unique_ptr<Expression> Parser::parse_postfix() {
     auto expr = parse_primary();
-    
+
     while(true) {
         if (current().type == TokenType::PLUS_PLUS) {
             advance();
@@ -220,7 +220,7 @@ std::unique_ptr<Expression> Parser::parse_primary(){
         std::string name = current().value;
         int identifier_line = current().line;
         advance();
-        
+
         // Check for enum access: EnumName::Value
         if(current().type == TokenType::DOUBLE_COLON){
             advance();
@@ -228,13 +228,13 @@ std::unique_ptr<Expression> Parser::parse_primary(){
             expect(TokenType::IDENTIFIER, "Expected enum value name after '::'");
             return std::make_unique<EnumAccess>(name, value_name);
         }
-        
+
         std::unique_ptr<Expression> expr = std::make_unique<Identifier>(name);
 
         while(true) {
             if(current().type == TokenType::LPAREN){
                 advance();
-                
+
                 // Check if this is component construction (named args) or function call (positional args)
                 // Component construction: Name(&param: value) or Name(param: value)
                 // Function call: Name(value, value, ...)
@@ -249,20 +249,20 @@ std::unique_ptr<Expression> Parser::parse_primary(){
                         is_component_construction = true;
                     }
                 }
-                
+
                 if (is_component_construction) {
                     // Parse component construction with named arguments
                     auto comp_expr = std::make_unique<ComponentConstruction>(expr->to_webcc());
-                    
+
                     while (current().type != TokenType::RPAREN) {
                         ComponentArg arg;
-                        
+
                         // Check for reference prefix &
                         if (current().type == TokenType::AMPERSAND) {
                             arg.is_reference = true;
                             advance();
                         }
-                        
+
                         // Parameter name (allow 'key' keyword as param name)
                         arg.name = current().value;
                         if (current().type == TokenType::IDENTIFIER || current().type == TokenType::KEY) {
@@ -271,12 +271,12 @@ std::unique_ptr<Expression> Parser::parse_primary(){
                             throw std::runtime_error("Expected parameter name at line " + std::to_string(current().line));
                         }
                         expect(TokenType::COLON, "Expected ':' after parameter name");
-                        
+
                         // Value
                         arg.value = parse_expression();
-                        
+
                         comp_expr->args.push_back(std::move(arg));
-                        
+
                         if (current().type == TokenType::COMMA) {
                             advance();
                         }
@@ -287,7 +287,7 @@ std::unique_ptr<Expression> Parser::parse_primary(){
                     // Regular function call with positional arguments
                     auto call = std::make_unique<FunctionCall>(expr->to_webcc());
                     call->line = identifier_line;
-                    
+
                     while(current().type != TokenType::RPAREN){
                         call->args.push_back(parse_expression());
                         if(current().type == TokenType::COMMA) advance();
@@ -300,7 +300,7 @@ std::unique_ptr<Expression> Parser::parse_primary(){
                 advance();
                 std::string member = current().value;
                 expect(TokenType::IDENTIFIER, "Expected member name");
-                
+
                 // Check for Component.EnumName::Value syntax for shared enums
                 if(current().type == TokenType::DOUBLE_COLON){
                     advance();
@@ -309,7 +309,7 @@ std::unique_ptr<Expression> Parser::parse_primary(){
                     // name is the component name, member is the enum name
                     return std::make_unique<EnumAccess>(member, value_name, name);
                 }
-                
+
                 expr = std::make_unique<MemberAccess>(std::move(expr), member);
             }
             else if(current().type == TokenType::LBRACKET){
@@ -329,37 +329,37 @@ std::unique_ptr<Expression> Parser::parse_primary(){
     // Array literal: [expr, expr, ...] or repeat initializer: [value; count]
     if(current().type == TokenType::LBRACKET){
         advance();
-        
+
         // Empty array
         if(current().type == TokenType::RBRACKET){
             advance();
             return std::make_unique<ArrayLiteral>();
         }
-        
+
         // Parse first expression
         auto first_expr = parse_expression();
-        
+
         // Check for repeat initializer syntax: [value; count]
         if(current().type == TokenType::SEMICOLON){
             advance();
             auto repeat = std::make_unique<ArrayRepeatLiteral>();
             repeat->value = std::move(first_expr);
-            
+
             // Count must be an integer literal (compile-time constant)
             if (current().type != TokenType::INT_LITERAL) {
                 throw std::runtime_error("Array repeat count must be an integer literal at line " + std::to_string(current().line));
             }
             repeat->count = std::stoi(current().value);
             advance();
-            
+
             expect(TokenType::RBRACKET, "Expected ']'");
             return repeat;
         }
-        
+
         // Regular array literal
         auto arr = std::make_unique<ArrayLiteral>();
         arr->elements.push_back(std::move(first_expr));
-        
+
         while(current().type == TokenType::COMMA){
             advance();
             if(current().type == TokenType::RBRACKET) break; // Allow trailing comma
@@ -397,11 +397,11 @@ std::unique_ptr<Statement> Parser::parse_statement(){
         expect(TokenType::LPAREN, "Expected '('");
         auto cond = parse_expression();
         expect(TokenType::RPAREN, "Expected ')'");
-        
+
         auto ifStmt = std::make_unique<IfStatement>();
         ifStmt->condition = std::move(cond);
         ifStmt->then_branch = parse_statement();
-        
+
         if(match(TokenType::ELSE)){
             ifStmt->else_branch = parse_statement();
         }
@@ -411,15 +411,15 @@ std::unique_ptr<Statement> Parser::parse_statement(){
     // For (three syntaxes: traditional, range-based, and foreach)
     if(current().type == TokenType::FOR){
         advance();
-        
+
         // Check for range-based or foreach syntax: for i in start:end { } OR for e in array { }
         if(current().type == TokenType::IDENTIFIER && peek().type == TokenType::IN) {
             std::string var_name = current().value;
             advance(); // skip identifier
             advance(); // skip 'in'
-            
+
             auto first_expr = parse_expression();
-            
+
             // If we see ':', it's a range: for i in start:end
             if(current().type == TokenType::COLON) {
                 advance(); // skip ':'
@@ -430,7 +430,7 @@ std::unique_ptr<Statement> Parser::parse_statement(){
                 rangeFor->body = parse_statement();
                 return rangeFor;
             }
-            
+
             // Otherwise it's foreach: for e in array
             auto forEach = std::make_unique<ForEachStatement>();
             forEach->var_name = var_name;
@@ -438,7 +438,7 @@ std::unique_ptr<Statement> Parser::parse_statement(){
             forEach->body = parse_statement();
             return forEach;
         }
-        
+
         throw std::runtime_error("Unexpected token after 'for'. Expected range 'i in start:end' or foreach 'i in array'. C-style for loops are not supported.");
     }
 
@@ -470,7 +470,7 @@ std::unique_ptr<Statement> Parser::parse_statement(){
         // Declaration: Type Name ... | Type[] Name ... | Type& Name ...
         // Assignment:  Name = ... | Name[index] = ...
         // Call:        Name(...)
-        
+
         Token next = peek(1);
         if (next.type == TokenType::IDENTIFIER) {
             is_type = true; // "Type Name"
@@ -531,7 +531,7 @@ std::unique_ptr<Statement> Parser::parse_statement(){
         size_t saved_pos = pos;
         advance(); // skip identifier
         advance(); // skip '['
-        
+
         // Skip to find matching ']'
         int bracket_depth = 1;
         while (bracket_depth > 0 && current().type != TokenType::END_OF_FILE) {
@@ -539,7 +539,7 @@ std::unique_ptr<Statement> Parser::parse_statement(){
             else if (current().type == TokenType::RBRACKET) bracket_depth--;
             advance();
         }
-        
+
         // Check if followed by assignment operator (including compound assignments)
         TokenType after_bracket = current().type;
         bool is_index_assign = (after_bracket == TokenType::ASSIGN ||
@@ -548,7 +548,7 @@ std::unique_ptr<Statement> Parser::parse_statement(){
                                 after_bracket == TokenType::STAR_ASSIGN ||
                                 after_bracket == TokenType::SLASH_ASSIGN ||
                                 after_bracket == TokenType::PERCENT_ASSIGN);
-        
+
         // Check if followed by .member = value (member assignment on array element)
         bool is_index_member_assign = false;
         if (after_bracket == TokenType::DOT) {
@@ -566,51 +566,51 @@ std::unique_ptr<Statement> Parser::parse_statement(){
                                       assign_op == TokenType::SLASH_ASSIGN ||
                                       assign_op == TokenType::PERCENT_ASSIGN);
         }
-        
+
         // Restore position
         pos = saved_pos;
-        
+
         if (is_index_assign) {
             advance(); // skip identifier
             expect(TokenType::LBRACKET, "Expected '['");
             auto index_expr = parse_expression();
             expect(TokenType::RBRACKET, "Expected ']'");
-            
+
             TokenType opType = current().type;
             advance(); // skip assignment operator
-            
+
             auto idx_assign = std::make_unique<IndexAssignment>();
             idx_assign->array = std::make_unique<Identifier>(name);
             idx_assign->index = std::move(index_expr);
             idx_assign->value = parse_expression();
-            
+
             // Set compound operator if not plain assignment
             if (opType == TokenType::PLUS_ASSIGN) idx_assign->compound_op = "+";
             else if (opType == TokenType::MINUS_ASSIGN) idx_assign->compound_op = "-";
             else if (opType == TokenType::STAR_ASSIGN) idx_assign->compound_op = "*";
             else if (opType == TokenType::SLASH_ASSIGN) idx_assign->compound_op = "/";
             else if (opType == TokenType::PERCENT_ASSIGN) idx_assign->compound_op = "%";
-            
+
             expect(TokenType::SEMICOLON, "Expected ';'");
             return idx_assign;
         }
-        
+
         if (is_index_member_assign) {
             // Parse arr[i].member = value as MemberAssignment with IndexAccess as object
             advance(); // skip identifier
             expect(TokenType::LBRACKET, "Expected '['");
             auto index_expr = parse_expression();
             expect(TokenType::RBRACKET, "Expected ']'");
-            
+
             // Build object as IndexAccess
             std::unique_ptr<Expression> obj_expr = std::make_unique<IndexAccess>(
                 std::make_unique<Identifier>(name), std::move(index_expr));
-            
+
             // Now parse the member chain
             expect(TokenType::DOT, "Expected '.'");
             std::string last_member = current().value;
             expect(TokenType::IDENTIFIER, "Expected member name");
-            
+
             // Handle chained member access (arr[i].a.b = value)
             while (current().type == TokenType::DOT) {
                 advance(); // skip '.'
@@ -618,22 +618,22 @@ std::unique_ptr<Statement> Parser::parse_statement(){
                 last_member = current().value;
                 expect(TokenType::IDENTIFIER, "Expected member name");
             }
-            
+
             TokenType opType = current().type;
             advance(); // skip assignment operator
-            
+
             auto member_assign = std::make_unique<MemberAssignment>();
             member_assign->object = std::move(obj_expr);
             member_assign->member = last_member;
             member_assign->value = parse_expression();
-            
+
             // Set compound operator if not plain assignment
             if (opType == TokenType::PLUS_ASSIGN) member_assign->compound_op = "+";
             else if (opType == TokenType::MINUS_ASSIGN) member_assign->compound_op = "-";
             else if (opType == TokenType::STAR_ASSIGN) member_assign->compound_op = "*";
             else if (opType == TokenType::SLASH_ASSIGN) member_assign->compound_op = "/";
             else if (opType == TokenType::PERCENT_ASSIGN) member_assign->compound_op = "%";
-            
+
             expect(TokenType::SEMICOLON, "Expected ';'");
             return member_assign;
         }
@@ -644,14 +644,14 @@ std::unique_ptr<Statement> Parser::parse_statement(){
         // Look ahead to find if this is a member assignment
         size_t saved_pos = pos;
         advance(); // skip identifier
-        
+
         // Track the chain of member accesses
         while (current().type == TokenType::DOT) {
             advance(); // skip '.'
             if (current().type != TokenType::IDENTIFIER) break;
             advance(); // skip member name
         }
-        
+
         // Check if followed by assignment operator
         TokenType assign_op = current().type;
         bool is_member_assign = (assign_op == TokenType::ASSIGN ||
@@ -660,19 +660,19 @@ std::unique_ptr<Statement> Parser::parse_statement(){
                                  assign_op == TokenType::STAR_ASSIGN ||
                                  assign_op == TokenType::SLASH_ASSIGN ||
                                  assign_op == TokenType::PERCENT_ASSIGN);
-        
+
         // Restore position
         pos = saved_pos;
-        
+
         if (is_member_assign) {
             // Parse the object part (all but the last member)
             std::unique_ptr<Expression> obj_expr = std::make_unique<Identifier>(current().value);
             advance(); // skip first identifier
             advance(); // skip first '.'
-            
+
             std::string last_member = current().value;
             expect(TokenType::IDENTIFIER, "Expected member name");
-            
+
             // Handle chained member access (a.b.c = value means object is a.b, member is c)
             while (current().type == TokenType::DOT) {
                 advance(); // skip '.'
@@ -681,47 +681,47 @@ std::unique_ptr<Statement> Parser::parse_statement(){
                 last_member = current().value;
                 expect(TokenType::IDENTIFIER, "Expected member name");
             }
-            
+
             TokenType opType = current().type;
             advance(); // skip assignment operator
-            
+
             auto member_assign = std::make_unique<MemberAssignment>();
             member_assign->object = std::move(obj_expr);
             member_assign->member = last_member;
             member_assign->value = parse_expression();
-            
+
             // Set compound operator if not plain assignment
             if (opType == TokenType::PLUS_ASSIGN) member_assign->compound_op = "+";
             else if (opType == TokenType::MINUS_ASSIGN) member_assign->compound_op = "-";
             else if (opType == TokenType::STAR_ASSIGN) member_assign->compound_op = "*";
             else if (opType == TokenType::SLASH_ASSIGN) member_assign->compound_op = "/";
             else if (opType == TokenType::PERCENT_ASSIGN) member_assign->compound_op = "%";
-            
+
             expect(TokenType::SEMICOLON, "Expected ';'");
             return member_assign;
         }
     }
 
     // Assignment
-    if(current().type == TokenType::IDENTIFIER && 
-        (peek().type == TokenType::ASSIGN || 
-        peek().type == TokenType::PLUS_ASSIGN || 
+    if(current().type == TokenType::IDENTIFIER &&
+        (peek().type == TokenType::ASSIGN ||
+        peek().type == TokenType::PLUS_ASSIGN ||
         peek().type == TokenType::MINUS_ASSIGN ||
         peek().type == TokenType::STAR_ASSIGN ||
         peek().type == TokenType::SLASH_ASSIGN ||
         peek().type == TokenType::PERCENT_ASSIGN)){
-        
+
         std::string name = current().value;
         advance();
-        
+
         TokenType opType = current().type;
         advance(); // skip op
 
         auto assign = std::make_unique<Assignment>();
         assign->name = name;
-        
+
         auto val = parse_expression();
-        
+
         if (opType == TokenType::PLUS_ASSIGN) {
             auto left = std::make_unique<Identifier>(name);
             auto binOp = std::make_unique<BinaryOp>(std::move(left), "+", std::move(val));
@@ -776,7 +776,7 @@ std::unique_ptr<StructDef> Parser::parse_struct(){
     while(current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
         std::string type = current().value;
         // Handle types
-        if(current().type == TokenType::INT || current().type == TokenType::STRING || 
+        if(current().type == TokenType::INT || current().type == TokenType::STRING ||
             current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
             current().type == TokenType::BOOL ||
             current().type == TokenType::IDENTIFIER){
@@ -784,7 +784,7 @@ std::unique_ptr<StructDef> Parser::parse_struct(){
         } else {
             throw std::runtime_error("Expected type in struct");
         }
-        
+
         std::string fieldName = current().value;
         expect(TokenType::IDENTIFIER, "Expected field name");
         expect(TokenType::SEMICOLON, "Expected ';'");
@@ -808,7 +808,7 @@ std::unique_ptr<EnumDef> Parser::parse_enum(){
         std::string valueName = current().value;
         expect(TokenType::IDENTIFIER, "Expected enum value name");
         def->values.push_back(valueName);
-        
+
         // Allow optional comma between values
         if(current().type == TokenType::COMMA){
             advance();
@@ -822,20 +822,20 @@ std::string Parser::parse_style_block() {
     expect(TokenType::LBRACE, "Expected '{'");
     std::string css = "";
     int brace_count = 1;
-    
+
     Token prev = tokens[pos-1]; // The '{' we just consumed
-    
+
     while (current().type != TokenType::END_OF_FILE) {
         if (current().type == TokenType::RBRACE && brace_count == 1) {
             advance(); // Consume closing '}'
             break;
         }
-        
+
         if (current().type == TokenType::LBRACE) brace_count++;
         if (current().type == TokenType::RBRACE) brace_count--;
-        
+
         Token tok = current();
-        
+
         int prev_len = prev.value.length();
         if (prev.type == TokenType::STRING_LITERAL) prev_len += 2;
 
@@ -844,13 +844,13 @@ std::string Parser::parse_style_block() {
         } else if (tok.column > prev.column + prev_len) {
             css += " ";
         }
-        
+
         if (tok.type == TokenType::STRING_LITERAL) {
                 css += "\"" + tok.value + "\"";
         } else {
                 css += tok.value;
         }
-        
+
         prev = tok;
         advance();
     }
@@ -860,29 +860,29 @@ std::string Parser::parse_style_block() {
 std::unique_ptr<ASTNode> Parser::parse_html_element(){
     expect(TokenType::LT, "Expected '<'");
     int start_line = current().line;
-    
+
     // Check for component variable syntax: <{varName} props... />
     // Used to project component variables into the view
     if (current().type == TokenType::LBRACE) {
         advance(); // consume '{'
-        
+
         // Parse the expression (typically just an identifier)
         auto expr = parse_expression();
         expect(TokenType::RBRACE, "Expected '}' after component variable expression");
-        
+
         // Get the variable name from the expression
         std::string member_name;
         std::string component_type;
-        
+
         if (auto* ident = dynamic_cast<Identifier*>(expr.get())) {
             member_name = ident->name;
             // Look up the component type
             auto it = component_member_types.find(member_name);
             if (it != component_member_types.end()) {
                 component_type = it->second;
-                
+
                 // Error if type is a built-in handle (not a component)
-                if (SchemaLoader::instance().is_handle(component_type)) {
+                if (DefSchema::instance().is_handle(component_type)) {
                     throw std::runtime_error("Variable '" + member_name + "' has type '" + component_type + "' which is a built-in type, not a component. Usage: <{" + member_name + "}/> is only for components at line " + std::to_string(start_line));
                 }
             } else {
@@ -891,13 +891,13 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
         } else {
             throw std::runtime_error("Expected identifier in <{...}/> syntax at line " + std::to_string(start_line));
         }
-        
+
         auto comp = std::make_unique<ComponentInstantiation>();
         comp->line = start_line;
         comp->is_member_reference = true;
         comp->member_name = member_name;
         comp->component_name = component_type;
-        
+
         // Parse props (same as regular component props)
         while(current().type == TokenType::IDENTIFIER || current().type == TokenType::AMPERSAND){
             bool is_ref_prop = false;
@@ -906,7 +906,7 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
             }
             std::string prop_name = current().value;
             advance();
-            
+
             std::unique_ptr<Expression> prop_value;
             if(match(TokenType::ASSIGN)){
                 if(current().type == TokenType::STRING_LITERAL){
@@ -943,14 +943,14 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
             cprop.is_reference = is_ref_prop;
             comp->props.push_back(std::move(cprop));
         }
-        
+
         // Must be self-closing: <{var}/>
         expect(TokenType::SLASH, "Expected '/>' - component variable projection must be self-closing: <{" + member_name + "}/>");
         expect(TokenType::GT, "Expected '>'");
-        
+
         return comp;
     }
-    
+
     std::string tag = current().value;
     expect(TokenType::IDENTIFIER, "Expected tag name");
 
@@ -958,10 +958,10 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
     // Lowercase tags are always HTML elements
     // Use <{var}/> syntax for component variables
     bool is_component = std::isupper(tag[0]);
-    
+
     if(is_component){
         // Error if tag is a built-in handle type
-        if (SchemaLoader::instance().is_handle(tag)) {
+        if (DefSchema::instance().is_handle(tag)) {
             throw std::runtime_error("Type '" + tag + "' cannot be used as a component tag at line " + std::to_string(start_line));
         }
 
@@ -977,7 +977,7 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
             }
             std::string prop_name = current().value;
             advance();
-            
+
             std::unique_ptr<Expression> prop_value;
             if(match(TokenType::ASSIGN)){
                 if(current().type == TokenType::STRING_LITERAL){
@@ -1044,10 +1044,10 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
             expect(TokenType::RBRACE, "Expected '}' after variable name");
             continue;
         }
-        
+
         std::string attrName = current().value;
         advance();
-        
+
         // Handle hyphenated attribute names (e.g., fill-opacity, stroke-width, data-id)
         while(current().type == TokenType::MINUS && peek().type == TokenType::IDENTIFIER){
             attrName += "-";
@@ -1055,7 +1055,7 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
             attrName += current().value;
             advance(); // consume identifier part
         }
-        
+
         std::unique_ptr<Expression> attrValue;
         if(match(TokenType::ASSIGN)){
             if(current().type == TokenType::STRING_LITERAL){
@@ -1109,19 +1109,19 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
             bool first = true;
             Token prev_token = current();
             // Text continues until we hit '<' or '{'
-            while(current().type != TokenType::LT && current().type != TokenType::LBRACE && 
+            while(current().type != TokenType::LT && current().type != TokenType::LBRACE &&
                   current().type != TokenType::END_OF_FILE){
                 if(!first){
                     int prev_len = prev_token.value.length();
                     if (prev_token.type == TokenType::STRING_LITERAL) prev_len += 2;
-                    
+
                     if (prev_token.line != current().line || prev_token.column + prev_len != current().column) {
                         text += " ";
                     }
                 }
                 if(current().type == TokenType::STRING_LITERAL) text += current().value;
                 else text += current().value;
-                
+
                 prev_token = current();
                 advance();
                 first = false;
@@ -1129,7 +1129,7 @@ std::unique_ptr<ASTNode> Parser::parse_html_element(){
             if(!text.empty()){
                 el->children.push_back(std::make_unique<TextNode>(text));
             }
-            
+
             if(current().type == TokenType::END_OF_FILE) break;
         }
     }
@@ -1150,7 +1150,7 @@ std::unique_ptr<ASTNode> Parser::parse_view_node() {
     if (current().type != TokenType::LT) {
         throw std::runtime_error("Expected '<' at line " + std::to_string(current().line));
     }
-    
+
     // Check for special tags
     if (peek().type == TokenType::IF) {
         return parse_view_if();
@@ -1167,15 +1167,15 @@ std::unique_ptr<ViewIfStatement> Parser::parse_view_if() {
     //     or: <if condition> ... </if>
     auto viewIf = std::make_unique<ViewIfStatement>();
     viewIf->line = current().line;
-    
+
     expect(TokenType::LT, "Expected '<'");
     expect(TokenType::IF, "Expected 'if'");
-    
+
     // Parse condition (everything until '>')
     // Use parse_expression_no_gt so > is not treated as comparison
     viewIf->condition = parse_expression_no_gt();
     expect(TokenType::GT, "Expected '>'");
-    
+
     // Parse then children until we hit </if> or <else>
     while (current().type != TokenType::END_OF_FILE) {
         if (current().type == TokenType::LT) {
@@ -1190,13 +1190,13 @@ std::unique_ptr<ViewIfStatement> Parser::parse_view_if() {
         }
         viewIf->then_children.push_back(parse_view_node());
     }
-    
+
     // Check for <else>
     if (current().type == TokenType::LT && peek().type == TokenType::ELSE) {
         advance(); // <
         advance(); // else
         expect(TokenType::GT, "Expected '>'");
-        
+
         // Parse else children until </else>
         while (current().type != TokenType::END_OF_FILE) {
             if (current().type == TokenType::LT && peek().type == TokenType::SLASH && peek(2).type == TokenType::ELSE) {
@@ -1204,20 +1204,20 @@ std::unique_ptr<ViewIfStatement> Parser::parse_view_if() {
             }
             viewIf->else_children.push_back(parse_view_node());
         }
-        
+
         // </else>
         expect(TokenType::LT, "Expected '<'");
         expect(TokenType::SLASH, "Expected '/'");
         expect(TokenType::ELSE, "Expected 'else'");
         expect(TokenType::GT, "Expected '>'");
     }
-    
+
     // </if>
     expect(TokenType::LT, "Expected '<'");
     expect(TokenType::SLASH, "Expected '/'");
     expect(TokenType::IF, "Expected 'if'");
     expect(TokenType::GT, "Expected '>'");
-    
+
     return viewIf;
 }
 
@@ -1225,30 +1225,30 @@ std::unique_ptr<ASTNode> Parser::parse_view_for() {
     // Syntax: <for var in start:end> ... </for>
     //     or: <for var in iterable> ... </for>
     int start_line = current().line;
-    
+
     expect(TokenType::LT, "Expected '<'");
     expect(TokenType::FOR, "Expected 'for'");
-    
+
     std::string var_name = current().value;
     expect(TokenType::IDENTIFIER, "Expected loop variable name");
     expect(TokenType::IN, "Expected 'in'");
-    
+
     // Use parse_expression_no_gt so > is not treated as comparison
     auto first_expr = parse_expression_no_gt();
-    
+
     // Check if this is a range (has colon) or foreach
     if (current().type == TokenType::COLON) {
         // Range: <for i in 0:10>
         advance();
         auto end_expr = parse_expression_no_gt();
         expect(TokenType::GT, "Expected '>'");
-        
+
         auto viewFor = std::make_unique<ViewForRangeStatement>();
         viewFor->line = start_line;
         viewFor->var_name = var_name;
         viewFor->start = std::move(first_expr);
         viewFor->end = std::move(end_expr);
-        
+
         // Parse children until </for>
         while (current().type != TokenType::END_OF_FILE) {
             if (current().type == TokenType::LT && peek().type == TokenType::SLASH && peek(2).type == TokenType::FOR) {
@@ -1256,13 +1256,13 @@ std::unique_ptr<ASTNode> Parser::parse_view_for() {
             }
             viewFor->children.push_back(parse_view_node());
         }
-        
+
         // </for>
         expect(TokenType::LT, "Expected '<'");
         expect(TokenType::SLASH, "Expected '/'");
         expect(TokenType::FOR, "Expected 'for'");
         expect(TokenType::GT, "Expected '>'");
-        
+
         return viewFor;
     } else {
         // ForEach: <for item in items key={item.id}>
@@ -1270,7 +1270,7 @@ std::unique_ptr<ASTNode> Parser::parse_view_for() {
         viewForEach->line = start_line;
         viewForEach->var_name = var_name;
         viewForEach->iterable = std::move(first_expr);
-        
+
         // Require key attribute for foreach loops
         if (current().type != TokenType::KEY) {
             throw std::runtime_error("Expected 'key' for foreach loop at line " + std::to_string(start_line) + ". Use: <for " + var_name + " in array key={" + var_name + ".id}>");
@@ -1280,9 +1280,9 @@ std::unique_ptr<ASTNode> Parser::parse_view_for() {
         expect(TokenType::LBRACE, "Expected '{' for key expression");
         viewForEach->key_expr = parse_expression();
         expect(TokenType::RBRACE, "Expected '}' after key expression");
-        
+
         expect(TokenType::GT, "Expected '>'");
-        
+
         // If iterating over a component array, temporarily add loop var to component_member_types
         // so that <var_name/> syntax works inside the loop
         std::string loop_var_comp_type;
@@ -1293,7 +1293,7 @@ std::unique_ptr<ASTNode> Parser::parse_view_for() {
                 component_member_types[var_name] = loop_var_comp_type;
             }
         }
-        
+
         // Parse children until </for>
         while (current().type != TokenType::END_OF_FILE) {
             if (current().type == TokenType::LT && peek().type == TokenType::SLASH && peek(2).type == TokenType::FOR) {
@@ -1301,25 +1301,25 @@ std::unique_ptr<ASTNode> Parser::parse_view_for() {
             }
             viewForEach->children.push_back(parse_view_node());
         }
-        
+
         // Remove the temporary loop variable from component_member_types
         if (!loop_var_comp_type.empty()) {
             component_member_types.erase(var_name);
         }
-        
+
         // </for>
         expect(TokenType::LT, "Expected '<'");
         expect(TokenType::SLASH, "Expected '/'");
         expect(TokenType::FOR, "Expected 'for'");
         expect(TokenType::GT, "Expected '>'");
-        
+
         return viewForEach;
     }
 }
 
 Component Parser::parse_component(){
     Component comp;
-    
+
     // Clear component member types from previous component
     component_member_types.clear();
     component_array_types.clear();
@@ -1329,7 +1329,7 @@ Component Parser::parse_component(){
     comp.line = current().line;
 
     // Check for collisions with built-in types
-    if (SchemaLoader::instance().is_handle(comp.name)) {
+    if (DefSchema::instance().is_handle(comp.name)) {
         throw std::runtime_error("Component name '" + comp.name + "' conflicts with a built-in type name at line " + std::to_string(current().line));
     }
 
@@ -1337,26 +1337,26 @@ Component Parser::parse_component(){
     if (!comp.name.empty() && !std::isupper(comp.name[0])) {
         throw std::runtime_error("Component name '" + comp.name + "' must start with an uppercase letter at line " + std::to_string(current().line));
     }
-    
+
     expect(TokenType::IDENTIFIER, "Expected component name");
-    
+
     // Parse component parameters (constructor-style): component Name(pub mut int& value = 0)
     if (match(TokenType::LPAREN)) {
         while (current().type != TokenType::RPAREN) {
             auto param = std::make_unique<ComponentParam>();
-            
+
             // Check for pub keyword (makes param accessible from outside)
             if (current().type == TokenType::PUB) {
                 param->is_public = true;
                 advance();
             }
-            
+
             // Check for mut keyword
             if (current().type == TokenType::MUT) {
                 param->is_mutable = true;
                 advance();
             }
-            
+
             // Parse type
             if (current().type == TokenType::DEF) {
                 // Function parameter: def onclick : void  OR  def onRemove(int) : void
@@ -1364,32 +1364,32 @@ Component Parser::parse_component(){
                 param->is_callback = true;
                 param->name = current().value;
                 expect(TokenType::IDENTIFIER, "Expected param name");
-                
+
                 // Check for optional parameter list: (type1, type2, ...)
                 std::vector<std::string> callback_params;
                 if (current().type == TokenType::LPAREN) {
                     advance();
                     while (current().type != TokenType::RPAREN && current().type != TokenType::END_OF_FILE) {
                         std::string param_type = current().value;
-                        if(current().type == TokenType::INT || current().type == TokenType::STRING || 
+                        if(current().type == TokenType::INT || current().type == TokenType::STRING ||
                             current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
-                            current().type == TokenType::BOOL || 
+                            current().type == TokenType::BOOL ||
                             current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
                             advance();
                         } else {
                             throw std::runtime_error("Expected parameter type in callback definition");
                         }
-                        
+
                         // Handle array type
                         if(current().type == TokenType::LBRACKET){
                             advance();
                             expect(TokenType::RBRACKET, "Expected ']'");
                             param_type += "[]";
                         }
-                        
+
                         callback_params.push_back(param_type);
                         param->callback_param_types.push_back(param_type);
-                        
+
                         if (current().type == TokenType::COMMA) {
                             advance();
                         } else {
@@ -1398,19 +1398,19 @@ Component Parser::parse_component(){
                     }
                     expect(TokenType::RPAREN, "Expected ')' after callback parameters");
                 }
-                
+
                 expect(TokenType::COLON, "Expected ':'");
-                
+
                 std::string retType = current().value;
-                if(current().type == TokenType::INT || current().type == TokenType::STRING || 
+                if(current().type == TokenType::INT || current().type == TokenType::STRING ||
                     current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
-                    current().type == TokenType::BOOL || 
+                    current().type == TokenType::BOOL ||
                     current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
                     advance();
                 } else {
                     throw std::runtime_error("Expected return type");
                 }
-                
+
                 // Build the webcc::function type with parameter types
                 std::string params_str;
                 for (size_t i = 0; i < callback_params.size(); ++i) {
@@ -1420,46 +1420,46 @@ Component Parser::parse_component(){
                 param->type = "webcc::function<" + retType + "(" + params_str + ")>";
             } else {
                 param->type = current().value;
-                if(current().type == TokenType::INT || current().type == TokenType::STRING || 
+                if(current().type == TokenType::INT || current().type == TokenType::STRING ||
                     current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
-                    current().type == TokenType::BOOL || 
+                    current().type == TokenType::BOOL ||
                     current().type == TokenType::IDENTIFIER || current().type == TokenType::VOID){
                     advance();
                 } else {
                     throw std::runtime_error("Expected param type");
                 }
-                
+
                 // Handle reference type
                 if(current().type == TokenType::AMPERSAND){
                     param->is_reference = true;
                     advance();
                 }
-                
+
                 // Handle array type
                 if(current().type == TokenType::LBRACKET){
                     advance();
                     expect(TokenType::RBRACKET, "Expected ']'");
                     param->type += "[]";
                 }
-                
+
                 param->name = current().value;
                 expect(TokenType::IDENTIFIER, "Expected param name");
             }
-            
+
             // Parse default value
             if(match(TokenType::ASSIGN)){
                 param->default_value = parse_expression();
             }
-            
+
             comp.params.push_back(std::move(param));
-            
+
             if (current().type == TokenType::COMMA) {
                 advance();
             }
         }
         expect(TokenType::RPAREN, "Expected ')'");
     }
-    
+
     expect(TokenType::LBRACE, "Expected '{'");
 
     // Parse state variables and methods
@@ -1467,19 +1467,19 @@ Component Parser::parse_component(){
         bool is_public = false;
         bool is_mutable = false;
         bool is_shared = false;
-        
+
         // Check for shared keyword (for enums)
         if (current().type == TokenType::SHARED) {
             is_shared = true;
             advance();
         }
-        
+
         // Check for pub keyword
         if (current().type == TokenType::PUB) {
             is_public = true;
             advance();
         }
-        
+
         // Check for mut keyword
         if (current().type == TokenType::MUT) {
             is_mutable = true;
@@ -1487,15 +1487,15 @@ Component Parser::parse_component(){
         }
 
         // Variable declaration
-        if(current().type == TokenType::INT || current().type == TokenType::STRING || 
+        if(current().type == TokenType::INT || current().type == TokenType::STRING ||
             current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
-            current().type == TokenType::BOOL || 
+            current().type == TokenType::BOOL ||
             current().type == TokenType::IDENTIFIER){
             auto var_decl = std::make_unique<VarDeclaration>();
             var_decl->type = current().value;
             var_decl->is_public = is_public;
             advance();
-            
+
             // Handle Component.EnumName type syntax for shared enums
             if(current().type == TokenType::DOT){
                 advance();
@@ -1529,11 +1529,11 @@ Component Parser::parse_component(){
 
             // Track component-type members for view parsing (e.g., "mut Test a;" -> can use <a/> in view)
             // Component types start with uppercase and are not arrays
-            if (!var_decl->type.empty() && std::isupper(var_decl->type[0]) && 
+            if (!var_decl->type.empty() && std::isupper(var_decl->type[0]) &&
                 var_decl->type.find('[') == std::string::npos) {
                 component_member_types[var_decl->name] = var_decl->type;
             }
-            
+
             // Track component array types (e.g., "Row[] rows" -> can use <row/> in for loops)
             if (!var_decl->type.empty() && var_decl->type.ends_with("[]")) {
                 std::string elem_type = var_decl->type.substr(0, var_decl->type.length() - 2);
@@ -1569,7 +1569,7 @@ Component Parser::parse_component(){
             func.name  = current().value;
             expect(TokenType::IDENTIFIER, "Expected function name");
             expect(TokenType::LPAREN, "Expected '('");
-            
+
             // Parse parameters
             while(current().type != TokenType::RPAREN){
                 bool is_mutable = false;
@@ -1579,9 +1579,9 @@ Component Parser::parse_component(){
                 }
 
                 std::string paramType = current().value;
-                if(current().type == TokenType::INT || current().type == TokenType::FLOAT || 
+                if(current().type == TokenType::INT || current().type == TokenType::FLOAT ||
                     current().type == TokenType::FLOAT32 ||
-                    current().type == TokenType::STRING || current().type == TokenType::BOOL || 
+                    current().type == TokenType::STRING || current().type == TokenType::BOOL ||
                     current().type == TokenType::IDENTIFIER){
                     advance();
                 } else {
@@ -1601,7 +1601,7 @@ Component Parser::parse_component(){
                 } else {
                     throw std::runtime_error("Expected parameter name at line " + std::to_string(current().line));
                 }
-                
+
                 func.params.push_back({paramType, paramName, is_mutable, is_reference});
 
                 if(current().type == TokenType::COMMA){
@@ -1661,7 +1661,7 @@ Component Parser::parse_component(){
             FunctionDef func;
             func.name = "tick";
             func.return_type = "void";
-            
+
             // Parameters are optional - tick {} or tick(float dt) {}
             if(current().type == TokenType::LPAREN) {
                 advance();
@@ -1674,9 +1674,9 @@ Component Parser::parse_component(){
                     }
 
                     std::string paramType = current().value;
-                    if(current().type == TokenType::INT || current().type == TokenType::FLOAT || 
+                    if(current().type == TokenType::INT || current().type == TokenType::FLOAT ||
                         current().type == TokenType::FLOAT32 ||
-                        current().type == TokenType::STRING || current().type == TokenType::BOOL || 
+                        current().type == TokenType::STRING || current().type == TokenType::BOOL ||
                         current().type == TokenType::IDENTIFIER){
                         advance();
                     } else {
@@ -1696,7 +1696,7 @@ Component Parser::parse_component(){
                     } else {
                         throw std::runtime_error("Expected parameter name at line " + std::to_string(current().line));
                     }
-                    
+
                     func.params.push_back({paramType, paramName, is_mutable, is_reference});
 
                     if(current().type == TokenType::COMMA){
@@ -1705,7 +1705,7 @@ Component Parser::parse_component(){
                 }
                 expect(TokenType::RPAREN, "Expected ')'");
             }
-            
+
             expect(TokenType::LBRACE, "Expected '{'");
 
             while(current().type != TokenType::RBRACE){
@@ -1749,12 +1749,12 @@ Component Parser::parse_component(){
 
 void Parser::parse_app() {
         expect(TokenType::LBRACE, "Expected '{'");
-        
+
         while(current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
             std::string key = current().value;
             expect(TokenType::IDENTIFIER, "Expected key");
             expect(TokenType::ASSIGN, "Expected '='");
-            
+
             if(key == "root"){
                 app_config.root_component = current().value;
                 expect(TokenType::IDENTIFIER, "Expected component name");
@@ -1776,7 +1776,7 @@ void Parser::parse_app() {
                     std::string comp = current().value;
                     expect(TokenType::IDENTIFIER, "Expected component name");
                     app_config.routes[route] = comp;
-                    
+
                     if(current().type == TokenType::COMMA) advance();
                 }
                 expect(TokenType::RBRACE, "Expected '}'");

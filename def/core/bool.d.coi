@@ -1,0 +1,7 @@
+// Coi Built-in Boolean Type
+// Boolean (true/false)
+
+@builtin
+type bool {
+    // No methods - use operators (&&, ||, !)
+}

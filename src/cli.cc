@@ -26,7 +26,7 @@ static void print_banner(const char* cmd) {
 }
 
 // Get the directory where the coi executable is located
-static fs::path get_executable_dir() {
+std::filesystem::path get_executable_dir() {
     char path[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
     if (len != -1) {
@@ -199,8 +199,10 @@ static fs::path find_entry_point() {
     return fs::path();
 }
 
-int build_project(bool keep_cc, bool cc_only) {
-    print_banner("build");
+int build_project(bool keep_cc, bool cc_only, bool silent_banner) {
+    if (!silent_banner) {
+        print_banner("build");
+    }
     
     fs::path entry = find_entry_point();
     if (entry.empty()) {
@@ -258,8 +260,8 @@ int build_project(bool keep_cc, bool cc_only) {
 int dev_project(bool keep_cc, bool cc_only) {
     print_banner("dev");
     
-    // First build
-    int ret = build_project(keep_cc, cc_only);
+    // First build (silent banner since dev already showed one)
+    int ret = build_project(keep_cc, cc_only, true);
     if (ret != 0) {
         return ret;
     }

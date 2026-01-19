@@ -1,10 +1,55 @@
 #include "expressions.h"
 #include "formatter.h"
-#include "../schema_loader.h"
+#include "../def_parser.h"
 #include <cctype>
 
 // Reference to per-component context for reference props
 extern std::set<std::string> g_ref_props;
+
+// Helper to expand @inline templates like "${this}.length()" or "${this}.substr(${0}, ${1})"
+static std::string expand_inline_template(const std::string& tmpl, const std::string& receiver,
+                                          const std::vector<std::unique_ptr<Expression>>& args) {
+    std::string result;
+    for (size_t i = 0; i < tmpl.size(); ++i) {
+        if (tmpl[i] == '$' && i + 1 < tmpl.size() && tmpl[i + 1] == '{') {
+            size_t end = tmpl.find('}', i + 2);
+            if (end != std::string::npos) {
+                std::string var = tmpl.substr(i + 2, end - i - 2);
+                if (var == "this") {
+                    result += receiver;
+                } else {
+                    // Numeric index like ${0}, ${1}
+                    int idx = std::stoi(var);
+                    if (idx >= 0 && idx < (int)args.size()) {
+                        result += args[idx]->to_webcc();
+                    }
+                }
+                i = end;
+                continue;
+            }
+        }
+        result += tmpl[i];
+    }
+    return result;
+}
+
+// Helper to generate intrinsic code
+static std::string generate_intrinsic(const std::string& intrinsic_name,
+                                      const std::vector<std::unique_ptr<Expression>>& args) {
+    if (intrinsic_name == "random") {
+        return "webcc::random()";
+    }
+    if (intrinsic_name == "random_seeded" && args.size() == 1) {
+        return "(webcc::random_seed(" + args[0]->to_webcc() + "), webcc::random())";
+    }
+    if (intrinsic_name == "key_down" && args.size() == 1) {
+        return "g_key_state[" + args[0]->to_webcc() + "]";
+    }
+    if (intrinsic_name == "key_up" && args.size() == 1) {
+        return "!g_key_state[" + args[0]->to_webcc() + "]";
+    }
+    return "";  // Unknown intrinsic
+}
 
 std::string IntLiteral::to_webcc() { return std::to_string(value); }
 
@@ -61,11 +106,11 @@ std::string StringLiteral::to_webcc() {
     if(parts.empty()) return "\"\"";
     bool has_expr = false;
     for(auto& p : parts) if(p.is_expr) has_expr = true;
-    
+
     if(!has_expr) {
         std::string content;
         for(auto& p : parts) content += p.content;
-        
+
         std::string escaped;
         for(char c : content) {
             if(c == '"') escaped += "\\\"";
@@ -138,13 +183,13 @@ void StringLiteral::collect_member_dependencies(std::set<MemberDependency>& memb
                 // Skip non-identifier chars
                 while (pos < expr.length() && !isalnum(expr[pos]) && expr[pos] != '_') pos++;
                 if (pos >= expr.length()) break;
-                
+
                 // Extract identifier
                 std::string obj;
                 while (pos < expr.length() && (isalnum(expr[pos]) || expr[pos] == '_')) {
                     obj += expr[pos++];
                 }
-                
+
                 // Check if followed by '.'
                 if (pos < expr.length() && expr[pos] == '.') {
                     pos++; // skip '.'
@@ -161,11 +206,11 @@ void StringLiteral::collect_member_dependencies(std::set<MemberDependency>& memb
     }
 }
 
-std::string Identifier::to_webcc() { 
+std::string Identifier::to_webcc() {
     if(g_ref_props.count(name)) {
         return "(*" + name + ")";
     }
-    return name; 
+    return name;
 }
 
 void Identifier::collect_dependencies(std::set<std::string>& deps) {
@@ -192,7 +237,7 @@ void BinaryOp::collect_dependencies(std::set<std::string>& deps) {
 
 std::string FunctionCall::args_to_string() {
     if (args.empty()) return "\"\"";
-    
+
     std::string result = "webcc::string::concat(";
     for(size_t i = 0; i < args.size(); i++){
         if(i > 0) result += ", ";
@@ -203,97 +248,114 @@ std::string FunctionCall::args_to_string() {
 }
 
 std::string FunctionCall::to_webcc() {
-    // Handle System.random() - built-in wasm random number generator
-    if (name == "System.random") {
-        if (args.empty()) {
-            return "webcc::random()";
-        } else if (args.size() == 1) {
-            // Seed and return random: random_seed(seed); return random()
-            return "(webcc::random_seed(" + args[0]->to_webcc() + "), webcc::random())";
-        }
-    }
-    
-    // Handle Input state methods (isKeyDown, isKeyUp, isMouseDown, etc.)
-    {
-        size_t dot_pos = name.rfind('.');
-        if (dot_pos != std::string::npos && dot_pos > 0 && dot_pos < name.length() - 1) {
-            std::string obj = name.substr(0, dot_pos);
-            std::string method = name.substr(dot_pos + 1);
-            
-            if (obj == "Input") {
-                if (method == "isKeyDown" && args.size() == 1) {
-                    return "g_key_state[" + args[0]->to_webcc() + "]";
-                }
-                if (method == "isKeyUp" && args.size() == 1) {
-                    return "!g_key_state[" + args[0]->to_webcc() + "]";
-                }
-            }
-        }
-    }
-
-    // Handle string methods
-    {
-        size_t dot_pos = name.rfind('.');
-        if (dot_pos != std::string::npos && dot_pos > 0 && dot_pos < name.length() - 1) {
-            std::string obj = name.substr(0, dot_pos);
-            std::string method = name.substr(dot_pos + 1);
-            
-            // Enum.size()
-            if (method == "size" && args.size() == 0 && !obj.empty() && std::isupper(obj[0])) {
-                size_t first_dot = obj.find('.');
-                if (first_dot != std::string::npos) {
-                    std::string comp = obj.substr(0, first_dot);
-                    std::string enum_name = obj.substr(first_dot + 1);
-                    return "static_cast<int>(" + comp + "::" + enum_name + "::_COUNT)";
-                }
-                return "static_cast<int>(" + obj + "::_COUNT)";
-            }
-            
-            // String methods
-            if (method == "length") return obj + ".length()";
-            if (method == "at" && args.size() == 1) return obj + ".at(" + args[0]->to_webcc() + ")";
-            if (method == "substr" && args.size() >= 1) {
-                if (args.size() == 1) return obj + ".substr(" + args[0]->to_webcc() + ")";
-                return obj + ".substr(" + args[0]->to_webcc() + ", " + args[1]->to_webcc() + ")";
-            }
-            if (method == "contains" && args.size() == 1) return obj + ".contains(" + args[0]->to_webcc() + ")";
-            if (method == "isEmpty" && args.size() == 0) return obj + ".empty()";
-            
-            // Array/vector methods
-            if (method == "push" && args.size() == 1) return obj + ".push_back(" + args[0]->to_webcc() + ")";
-            if (method == "pop" && args.size() == 0) return obj + ".pop_back()";
-            if (method == "size" && args.size() == 0) return "(int)" + obj + ".size()";
-            if (method == "clear" && args.size() == 0) return obj + ".clear()";
-        }
-    }
-
-    // Schema-based transformation
+    // Parse Type.method or instance.method
     size_t dot_pos = name.rfind('.');
-    const coi::SchemaEntry* entry = nullptr;
+    std::string type_or_obj = "";
+    std::string method = name;
+
+    if (dot_pos != std::string::npos && dot_pos > 0 && dot_pos < name.length() - 1) {
+        type_or_obj = name.substr(0, dot_pos);
+        method = name.substr(dot_pos + 1);
+    }
+
+    // Try DefSchema lookup first (handles @intrinsic, @inline, @map)
+    if (!type_or_obj.empty()) {
+        // Check for static type call (e.g., System.random, Input.isKeyDown)
+        if (std::isupper(type_or_obj[0])) {
+            if (auto* method_def = DefSchema::instance().lookup_method(type_or_obj, method)) {
+                // Check arg count matches (for overloads)
+                if (method_def->params.size() == args.size()) {
+                    switch (method_def->mapping_type) {
+                        case MappingType::Intrinsic: {
+                            std::string code = generate_intrinsic(method_def->mapping_value, args);
+                            if (!code.empty()) return code;
+                            break;
+                        }
+                        case MappingType::Inline:
+                            return expand_inline_template(method_def->mapping_value, type_or_obj, args);
+                        case MappingType::Map:
+                            // Handled below by existing schema lookup
+                            break;
+                    }
+                }
+            }
+        }
+
+        // Check for builtin type instance methods (string, array)
+        // For string methods, we need to check against the "string" type
+        if (auto* method_def = DefSchema::instance().lookup_method("string", method)) {
+            if (method_def->mapping_type == MappingType::Inline &&
+                method_def->params.size() == args.size()) {
+                return expand_inline_template(method_def->mapping_value, type_or_obj, args);
+            }
+        }
+
+        // Check array methods
+        if (auto* method_def = DefSchema::instance().lookup_method("array", method)) {
+            if (method_def->mapping_type == MappingType::Inline &&
+                method_def->params.size() == args.size()) {
+                return expand_inline_template(method_def->mapping_value, type_or_obj, args);
+            }
+        }
+    }
+
+    // Handle Enum.size() - special case not in def files
+    if (!type_or_obj.empty() && method == "size" && args.size() == 0 && std::isupper(type_or_obj[0])) {
+        size_t first_dot = type_or_obj.find('.');
+        if (first_dot != std::string::npos) {
+            std::string comp = type_or_obj.substr(0, first_dot);
+            std::string enum_name = type_or_obj.substr(first_dot + 1);
+            return "static_cast<int>(" + comp + "::" + enum_name + "::_COUNT)";
+        }
+        return "static_cast<int>(" + type_or_obj + "::_COUNT)";
+    }
+
+    // DefSchema-based transformation for @map methods (webcc API calls)
     std::string obj_arg = "";
     bool pass_obj = false;
+    const MethodDef* map_method = nullptr;
+    std::string map_ns = "";
+    std::string map_func = "";
 
     if (dot_pos != std::string::npos && dot_pos > 0 && dot_pos < name.length() - 1) {
         std::string obj = name.substr(0, dot_pos);
-        std::string method = name.substr(dot_pos + 1);
-        
-        std::string snake_method = SchemaLoader::to_snake_case(method);
-        entry = SchemaLoader::instance().lookup(snake_method);
-        
-        if (entry && !entry->params.empty()) {
-            const std::string& first_param_type = entry->params[0].type;
-            if (SchemaLoader::instance().is_handle(first_param_type) && 
-                args.size() == entry->params.size() - 1) {
-                 pass_obj = true;
-                 obj_arg = obj;
+        std::string method_name = name.substr(dot_pos + 1);
+
+        // Check if obj is a type name (static call) or instance
+        bool is_static_call = !obj.empty() && std::isupper(obj[0]);
+
+        if (is_static_call) {
+            // Static call: Type.method() - look up directly
+            map_method = DefSchema::instance().lookup_method(obj, method_name);
+        } else {
+            // Instance call: obj.method() - need to find type
+            // Try common handle types that have instance methods
+            for (const auto& [type_name, type_def] : DefSchema::instance().types()) {
+                if (!type_def.is_builtin && !type_def.methods.empty()) {
+                    for (const auto& m : type_def.methods) {
+                        if (m.name == method_name && !m.is_shared && m.mapping_type == MappingType::Map) {
+                            map_method = &m;
+                            pass_obj = true;
+                            obj_arg = obj;
+                            break;
+                        }
+                    }
+                    if (map_method) break;
+                }
             }
         }
-    } else {
-        std::string snake_name = SchemaLoader::to_snake_case(name);
-        entry = SchemaLoader::instance().lookup(snake_name);
+
+        // Extract ns::func from @map value
+        if (map_method && map_method->mapping_type == MappingType::Map && !map_method->mapping_value.empty()) {
+            size_t sep = map_method->mapping_value.find("::");
+            if (sep != std::string::npos) {
+                map_ns = map_method->mapping_value.substr(0, sep);
+                map_func = map_method->mapping_value.substr(sep + 2);
+            }
+        }
     }
 
-    if (entry) {
+    if (map_method && !map_ns.empty() && !map_func.empty()) {
         // Check for string concat argument - use formatter block
         bool has_string_concat_arg = false;
         int string_concat_arg_idx = -1;
@@ -304,20 +366,20 @@ std::string FunctionCall::to_webcc() {
                 break;
             }
         }
-        
+
         if (has_string_concat_arg) {
             std::vector<Expression*> parts;
             flatten_string_concat(args[string_concat_arg_idx].get(), parts);
-            
-            std::string call_prefix = "webcc::" + entry->ns + "::" + entry->func_name + "(";
+
+            std::string call_prefix = "webcc::" + map_ns + "::" + map_func + "(";
             std::string call_suffix;
-            
+
             bool first_arg = true;
             if (pass_obj) {
                 call_prefix += obj_arg;
                 first_arg = false;
             }
-            
+
             for (size_t i = 0; i < args.size(); i++) {
                 if (!first_arg) {
                     if ((int)i == string_concat_arg_idx) {
@@ -335,11 +397,11 @@ std::string FunctionCall::to_webcc() {
                 first_arg = false;
             }
             call_suffix += ")";
-            
+
             return generate_formatter_block(parts, call_prefix, call_suffix);
         }
-        
-        std::string code = "webcc::" + entry->ns + "::" + entry->func_name + "(";
+
+        std::string code = "webcc::" + map_ns + "::" + map_func + "(";
         bool first_arg = true;
 
         if (pass_obj) {
@@ -353,11 +415,12 @@ std::string FunctionCall::to_webcc() {
             first_arg = false;
         }
         code += ")";
-        
-        if (entry->return_type == "int32") {
+
+        // Check return type from method definition
+        if (map_method->return_type == "int") {
             code = "(int32_t)(" + code + ")";
         }
-        
+
         return code;
     }
 

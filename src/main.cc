@@ -1,9 +1,8 @@
 #include "lexer.h"
 #include "parser.h"
 #include "ast/ast.h"
-#include "schema_loader.h"
+#include "def_parser.h"
 #include "type_checker.h"
-#include "coi_schema.h"
 #include "cli.h"
 #include <iostream>
 #include <fstream>
@@ -22,22 +21,36 @@ namespace fs = std::filesystem;
 // INCLUDE DETECTION
 // =========================================================
 
-// Build type-to-header mapping from schema (handle types -> namespace)
+// Build type-to-header mapping from DefSchema (handle types -> namespace)
 static std::map<std::string, std::string> build_type_to_header() {
     std::map<std::string, std::string> result;
-    for (size_t i = 0; i < coi::SCHEMA_COUNT; ++i) {
-        const auto& entry = coi::SCHEMA[i];
-        // Map return type (if it's a handle) to namespace
-        if (!entry.return_type.empty()) {
-            result[entry.return_type] = entry.ns;
-        }
-        // Map parameter types (if they're handles) to namespace
-        for (const auto& param : entry.params) {
-            // Check if it's a handle type (not a primitive)
-            if (param.type != "string" && param.type != "int32" && param.type != "uint32" && 
-                param.type != "uint8" && param.type != "float32" && param.type != "float64" &&
-                param.type != "bool" && param.type != "func_ptr") {
-                result[param.type] = entry.ns;
+    auto& schema = DefSchema::instance();
+    
+    for (const auto& [type_name, type_def] : schema.types()) {
+        // Get the namespace for this type (from @map annotations)
+        std::string ns = schema.get_namespace_for_type(type_name);
+        if (ns.empty()) continue;
+        
+        // Map the type itself to its namespace
+        result[type_name] = ns;
+        
+        // Also map return types and parameter types from methods
+        for (const auto& method : type_def.methods) {
+            // Map return type if it's a handle type
+            if (!method.return_type.empty() && schema.lookup_type(method.return_type)) {
+                std::string return_ns = schema.get_namespace_for_type(method.return_type);
+                if (!return_ns.empty()) {
+                    result[method.return_type] = return_ns;
+                }
+            }
+            // Map parameter types if they're handle types
+            for (const auto& param : method.params) {
+                if (schema.lookup_type(param.type)) {
+                    std::string param_ns = schema.get_namespace_for_type(param.type);
+                    if (!param_ns.empty()) {
+                        result[param.type] = param_ns;
+                    }
+                }
             }
         }
     }
@@ -184,6 +197,39 @@ static std::set<std::string> get_required_headers(const std::vector<Component>& 
     }
     
     return headers;
+}
+
+// =========================================================
+// DEF SCHEMA INITIALIZATION
+// =========================================================
+
+static void load_def_schema() {
+    // Initialize DefSchema from def files (for @intrinsic, @inline, @map)
+    // Always use the def directory next to the executable
+    fs::path exe_dir = get_executable_dir();
+    std::string def_dir;
+    
+    if (!exe_dir.empty() && fs::exists(exe_dir / "def")) {
+        def_dir = (exe_dir / "def").string();
+    } else {
+        std::cerr << "Error: Could not find 'def' directory next to executable" << std::endl;
+        std::cerr << "Expected location: " << (exe_dir / "def").string() << std::endl;
+        exit(1);
+    }
+    
+    // Load from binary cache (generated at build time by gen_schema)
+    std::string cache_path = def_dir + "/.cache/def_cache.bin";
+    auto& def_schema = DefSchema::instance();
+    
+    if (def_schema.is_cache_valid(cache_path, def_dir)) {
+        def_schema.load_cache(cache_path);
+    } else {
+        // Cache missing or outdated - parse def files
+        def_schema.load(def_dir);
+        // Save cache for next time (only in the compiler's def directory)
+        fs::create_directories(def_dir + "/.cache");
+        def_schema.save_cache(cache_path);
+    }
 }
 
 // =========================================================
@@ -337,9 +383,6 @@ std::vector<Component *> topological_sort_components(std::vector<Component> &com
 
 int main(int argc, char **argv)
 {
-    // Initialize SchemaLoader with embedded schema
-    SchemaLoader::instance().init();
-
     if (argc < 2)
     {
         print_help(argv[0]);
@@ -362,6 +405,12 @@ int main(int argc, char **argv)
         return init_project(project_name);
     }
     
+    // Hidden command for build system to pre-generate cache
+    if (first_arg == "--gen-def-cache") {
+        load_def_schema();
+        return 0;
+    }
+    
     // Parse build flags (shared by build, dev, and direct compilation)
     bool keep_cc = false;
     bool cc_only = false;
@@ -378,6 +427,9 @@ int main(int argc, char **argv)
     if (first_arg == "dev") {
         return dev_project(keep_cc, cc_only);
     }
+
+    // From here on, we're doing actual compilation - load DefSchema
+    load_def_schema();
 
     std::string input_file;
     std::string output_dir;

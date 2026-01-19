@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <filesystem>
 
 // ANSI color codes for terminal output
 namespace colors {
@@ -26,7 +27,7 @@ int init_project(const std::string& project_name_arg);
 
 // Build a Coi project in the current directory
 // Returns 0 on success, non-zero on error
-int build_project(bool keep_cc = false, bool cc_only = false);
+int build_project(bool keep_cc = false, bool cc_only = false, bool silent_banner = false);
 
 // Build and start dev server
 // Returns 0 on success, non-zero on error  
@@ -34,3 +35,6 @@ int dev_project(bool keep_cc = false, bool cc_only = false);
 
 // Print help message
 void print_help(const char* program_name);
+
+// Get the directory where the coi executable is located
+std::filesystem::path get_executable_dir();

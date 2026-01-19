@@ -1,0 +1,17 @@
+// Coi Built-in Array Type
+// This file defines mappings for array/vector methods
+
+@builtin
+type array<T> {
+    @inline("${this}.push_back(${0})")
+    def push(T value): void
+
+    @inline("${this}.pop_back()")
+    def pop(): void
+
+    @inline("(int)${this}.size()")
+    def size(): int
+
+    @inline("${this}.clear()")
+    def clear(): void
+}

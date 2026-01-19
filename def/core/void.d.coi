@@ -1,0 +1,7 @@
+// Coi Built-in Void Type
+// No return value
+
+@builtin
+type void {
+    // Special type for functions that don't return a value
+}
