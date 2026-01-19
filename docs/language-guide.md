@@ -278,6 +278,56 @@ count++;
 count--;
 ```
 
+### Move Assignment (`:=`)
+
+The move assignment operator `:=` transfers ownership of a value:
+
+```tsx
+string original = "Hello";
+string moved := original;  // Move original into moved
+// original is now invalid and cannot be used
+```
+
+## Reference and Move Semantics
+
+Coi supports explicit reference (`&`) and move (`:`) semantics for efficient value passing.
+
+### Reference (`&`)
+
+Pass a reference to allow the callee to read or modify the original value (borrowing):
+
+```tsx
+def increment(mut int& value) : void {
+    value++;  // Modifies the original
+}
+
+mut int count = 0;
+increment(&count);  // count is now 1
+```
+
+### Move (`:`)
+
+Transfer ownership of a value to the callee. The original variable becomes invalid:
+
+```tsx
+def consume(string text) : void {
+    // Function owns the string
+    System.log(text);
+}
+
+string msg = "Hello";
+consume(:msg);  // Ownership transferred
+// msg cannot be used anymore
+```
+
+### Summary
+
+| Syntax | Meaning | Original After Call |
+|--------|---------|--------------------|
+| `func(value)` | Copy | Valid (unchanged) |
+| `func(&value)` | Borrow (reference) | Valid (may be modified) |
+| `func(:value)` | Move (transfer ownership) | Invalid |
+
 ## Functions
 
 Functions are defined with the `def` keyword:
