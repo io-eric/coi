@@ -1,6 +1,7 @@
-// Coi Built-in Array Type
-// This file defines mappings for array/vector methods
+// Coi Built-in Array Types
+// This file defines mappings for both dynamic and fixed-size arrays
 
+// Dynamic array (T[]) - maps to webcc::vector<T>
 @builtin
 type array<T> {
     @inline("${this}.push_back(${0})")
@@ -14,4 +15,41 @@ type array<T> {
 
     @inline("${this}.clear()")
     def clear(): void
+
+    @inline("${this}.empty()")
+    def isEmpty(): bool
+
+    @inline("${this}.index_of(${0})")
+    def indexOf(T value): int
+
+    @inline("${this}.contains(${0})")
+    def contains(T value): bool
+
+    @inline("${this}.remove(${0})")
+    def remove(int index): void
+
+    @inline("${this}.sort()")
+    def sort(): void
+}
+
+// Fixed-size array (T[N]) - maps to webcc::array<T, N>
+@builtin
+type array<T, const N: int> {
+    @inline("(int)${this}.size()")
+    def size(): int
+
+    @inline("${this}.empty()")
+    def isEmpty(): bool
+
+    @inline("${this}.index_of(${0})")
+    def indexOf(T value): int
+
+    @inline("${this}.contains(${0})")
+    def contains(T value): bool
+
+    @inline("${this}.fill(${0})")
+    def fill(T value): void
+
+    @inline("${this}.sort()")
+    def sort(): void
 }
