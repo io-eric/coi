@@ -16,29 +16,90 @@ bool active = true;      // Boolean
 ### Arrays
 
 ```tsx
-// Array literals
+// Dynamic arrays - size can change at runtime
 int[] scores = [10, 20, 30]; 
 string[] tags = ["web", "fast"];
 mut float[] prices = [];     // Mutable empty array
 
-// Fixed-size arrays with repeat initializer [value; count]
+// Fixed-size arrays - size known at compile time
+int[5] fixedNums = [1, 2, 3, 4, 5];
+float[3] coords = [0.0, 0.0, 0.0];
+
+// Repeat initializer [value; count]
 int[] zeros = [0; 100];      // Array of 100 zeros
 int[] tens = [10; 5];        // [10, 10, 10, 10, 10]
-float[] coords = [0.0; 3];   // [0.0, 0.0, 0.0]
 ```
 
-### Array Methods
+### Dynamic Array Methods (T[])
 
 ```tsx
-int len = scores.size();     // Get length
-scores.push(40);             // Add element (requires mut)
-scores.pop();                // Remove last element (requires mut)
-scores.clear();              // Remove all elements (requires mut)
-bool empty = scores.isEmpty();
+mut int[] nums = [1, 2, 3];
+
+// Size and state
+int len = nums.size();       // Get length
+bool empty = nums.isEmpty(); // Check if empty
+
+// Modification (requires mut)
+nums.push(4);                // Add element to end
+nums.pop();                  // Remove last element
+nums.clear();                // Remove all elements
+nums.remove(0);              // Remove element at index
+nums.sort();                 // Sort in ascending order
+
+// Search
+int idx = nums.indexOf(2);   // Find index of value (-1 if not found)
+bool has = nums.contains(2); // Check if value exists
 
 // Index access
-int first = scores[0];
-scores[0] = 100;             // Requires mut
+int first = nums[0];
+nums[0] = 100;               // Requires mut
+```
+
+### Fixed-Size Array Methods (T[N])
+
+```tsx
+mut int[5] fixed = [5, 3, 1, 4, 2];
+
+// Size and state
+int len = fixed.size();       // Get length (always N)
+bool empty = fixed.isEmpty(); // Check if empty
+
+// Modification (requires mut)
+fixed.sort();                 // Sort in ascending order
+fixed.fill(0);                // Fill all elements with value
+
+// Search
+int idx = fixed.indexOf(3);   // Find index of value (-1 if not found)
+bool has = fixed.contains(3); // Check if value exists
+
+// Index access
+int first = fixed[0];
+fixed[0] = 100;               // Requires mut
+```
+
+### Strings
+
+```tsx
+string text = "Hello, World!";
+
+// Properties
+int len = text.length();      // Get length
+bool empty = text.isEmpty();  // Check if empty
+
+// Access
+int ch = text.charAt(0);      // Get character code at index
+
+// Substrings
+string sub = text.subStr(7);      // "World!" - from index to end
+string sub2 = text.subStr(0, 5);  // "Hello" - from index with length
+
+// Search
+bool has = text.contains("World"); // Check if substring exists
+
+// Trimming
+string trimmed = text.trim();       // Remove whitespace from both ends
+string left = text.trimStart();     // Remove leading whitespace
+string right = text.trimEnd();      // Remove trailing whitespace
 ```
 
 ## Enums
