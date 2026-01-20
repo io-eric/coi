@@ -28,7 +28,6 @@ static const std::set<std::string> EXCLUDED_FUNCTIONS = {
     "add_change_listener",      // Handled by onChange attribute
     "add_keydown_listener",     // Handled by onKeydown attribute
     "random",                   // System.random() - built-in wasm random
-    // Add more as needed
 };
 
 // Convert snake_case to camelCase for Coi function names
