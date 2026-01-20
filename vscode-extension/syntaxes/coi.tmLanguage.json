@@ -64,11 +64,15 @@
       "patterns": [
         {
           "name": "keyword.control.coi",
-          "match": "\\b(component|def|view|return|if|else|for|while|computed|tick|init|mount|app|import|struct|style|type|global|in|root)\\b"
+          "match": "\\b(component|def|view|return|if|else|for|while|computed|tick|init|mount|app|import|struct|style|type|global|in|root|extends|enum|key)\\b"
         },
         {
           "name": "storage.modifier.coi",
           "match": "\\b(mut|pub|shared)\\b"
+        },
+        {
+          "name": "storage.type.annotation.coi",
+          "match": "@(nocopy|builtin|inline|map|intrinsic|alias)\\b"
         },
         {
           "name": "constant.numeric.coi",
@@ -99,8 +103,8 @@
           }
         },
         {
-          "comment": "Standalone function calls like doSomething()",
-          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "comment": "Standalone function calls (excluding keywords like if, else, for, while)",
+          "match": "\\b(?!(?:if|else|for|while|return|component|def|view|tick|init|mount|app|import|struct|style|type|global|in|computed|enum|key)\\b)([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
           "captures": {
             "1": { "name": "entity.name.function.coi" }
           }
@@ -112,6 +116,14 @@
         {
           "name": "keyword.operator.arithmetic.coi",
           "match": "\\+\\+|--|\\+|-|\\*|/|%"
+        },
+        {
+          "name": "keyword.operator.move.coi",
+          "match": ":=|(?<=\\s|\\(|,):(?=\\w)"
+        },
+        {
+          "name": "keyword.operator.reference.coi",
+          "match": "&(?=\\w)"
         },
         {
           "name": "keyword.operator.assignment.coi",
@@ -131,7 +143,7 @@
       "patterns": [
         {
           "name": "storage.type.coi",
-          "match": "\\b(int|void|string|bool|float)\\b"
+          "match": "\\b(int|int8|int16|int32|int64|uint8|uint16|uint32|uint64|float|float32|float64|void|string|bool)\\b"
         }
       ]
     },

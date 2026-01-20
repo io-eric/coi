@@ -410,6 +410,18 @@ int main(int argc, char **argv)
         load_def_schema();
         return 0;
     }
+
+    // Return the absolute path to the bundled def/ directory next to the executable
+    if (first_arg == "--def-path") {
+        fs::path exe_dir = get_executable_dir();
+        if (exe_dir.empty()) {
+            std::cerr << "Error: could not determine executable directory" << std::endl;
+            return 1;
+        }
+        fs::path def_dir = exe_dir / "def";
+        std::cout << def_dir.string() << std::endl;
+        return 0;
+    }
     
     // Parse build flags (shared by build, dev, and direct compilation)
     bool keep_cc = false;
@@ -1022,7 +1034,15 @@ int main(int argc, char **argv)
             fs::path webcc_cache_dir = cache_dir / "webcc";
             fs::create_directories(webcc_cache_dir);
 
-            std::string cmd = "webcc " + abs_output_cc.string();
+            // Find webcc relative to coi binary (in deps/webcc/)
+            fs::path exe_dir = get_executable_dir();
+            fs::path webcc_path = exe_dir / "deps" / "webcc" / "webcc";
+            if (!fs::exists(webcc_path)) {
+                std::cerr << colors::RED << "Error:" << colors::RESET << " Could not find webcc at " << webcc_path << std::endl;
+                return 1;
+            }
+
+            std::string cmd = webcc_path.string() + " " + abs_output_cc.string();
             cmd += " --out " + abs_output_dir.string();
             cmd += " --cache-dir " + webcc_cache_dir.string();
             cmd += " --template " + abs_template.string();

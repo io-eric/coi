@@ -25,7 +25,7 @@
     { "open": "<", "close": ">" }
   ],
   "indentationRules": {
-    "increaseIndentPattern": "^.*\\{[^}]*$|<[a-zA-Z][^/>]*>(?!.*</)",
+    "increaseIndentPattern": "^.*\\{[^}]*$|<[a-zA-Z]([^>]*[^/])?>(?!.*</)",
     "decreaseIndentPattern": "^\\s*\\}|^\\s*</[a-zA-Z]"
   },
   "folding": {

@@ -19,7 +19,7 @@ component App {
             background: #9477ff;
             color: #ffffff;
         }
-        
+
         ::-webkit-scrollbar {
             width: 10px;
             height: 10px;

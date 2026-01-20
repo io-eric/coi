@@ -70,9 +70,6 @@ if [ -d "deps/webcc" ]; then
         echo "[Coi] Error: webcc build failed"
         exit 1
     fi
-    
-    # Ensure webcc is in PATH
-    export PATH="$PWD/deps/webcc:$PATH"
 fi
 
 # Force rebuild schema if requested
