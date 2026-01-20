@@ -735,6 +735,17 @@ void validate_types(const std::vector<Component> &components, const std::vector<
                     exit(1);
                 }
                 
+                // Error: cannot copy a nocopy type (must use := or &)
+                // Only applies when copying from another variable, not from function returns
+                if (!var->is_move && !var->is_reference && DefSchema::instance().is_nocopy(type)
+                    && dynamic_cast<Identifier*>(var->initializer.get()))
+                {
+                    std::cerr << "\033[1;31mError:\033[0m Cannot copy '" << type << "' - it is a nocopy type. "
+                              << "Use '" << var->name << " := :source' (move) or '" << var->name << " = &source' (reference) instead. "
+                              << "At line " << var->line << std::endl;
+                    exit(1);
+                }
+                
                 std::string init = infer_expression_type(var->initializer.get(), scope);
                 if (init != "unknown" && !is_compatible_type(init, type))
                 {
@@ -907,6 +918,17 @@ void validate_types(const std::vector<Component> &components, const std::vector<
                             exit(1);
                         }
                         
+                        // Error: cannot copy a nocopy type (must use := or &)
+                        // Only applies when copying from another variable, not from function returns
+                        if (!decl->is_move && !decl->is_reference && DefSchema::instance().is_nocopy(type)
+                            && dynamic_cast<Identifier*>(decl->initializer.get()))
+                        {
+                            std::cerr << "\033[1;31mError:\033[0m Cannot copy '" << type << "' - it is a nocopy type. "
+                                      << "Use '" << decl->name << " := :source' (move) or '" << decl->name << " = &source' (reference) instead. "
+                                      << "At line " << decl->line << std::endl;
+                            exit(1);
+                        }
+                        
                         std::string init = infer_expression_type(decl->initializer.get(), current_scope);
                         if (init != "unknown" && !is_compatible_type(init, type))
                         {
@@ -937,6 +959,17 @@ void validate_types(const std::vector<Component> &components, const std::vector<
                         if (!moved_var.empty()) {
                             moved_vars.insert(moved_var);
                         }
+                    }
+                    
+                    // Error: cannot copy a nocopy type (must use :=)
+                    // Only applies when copying from another variable, not from function returns
+                    if (!assign->is_move && DefSchema::instance().is_nocopy(var_type)
+                        && dynamic_cast<Identifier*>(assign->value.get()))
+                    {
+                        std::cerr << "\033[1;31mError:\033[0m Cannot copy '" << var_type << "' - it is a nocopy type. "
+                                  << "Use '" << assign->name << " := :source' (move) instead. "
+                                  << "At line " << assign->line << std::endl;
+                        exit(1);
                     }
                     
                     std::string val_type = infer_expression_type(assign->value.get(), current_scope);

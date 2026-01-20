@@ -19,6 +19,44 @@ canvas.setSize(800, 600);
 ctx = canvas.getContext2d();
 ```
 
+### No-Copy Types
+
+Platform types (handles to browser resources) **cannot be copied** - they can only be **moved** or **referenced**:
+
+```tsx
+// ERROR: Cannot copy a Canvas
+mut Canvas canvas1 = Canvas.createCanvas("c1", 800.0, 600.0);
+mut Canvas canvas2 = canvas1;  // Error!
+
+// OK: Move ownership
+mut Canvas canvas1 = Canvas.createCanvas("c1", 800.0, 600.0);
+mut Canvas canvas2 := canvas1;  // canvas1 is now invalid
+
+// OK: Reference (borrow)
+mut Canvas canvas1 = Canvas.createCanvas("c1", 800.0, 600.0);
+mut Canvas& canvasRef = canvas1;  // Both valid (& is part of type, not value)
+
+// OK: Fresh value from factory method
+mut Canvas canvas = Canvas.createCanvas("c1", 800.0, 600.0);  // Not a copy
+```
+
+This applies to all platform types:
+- `Canvas`, `CanvasContext2D`
+- `DOMElement`, `Image`, `Audio`
+- `WebSocket`, `FetchRequest`
+- `WebGLContext`, `WGPUContext`, etc.
+
+Arrays of these types also cannot be copied:
+
+```tsx
+// ERROR: Cannot copy Audio[]
+mut Audio[] sounds = [Audio.load("a.mp3"), Audio.load("b.mp3")];
+mut Audio[] backup = sounds;  // Error!
+
+// OK: Move the array
+mut Audio[] backup := sounds;  // sounds is now invalid
+```
+
 ## Canvas
 
 2D drawing, paths, text, images, and transformations.

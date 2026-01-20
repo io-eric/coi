@@ -320,6 +320,31 @@ consume(:msg);  // Ownership transferred
 // msg cannot be used anymore
 ```
 
+### No-Copy Types
+
+Some types **cannot be copied** at all - they can only be moved or referenced. These are platform types that represent browser resources:
+
+```tsx
+// Platform types that cannot be copied:
+// Canvas, DOMElement, Audio, Image, WebSocket, etc.
+
+mut Canvas canvas1 = Canvas.createCanvas("c1", 800.0, 600.0);
+
+// ERROR: Cannot copy
+Canvas canvas2 = canvas1;
+
+// OK: Move ownership
+Canvas canvas2 := canvas1;  // canvas1 is now invalid
+
+// OK: Reference (& is part of the type declaration)
+Canvas& ref = canvas1;  // Both valid
+
+// OK: Fresh value from factory
+Canvas canvas3 = Canvas.createCanvas("c3", 400.0, 300.0);
+```
+
+This restriction prevents accidental duplication of browser resources and ensures clear ownership.
+
 ### Summary
 
 | Syntax | Meaning | Original After Call |
