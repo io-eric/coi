@@ -2,6 +2,28 @@
 
 set -e
 
+# Check for Clang 16+ (required for full C++20 support)
+check_clang_version() {
+    if ! command -v clang++ &> /dev/null; then
+        echo "Error: clang++ not found. Please install Clang 16 or later."
+        echo "  Ubuntu/Debian: sudo apt install clang-16"
+        echo "  macOS: brew install llvm"
+        exit 1
+    fi
+    
+    CLANG_VERSION=$(clang++ --version | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)
+    if [ -z "$CLANG_VERSION" ]; then
+        echo "Warning: Could not detect Clang version"
+    elif [ "$CLANG_VERSION" -lt 16 ]; then
+        echo "Error: Clang $CLANG_VERSION detected. Coi requires Clang 16+ for full C++20 support."
+        echo "  Ubuntu/Debian: sudo apt install clang-16"
+        echo "  macOS: brew install llvm"
+        exit 1
+    fi
+}
+
+check_clang_version
+
 # Ensure git submodules are up to date (deps/webcc)
 if [ -d ".git" ] && [ -f ".gitmodules" ]; then
     if [ -d "deps/webcc/.git" ] || grep -q "submodule.*webcc" .gitmodules; then
