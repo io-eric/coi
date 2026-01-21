@@ -152,6 +152,9 @@ DefParser::Token DefParser::next_token()
     case '>':
         pos_++;
         return {Token::Greater, ">", token_line};
+    case '=':
+        pos_++;
+        return {Token::Equals, "=", token_line};
     }
 
     // String literal
@@ -304,9 +307,9 @@ std::vector<MethodParam> DefParser::parse_params()
             param.type = func_type;
             
             // Skip optional default value (= void or = something)
-            if (current_.type == Token::Identifier && current_.value == "=")
+            if (current_.type == Token::Equals)
             {
-                advance();
+                advance(); // skip '='
                 advance(); // skip the default value
             }
         }

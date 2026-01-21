@@ -80,6 +80,7 @@ private:
             At,
             Less,
             Greater,
+            Equals,
             KwType,
             KwDef,
             KwShared,

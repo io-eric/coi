@@ -371,7 +371,7 @@ void HTMLElement::generate_code(std::stringstream &ss, const std::string &parent
     {
         // In loops, use local variable but still deferred creation
         var = "_el_" + std::to_string(my_id);
-        ss << "        webcc::handle " << var << " = webcc::next_deferred_handle();\n";
+        ss << "        webcc::handle " << var << " = webcc::handle(webcc::next_deferred_handle());\n";
         ss << "        webcc::dom::create_element_deferred(" << var << ", \"" << tag << "\");\n";
     }
     else

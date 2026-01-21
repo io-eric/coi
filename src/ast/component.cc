@@ -690,9 +690,20 @@ std::string Component::to_webcc(CompilerSession &session)
 
         std::string el_var = "el[" + std::to_string(binding.element_id) + "]";
         std::string update_line;
-        std::string dom_call = (binding.type == "attr")
-                                   ? "webcc::dom::set_attribute(" + el_var + ", \"" + binding.name + "\", "
-                                   : "webcc::dom::set_inner_text(" + el_var + ", ";
+        std::string dom_call;
+        if (binding.type == "attr") {
+            // Use set_property for properties that need to be set on the DOM object, not as attributes
+            // - value: for input/textarea/select current value (attribute only sets default)
+            // - checked: for checkbox/radio current checked state
+            // - selected: for option current selected state
+            if (binding.name == "value" || binding.name == "checked" || binding.name == "selected") {
+                dom_call = "webcc::dom::set_property(" + el_var + ", \"" + binding.name + "\", ";
+            } else {
+                dom_call = "webcc::dom::set_attribute(" + el_var + ", \"" + binding.name + "\", ";
+            }
+        } else {
+            dom_call = "webcc::dom::set_inner_text(" + el_var + ", ";
+        }
 
         bool optimized = false;
         if (binding.expr)
@@ -942,40 +953,86 @@ std::string Component::to_webcc(CompilerSession &session)
 
         if (region.is_keyed)
         {
-            std::string vec_name = region.is_member_ref_loop ? region.iterable_expr : ("_loop_" + region.component_type + "s");
             std::string count_var = "_loop_" + std::to_string(region.loop_id) + "_count";
             std::string parent_var = "_loop_" + std::to_string(region.loop_id) + "_parent";
 
-            ss << "        int _new_count = (int)" << vec_name << ".size();\n";
-
-            // Clear existing views - MUST call _remove_view() to unregister event handlers from dispatchers
-            ss << "        if (" << count_var << " > 0) {\n";
-            ss << "            for (int _i = 0; _i < " << count_var << "; _i++) {\n";
-            ss << "                " << vec_name << "[_i]._remove_view();\n";
-            ss << "            }\n";
-            ss << "        }\n";
-            ss << "        \n";
-
-            // Recreate all items in current array order with fresh views
-            ss << "        g_view_depth++;\n";
-            ss << "        for (auto& " << region.var_name << " : " << region.iterable_expr << ") {\n";
-
-            std::string item_code = region.item_creation_code;
-            std::stringstream indented;
-            std::istringstream iss(item_code);
-            std::string line;
-            while (std::getline(iss, line))
+            if (region.is_html_loop)
             {
-                if (!line.empty())
-                {
-                    indented << "        " << line << "\n";
-                }
-            }
-            ss << indented.str();
+                // Keyed HTML element loop (e.g., <for msg in messages key={msg}><div>{msg}</div></for>)
+                std::string elements_vec = "_loop_" + std::to_string(region.loop_id) + "_elements";
+                
+                ss << "        int _new_count = (int)" << region.iterable_expr << ".size();\n";
 
-            ss << "        }\n";
-            ss << "        if (--g_view_depth == 0) webcc::flush();\n";
-            ss << "        " << count_var << " = _new_count;\n";
+                // Remove all existing HTML elements
+                ss << "        for (auto& _el : " << elements_vec << ") {\n";
+                ss << "            webcc::dom::remove_element(_el);\n";
+                ss << "        }\n";
+                ss << "        " << elements_vec << ".clear();\n";
+                ss << "        \n";
+
+                // Recreate all items
+                ss << "        g_view_depth++;\n";
+                ss << "        for (auto& " << region.var_name << " : " << region.iterable_expr << ") {\n";
+
+                std::string item_code = region.item_creation_code;
+                std::stringstream indented;
+                std::istringstream iss(item_code);
+                std::string line;
+                while (std::getline(iss, line))
+                {
+                    if (!line.empty())
+                    {
+                        indented << "        " << line << "\n";
+                    }
+                }
+                ss << indented.str();
+
+                // Track the created root element
+                if (!region.root_element_var.empty())
+                {
+                    ss << "            " << elements_vec << ".push_back(" << region.root_element_var << ");\n";
+                }
+
+                ss << "        }\n";
+                ss << "        if (--g_view_depth == 0) webcc::flush();\n";
+                ss << "        " << count_var << " = _new_count;\n";
+            }
+            else
+            {
+                // Keyed component loop
+                std::string vec_name = region.is_member_ref_loop ? region.iterable_expr : ("_loop_" + region.component_type + "s");
+
+                ss << "        int _new_count = (int)" << vec_name << ".size();\n";
+
+                // Clear existing views - MUST call _remove_view() to unregister event handlers from dispatchers
+                ss << "        if (" << count_var << " > 0) {\n";
+                ss << "            for (int _i = 0; _i < " << count_var << "; _i++) {\n";
+                ss << "                " << vec_name << "[_i]._remove_view();\n";
+                ss << "            }\n";
+                ss << "        }\n";
+                ss << "        \n";
+
+                // Recreate all items in current array order with fresh views
+                ss << "        g_view_depth++;\n";
+                ss << "        for (auto& " << region.var_name << " : " << region.iterable_expr << ") {\n";
+
+                std::string item_code = region.item_creation_code;
+                std::stringstream indented;
+                std::istringstream iss(item_code);
+                std::string line;
+                while (std::getline(iss, line))
+                {
+                    if (!line.empty())
+                    {
+                        indented << "        " << line << "\n";
+                    }
+                }
+                ss << indented.str();
+
+                ss << "        }\n";
+                ss << "        if (--g_view_depth == 0) webcc::flush();\n";
+                ss << "        " << count_var << " = _new_count;\n";
+            }
         }
         else
         {

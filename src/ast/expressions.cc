@@ -65,9 +65,9 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
         return "!g_key_state[" + args[0].value->to_webcc() + "]";
     }
     
-    // WebSocket.create with named callback arguments
-    // Usage: WebSocket.create("url", &onMessage = handler, &onOpen = handler, ...)
-    if (intrinsic_name == "ws_create") {
+    // WebSocket.connect with named callback arguments
+    // Usage: WebSocket.connect("url", &onMessage = handler, &onOpen = handler, ...)
+    if (intrinsic_name == "ws_connect") {
         if (args.empty()) return "";
         
         std::string url = args[0].value->to_webcc();
