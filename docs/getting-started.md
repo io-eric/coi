@@ -180,11 +180,6 @@ app {
     title = "My App";                              // Page title (<title> tag)
     description = "A description for SEO";         // Meta description
     lang = "en";                                   // HTML lang attribute (default: "en")
-    routes = {                                     // Client-side routing (optional)
-        "/": Home,
-        "/about": About,
-        "/users/:id": UserProfile
-    };
 }
 ```
 
