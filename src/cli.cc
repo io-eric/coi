@@ -339,7 +339,11 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     import socketserver
     PORT = 8000
-    with socketserver.TCPServer(('', PORT), SPAHandler) as httpd:
+    
+    class ReusableTCPServer(socketserver.TCPServer):
+        allow_reuse_address = True
+    
+    with ReusableTCPServer(('', PORT), SPAHandler) as httpd:
         httpd.serve_forever()
 )";
 
