@@ -1871,10 +1871,51 @@ std::unique_ptr<RouterDef> Parser::parse_router() {
         advance();
         
         // Optional: parse component arguments (ComponentName(arg1, arg2))
+        // Uses same syntax as component construction: &ref, :move, name = value
         if (current().type == TokenType::LPAREN) {
             advance();
             while (current().type != TokenType::RPAREN && current().type != TokenType::END_OF_FILE) {
-                entry.args.push_back(parse_expression());
+                CallArg arg;
+
+                // Check for reference prefix &
+                if (current().type == TokenType::AMPERSAND) {
+                    arg.is_reference = true;
+                    advance();
+                }
+                // Check for move prefix :
+                else if (current().type == TokenType::COLON) {
+                    arg.is_move = true;
+                    advance();
+                }
+
+                // Check if this is a named argument: [&]name = value OR name := value
+                bool is_named = false;
+                if (current().type == TokenType::IDENTIFIER || current().type == TokenType::KEY) {
+                    if (peek().type == TokenType::ASSIGN || peek().type == TokenType::MOVE_ASSIGN) {
+                        is_named = true;
+                    }
+                }
+
+                if (is_named) {
+                    // Named argument
+                    arg.name = current().value;
+                    advance();
+
+                    // Check for := (move) or = (copy/reference)
+                    if (match(TokenType::MOVE_ASSIGN)) {
+                        arg.is_move = true;
+                    } else {
+                        expect(TokenType::ASSIGN, "Expected '=' or ':=' after parameter name");
+                    }
+
+                    arg.value = parse_expression();
+                } else {
+                    // Positional argument
+                    arg.value = parse_expression();
+                }
+
+                entry.args.push_back(std::move(arg));
+
                 if (current().type == TokenType::COMMA) {
                     advance();
                 } else {

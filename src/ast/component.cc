@@ -1621,18 +1621,36 @@ std::string Component::to_webcc(CompilerSession &session)
             const auto& route = router->routes[i];
             ss << "        " << (first ? "if" : "else if") << " (_current_route == \"" << route.path << "\") {\n";
             ss << "            _route_" << i << " = new " << route.component_name << "{";
-            // Pass arguments if any - wrap identifiers as lambdas for callbacks
+            // Pass arguments - same handling as component construction
+            // Reference args (&) that are identifiers are callbacks and need lambda wrapping
             for (size_t j = 0; j < route.args.size(); ++j)
             {
                 if (j > 0) ss << ", ";
-                // If arg is a simple identifier (method name), wrap as lambda
-                if (auto* ident = dynamic_cast<Identifier*>(route.args[j].get()))
+                const auto& arg = route.args[j];
+                
+                // Check if this is a callback (reference to a method identifier)
+                if (arg.is_reference)
                 {
-                    ss << "[this]() { " << ident->name << "(); }";
+                    if (auto* ident = dynamic_cast<Identifier*>(arg.value.get()))
+                    {
+                        // Wrap method reference in a lambda
+                        ss << "[this]() { this->" << ident->name << "(); }";
+                    }
+                    else
+                    {
+                        // Reference to a variable - pass as pointer
+                        ss << "&(" << arg.value->to_webcc() << ")";
+                    }
+                }
+                else if (arg.is_move)
+                {
+                    // Move semantics
+                    ss << "std::move(" << arg.value->to_webcc() << ")";
                 }
                 else
                 {
-                    ss << route.args[j]->to_webcc();
+                    // Regular value copy
+                    ss << arg.value->to_webcc();
                 }
             }
             ss << "};\n";

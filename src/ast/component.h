@@ -9,7 +9,7 @@
 struct RouteEntry {
     std::string path;                              // e.g., "/", "/dashboard", "/pricing"
     std::string component_name;                    // e.g., "Landing", "Dashboard"
-    std::vector<std::unique_ptr<Expression>> args; // Optional component arguments
+    std::vector<CallArg> args;                     // Optional component arguments (same as component construction)
     int line = 0;
 };
 

@@ -10,6 +10,81 @@
 // Global set of known enum type names (populated during validation)
 static std::set<std::string> g_enum_types;
 
+// Forward declarations
+std::string normalize_type(const std::string &type);
+bool is_compatible_type(const std::string &source, const std::string &target);
+std::string infer_expression_type(Expression *expr, const std::map<std::string, std::string> &scope);
+
+// Validate positional arguments against component parameters (used by router and could be used for constructor calls)
+// Returns error message if validation fails, empty string on success
+static std::string validate_component_args(
+    const std::vector<CallArg> &args,
+    const std::vector<std::unique_ptr<ComponentParam>> &params,
+    const std::string &component_name,
+    const std::string &context_desc,  // e.g., "Route '/dashboard'" or "Component 'App'"
+    int line,
+    const std::map<std::string, std::string> &scope = {})
+{
+    size_t arg_count = args.size();
+    size_t param_count = params.size();
+
+    if (arg_count != param_count)
+    {
+        return context_desc + " passes " + std::to_string(arg_count) + 
+            " argument(s) to component '" + component_name + "' but it expects " + 
+            std::to_string(param_count) + " parameter(s) at line " + std::to_string(line);
+    }
+
+    for (size_t i = 0; i < arg_count; ++i)
+    {
+        const auto &arg = args[i];
+        const auto &param = params[i];
+
+        // With CallArg, is_reference is explicit
+        bool is_reference = arg.is_reference;
+
+        // Get the argument name for helpful error messages
+        std::string arg_name = "argument";
+        if (auto *id = dynamic_cast<Identifier*>(arg.value.get()))
+            arg_name = id->name;
+
+        // Callback parameters (def name : returnType) require & prefix
+        if (param->is_callback)
+        {
+            if (!is_reference)
+            {
+                return context_desc + ": callback parameter '" + param->name + 
+                    "' requires '&' prefix. Use '&" + arg_name + "' instead of '" + arg_name + 
+                    "' at line " + std::to_string(line);
+            }
+        }
+        // Reference parameters (Type& name) require & prefix
+        else if (param->is_reference)
+        {
+            if (!is_reference)
+            {
+                return context_desc + ": parameter '" + param->name + 
+                    "' is a reference and requires '&' prefix. Use '&" + arg_name + 
+                    "' at line " + std::to_string(line);
+            }
+        }
+        // Non-reference, non-callback: validate types if scope provided
+        else if (!scope.empty())
+        {
+            std::string arg_type = infer_expression_type(arg.value.get(), scope);
+            std::string expected_type = normalize_type(param->type);
+            if (arg_type != "unknown" && !is_compatible_type(arg_type, expected_type))
+            {
+                return context_desc + ": argument " + std::to_string(i + 1) + " ('" + arg_name + 
+                    "') expects type '" + expected_type + "' but got '" + arg_type + 
+                    "' at line " + std::to_string(line);
+            }
+        }
+    }
+
+    return "";  // Success
+}
+
 // Check if a type is a known enum type
 static bool is_enum_type(const std::string &t) {
     // Check direct match
@@ -1601,7 +1676,7 @@ void validate_view_hierarchy(const std::vector<Component> &components)
             throw std::runtime_error("Component '" + comp.name + "' has <route /> but no router block. Add a router block to define routes");
         }
 
-        // Validate that route components exist
+        // Validate that route components exist and their arguments match parameters
         if (has_router_block)
         {
             for (const auto &route : comp.router->routes)
@@ -1610,6 +1685,19 @@ void validate_view_hierarchy(const std::vector<Component> &components)
                 if (it == component_map.end())
                 {
                     throw std::runtime_error("Route '" + route.path + "' references unknown component '" + route.component_name + "' at line " + std::to_string(route.line));
+                }
+
+                // Use shared validation for route arguments
+                std::string error = validate_component_args(
+                    route.args,
+                    it->second->params,
+                    route.component_name,
+                    "Route '" + route.path + "'",
+                    route.line
+                );
+                if (!error.empty())
+                {
+                    throw std::runtime_error(error);
                 }
             }
         }

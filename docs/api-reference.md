@@ -330,6 +330,7 @@ Logging, page title, time, random numbers, and URL navigation.
 | `System.setTitle(string title)` | Set page title |
 | `System.reload()` | Reload the page |
 | `System.openUrl(string url)` | Open URL in new tab |
+| `System.navigate(string path)` | Navigate to route (client-side routing) |
 | `System.getTime()` | Get time in seconds (float64) |
 | `System.getDateNow()` | Get milliseconds since epoch (float64) |
 | `System.random()` | Random float between 0.0 and 1.0 |
@@ -354,7 +355,8 @@ float epoch = System.getDateNow();  // Milliseconds since epoch
 float r = System.random();          // 0.0 to 1.0
 
 // URL navigation
-System.openUrl("https://example.com");
+System.openUrl("https://example.com");  // Opens in new tab
+System.navigate("/dashboard");           // Client-side navigation
 ```
 
 ## Input

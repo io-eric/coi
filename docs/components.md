@@ -318,6 +318,107 @@ component App {
 }
 ```
 
+## Client-Side Routing
+
+Coi has built-in client-side routing for single-page applications. Define routes with the `router {}` block and render the current route with `<route />`.
+
+### Basic Routing
+
+```tsx
+import "pages/Home.coi";
+import "pages/About.coi";
+import "pages/Dashboard.coi";
+
+component App {
+    router {
+        "/" => Home,
+        "/about" => About,
+        "/dashboard" => Dashboard
+    }
+    
+    view {
+        <div>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+            </nav>
+            <route />
+        </div>
+    }
+}
+```
+
+### Passing Props to Routes
+
+Pass callbacks or values to route components:
+
+```tsx
+component App {
+    mut bool isLoggedIn = false;
+    
+    def handleLogin() : void {
+        isLoggedIn = true;
+    }
+    
+    def handleLogout() : void {
+        isLoggedIn = false;
+    }
+    
+    router {
+        "/" => Landing(&handleLogin),
+        "/dashboard" => Dashboard(&handleLogout)
+    }
+    
+    view {
+        <div>
+            <NavBar />
+            <route />
+            <Footer />
+        </div>
+    }
+}
+```
+
+### Programmatic Navigation
+
+Use `System.navigate(path)` to navigate programmatically:
+
+```tsx
+component NavBar {
+    def goToDashboard() : void {
+        System.navigate("/dashboard");
+    }
+    
+    def goToHome() : void {
+        System.navigate("/");
+    }
+    
+    view {
+        <nav>
+            <button onclick={goToHome}>Home</button>
+            <button onclick={goToDashboard}>Dashboard</button>
+        </nav>
+    }
+}
+```
+
+### How It Works
+
+- Routes are defined in the `router {}` block with `"path" => Component` syntax
+- The `<route />` element renders the component matching the current URL
+- `System.navigate(path)` changes the URL and updates the view
+- The router reads the initial URL on page load, so direct links work (e.g., `/dashboard`)
+- Browser back/forward buttons work automatically via the History API
+
+### Route Summary
+
+| Feature | Syntax | Description |
+|---------|--------|-------------|
+| Define routes | `router { "/" => Home }` | Map paths to components |
+| Render route | `<route />` | Placeholder for current route's component |
+| Navigate | `System.navigate("/path")` | Programmatically change route |
+| With props | `"/" => Page(callback)` | Pass props to route component |
+
 ## Next Steps
 
 - [View Syntax](view-syntax.md) — JSX-like templates, conditionals, loops
