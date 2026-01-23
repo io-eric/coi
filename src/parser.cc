@@ -1542,8 +1542,8 @@ Component Parser::parse_component(){
 
     expect(TokenType::LBRACE, "Expected '{'");
 
-    // Parse state variables and methods
-    while(current().type != TokenType::VIEW && current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
+    // Parse state variables, methods, view, style, and router blocks
+    while(current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
         bool is_public = false;
         bool is_mutable = false;
         bool is_shared = false;
@@ -1826,18 +1826,18 @@ Component Parser::parse_component(){
             }
             comp.router = parse_router();
         }
+        // View block
+        else if(current().type == TokenType::VIEW){
+            advance();
+            expect(TokenType::LBRACE, "Expected '{'");
+            while(current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
+                comp.render_roots.push_back(parse_view_node());
+            }
+            expect(TokenType::RBRACE, "Expected '}'");
+        }
         else {
             advance();
         }
-    }
-
-    // Parse render block
-    if(match(TokenType::VIEW)){
-        expect(TokenType::LBRACE, "Expected '{'");
-        while(current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
-            comp.render_roots.push_back(parse_view_node());
-        }
-        expect(TokenType::RBRACE, "Expected '}'");
     }
 
     return comp;
