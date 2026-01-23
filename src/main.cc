@@ -696,6 +696,7 @@ int main(int argc, char **argv)
             out << "Dispatcher<webcc::function<void()>> g_ws_close_dispatcher;\n";
             out << "Dispatcher<webcc::function<void()>> g_ws_error_dispatcher;\n";
         }
+        out << "webcc::function<void(const webcc::string&)> g_popstate_callback;\n";
         out << "bool g_key_state[256] = {};\n";
         out << "int g_view_depth = 0;\n\n";
 
@@ -784,6 +785,8 @@ int main(int argc, char **argv)
         out << "            if (auto evt = e.as<webcc::input::KeyDownEvent>()) { if (evt->key_code >= 0 && evt->key_code < 256) g_key_state[evt->key_code] = true; }\n";
         out << "        } else if (e.opcode == webcc::input::KeyUpEvent::OPCODE) {\n";
         out << "            if (auto evt = e.as<webcc::input::KeyUpEvent>()) { if (evt->key_code >= 0 && evt->key_code < 256) g_key_state[evt->key_code] = false; }\n";
+        out << "        } else if (e.opcode == webcc::system::PopstateEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::system::PopstateEvent>()) { if (g_popstate_callback) g_popstate_callback(webcc::string(evt->path)); }\n";
         if (uses_websocket) {
             out << "        } else if (e.opcode == webcc::websocket::MessageEvent::OPCODE) {\n";
             out << "            if (auto evt = e.as<webcc::websocket::MessageEvent>()) g_ws_message_dispatcher.dispatch(evt->handle, webcc::string(evt->data));\n";
@@ -823,6 +826,14 @@ int main(int argc, char **argv)
         out << "    void* app_mem = webcc::malloc(sizeof(" << final_app_config.root_component << "));\n";
         out << "    app = new (app_mem) " << final_app_config.root_component << "();\n";
         out << "    webcc::input::init_keyboard();\n";
+        // Initialize popstate listener for router apps
+        if (root_comp && root_comp->router) {
+            out << "    // Set up browser back/forward button handling\n";
+            out << "    g_popstate_callback = [](const webcc::string& path) {\n";
+            out << "        if (app) app->_handle_popstate(path);\n";
+            out << "    };\n";
+            out << "    webcc::system::init_popstate();\n";
+        }
 
         out << "    app->view();\n";
         out << "    webcc::system::set_main_loop(update_wrapper);\n";

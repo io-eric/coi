@@ -1608,6 +1608,19 @@ std::string Component::to_webcc(CompilerSession &session)
         ss << "        _sync_route();\n";
         ss << "    }\n";
 
+        // _handle_popstate() method - called when browser back/forward buttons are clicked
+        ss << "    void _handle_popstate(const webcc::string& path) {\n";
+        ss << "        if (_current_route == path) return;\n";
+        ss << "        _current_route = path;\n";
+        // Validate route and fall back to default if invalid
+        ss << "        bool _route_matched = false;\n";
+        for (const auto& route : router->routes) {
+            ss << "        if (_current_route == \"" << route.path << "\") _route_matched = true;\n";
+        }
+        ss << "        if (!_route_matched) _current_route = \"" << (router->routes.empty() ? "/" : router->routes[0].path) << "\";\n";
+        ss << "        _sync_route();\n";
+        ss << "    }\n";
+
         // _sync_route() method - destroys old component and creates new one
         ss << "    void _sync_route() {\n";
         // First destroy any existing route component
