@@ -704,6 +704,12 @@ int main(int argc, char **argv)
             out << "Dispatcher<webcc::function<void()>> g_ws_close_dispatcher;\n";
             out << "Dispatcher<webcc::function<void()>> g_ws_error_dispatcher;\n";
         }
+        bool uses_fetch = required_headers.count("fetch") > 0;
+        if (uses_fetch) {
+            out << "// Fetch event dispatchers\n";
+            out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_fetch_success_dispatcher;\n";
+            out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_fetch_error_dispatcher;\n";
+        }
         out << "webcc::function<void(const webcc::string&)> g_popstate_callback;\n";
         out << "bool g_key_state[256] = {};\n";
         out << "int g_view_depth = 0;\n\n";
@@ -801,9 +807,39 @@ int main(int argc, char **argv)
             out << "        } else if (e.opcode == webcc::websocket::OpenEvent::OPCODE) {\n";
             out << "            if (auto evt = e.as<webcc::websocket::OpenEvent>()) g_ws_open_dispatcher.dispatch(evt->handle);\n";
             out << "        } else if (e.opcode == webcc::websocket::CloseEvent::OPCODE) {\n";
-            out << "            if (auto evt = e.as<webcc::websocket::CloseEvent>()) g_ws_close_dispatcher.dispatch(evt->handle);\n";
+            out << "            if (auto evt = e.as<webcc::websocket::CloseEvent>()) {\n";
+            out << "                g_ws_close_dispatcher.dispatch(evt->handle);\n";
+            out << "                // Clean up all dispatchers for this WebSocket (connection is done)\n";
+            out << "                g_ws_message_dispatcher.remove(evt->handle);\n";
+            out << "                g_ws_open_dispatcher.remove(evt->handle);\n";
+            out << "                g_ws_close_dispatcher.remove(evt->handle);\n";
+            out << "                g_ws_error_dispatcher.remove(evt->handle);\n";
+            out << "            }\n";
             out << "        } else if (e.opcode == webcc::websocket::ErrorEvent::OPCODE) {\n";
-            out << "            if (auto evt = e.as<webcc::websocket::ErrorEvent>()) g_ws_error_dispatcher.dispatch(evt->handle);\n";
+            out << "            if (auto evt = e.as<webcc::websocket::ErrorEvent>()) {\n";
+            out << "                g_ws_error_dispatcher.dispatch(evt->handle);\n";
+            out << "                // Clean up all dispatchers for this WebSocket (connection failed)\n";
+            out << "                g_ws_message_dispatcher.remove(evt->handle);\n";
+            out << "                g_ws_open_dispatcher.remove(evt->handle);\n";
+            out << "                g_ws_close_dispatcher.remove(evt->handle);\n";
+            out << "                g_ws_error_dispatcher.remove(evt->handle);\n";
+            out << "            }\n";
+        }
+        if (uses_fetch) {
+            out << "        } else if (e.opcode == webcc::fetch::SuccessEvent::OPCODE) {\n";
+            out << "            if (auto evt = e.as<webcc::fetch::SuccessEvent>()) {\n";
+            out << "                g_fetch_success_dispatcher.dispatch(evt->id, webcc::string(evt->data));\n";
+            out << "                // Clean up - fetch is one-shot\n";
+            out << "                g_fetch_success_dispatcher.remove(evt->id);\n";
+            out << "                g_fetch_error_dispatcher.remove(evt->id);\n";
+            out << "            }\n";
+            out << "        } else if (e.opcode == webcc::fetch::ErrorEvent::OPCODE) {\n";
+            out << "            if (auto evt = e.as<webcc::fetch::ErrorEvent>()) {\n";
+            out << "                g_fetch_error_dispatcher.dispatch(evt->id, webcc::string(evt->error));\n";
+            out << "                // Clean up - fetch is one-shot\n";
+            out << "                g_fetch_success_dispatcher.remove(evt->id);\n";
+            out << "                g_fetch_error_dispatcher.remove(evt->id);\n";
+            out << "            }\n";
         }
         out << "        }\n";
         out << "    }\n";

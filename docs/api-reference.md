@@ -474,29 +474,86 @@ component App {
 
 ## Fetch
 
-HTTP requests. Returns a `FetchRequest` handle.
+HTTP requests with callback-based response handling. Returns a `FetchRequest` handle.
 
 ### Methods
 
 | Method | Description |
 |--------|-------------|
-| `FetchRequest.get(string url)` | Make a GET request (static) |
-| `FetchRequest.post(string url, string body)` | Make a POST request (static) |
+| `FetchRequest.get(url, &onSuccess=..., &onError=...)` | Make a GET request (static) |
+| `FetchRequest.post(url, body, &onSuccess=..., &onError=...)` | Make a POST request (static) |
+
+### Callback Signatures
+
+| Callback | Signature | Description |
+|----------|-----------|-------------|
+| `onSuccess` | `def handler(string data) : void` | Called with response data |
+| `onError` | `def handler(string error) : void` | Called on request error |
 
 ### Example
 
 ```tsx
 component DataLoader {
-    mut string data = "";
+    mut string result = "Click to load data";
+    mut bool loading = false;
+
+    def handleSuccess(string data) : void {
+        loading = false;
+        result = data;
+    }
+
+    def handleError(string error) : void {
+        loading = false;
+        result = "Error: " + error;
+    }
 
     def loadData() : void {
-        FetchRequest.get("https://api.example.com/data");
+        loading = true;
+        result = "Loading...";
+        FetchRequest.get(
+            "https://api.example.com/data",
+            &onSuccess = handleSuccess,
+            &onError = handleError
+        );
     }
 
     view {
         <div>
             <button onclick={loadData}>Load</button>
-            <p>{data}</p>
+            <p>{result}</p>
+        </div>
+    }
+}
+```
+
+### POST Example
+
+```tsx
+component FormSubmit {
+    mut string status = "";
+
+    def handleSuccess(string response) : void {
+        status = "Submitted!";
+    }
+
+    def handleError(string error) : void {
+        status = "Failed: " + error;
+    }
+
+    def submit() : void {
+        status = "Submitting...";
+        FetchRequest.post(
+            "https://api.example.com/submit",
+            "{\"name\": \"test\"}",
+            &onSuccess = handleSuccess,
+            &onError = handleError
+        );
+    }
+
+    view {
+        <div>
+            <button onclick={submit}>Submit</button>
+            <p>{status}</p>
         </div>
     }
 }

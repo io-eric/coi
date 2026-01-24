@@ -109,6 +109,61 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
         return code;
     }
     
+    // FetchRequest.get with named callback arguments
+    // Usage: FetchRequest.get("url", &onSuccess = handler, &onError = handler)
+    if (intrinsic_name == "fetch_get") {
+        if (args.empty()) return "";
+        
+        std::string url = args[0].value->to_webcc();
+        std::string code = "[&]() {\n";
+        code += "            auto _req = webcc::fetch::get(" + url + ");\n";
+        
+        // Process named callback arguments
+        for (size_t i = 1; i < args.size(); i++) {
+            const auto& arg = args[i];
+            if (arg.name.empty()) continue;
+            
+            std::string callback = arg.value->to_webcc();
+            if (arg.name == "onSuccess") {
+                code += "            g_fetch_success_dispatcher.set(_req, [this](const webcc::string& data) { this->" + callback + "(data); });\n";
+            } else if (arg.name == "onError") {
+                code += "            g_fetch_error_dispatcher.set(_req, [this](const webcc::string& error) { this->" + callback + "(error); });\n";
+            }
+        }
+        
+        code += "            return _req;\n";
+        code += "        }()";
+        return code;
+    }
+    
+    // FetchRequest.post with named callback arguments
+    // Usage: FetchRequest.post("url", "body", &onSuccess = handler, &onError = handler)
+    if (intrinsic_name == "fetch_post") {
+        if (args.size() < 2) return "";
+        
+        std::string url = args[0].value->to_webcc();
+        std::string body = args[1].value->to_webcc();
+        std::string code = "[&]() {\n";
+        code += "            auto _req = webcc::fetch::post(" + url + ", " + body + ");\n";
+        
+        // Process named callback arguments
+        for (size_t i = 2; i < args.size(); i++) {
+            const auto& arg = args[i];
+            if (arg.name.empty()) continue;
+            
+            std::string callback = arg.value->to_webcc();
+            if (arg.name == "onSuccess") {
+                code += "            g_fetch_success_dispatcher.set(_req, [this](const webcc::string& data) { this->" + callback + "(data); });\n";
+            } else if (arg.name == "onError") {
+                code += "            g_fetch_error_dispatcher.set(_req, [this](const webcc::string& error) { this->" + callback + "(error); });\n";
+            }
+        }
+        
+        code += "            return _req;\n";
+        code += "        }()";
+        return code;
+    }
+    
     return "";  // Unknown intrinsic
 }
 

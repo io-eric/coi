@@ -30,6 +30,8 @@ static const std::set<std::string> EXCLUDED_FUNCTIONS = {
     "dom::add_keydown_listener",        // Handled by onKeydown attribute
     "system::random",                   // System.random() - built-in wasm random
     "websocket::connect",               // WebSocket.connect with callbacks handled via intrinsic
+    "fetch::get",                       // FetchRequest.get with callbacks handled via intrinsic
+    "fetch::post",                      // FetchRequest.post with callbacks handled via intrinsic
 };
 
 // Convert snake_case to camelCase for Coi function names
@@ -167,6 +169,16 @@ int main() {
     std::map<std::string, std::set<std::string>> handles_by_ns;  // Track which handles belong to which namespace
     
     for (const auto* c = webcc::SCHEMA_COMMANDS; !c->ns.empty(); ++c) {
+        // Track handle types for this namespace BEFORE exclusion check
+        // This ensures namespaces with intrinsic-only types still get generated
+        if (!c->return_handle_type.empty()) {
+            handles_by_ns[c->ns].insert(c->return_handle_type);
+            // Ensure namespace exists in commands_by_ns even if all commands are excluded
+            if (commands_by_ns.find(c->ns) == commands_by_ns.end()) {
+                commands_by_ns[c->ns] = {};
+            }
+        }
+        
         // Skip excluded functions (check namespace::function_name)
         if (EXCLUDED_FUNCTIONS.count(c->ns + "::" + c->func_name)) {
             continue;
@@ -182,11 +194,6 @@ int main() {
         if (has_func_ptr) continue;
         
         commands_by_ns[c->ns].push_back(c);
-        
-        // Track handle types for this namespace
-        if (!c->return_handle_type.empty()) {
-            handles_by_ns[c->ns].insert(c->return_handle_type);
-        }
     }
     
     // Group commands by their "receiver" handle type (first param if it's a handle)
@@ -245,10 +252,16 @@ int main() {
             factories_by_type[cmd->return_handle_type].push_back(cmd);
         }
         
-        // Collect all handle types that need to be generated (either have factories or methods)
+        // Collect all handle types that need to be generated (either have factories, methods, or intrinsics)
         std::set<std::string> all_handle_types;
         for (const auto& [type, _] : factories_by_type) all_handle_types.insert(type);
         for (const auto& [type, _] : methods_by_handle) all_handle_types.insert(type);
+        // Also include handle types from this namespace (even if all commands are excluded - for intrinsics)
+        if (handles_by_ns.count(ns)) {
+            for (const auto& type : handles_by_ns[ns]) {
+                all_handle_types.insert(type);
+            }
+        }
         
         // Generate each handle type with both static and instance methods combined
         for (const auto& handle_type : all_handle_types) {
@@ -354,6 +367,23 @@ int main() {
                 out << "    def onClose(def callback : void): void\n\n";
                 out << "    @intrinsic(\"ws_on_error\")\n";
                 out << "    def onError(def callback : void): void\n";
+            }
+            
+            // Inject FetchRequest intrinsics (get/post with callbacks)
+            if (handle_type == "FetchRequest") {
+                out << "    // FetchRequest.get with optional callback parameters (compiler intrinsic)\n";
+                out << "    @intrinsic(\"fetch_get\")\n";
+                out << "    shared def get(string url, "
+                    << "def onSuccess(string) : void = void, "
+                    << "def onError(string) : void = void"
+                    << "): FetchRequest\n\n";
+                
+                out << "    // FetchRequest.post with optional callback parameters (compiler intrinsic)\n";
+                out << "    @intrinsic(\"fetch_post\")\n";
+                out << "    shared def post(string url, string body, "
+                    << "def onSuccess(string) : void = void, "
+                    << "def onError(string) : void = void"
+                    << "): FetchRequest\n";
             }
             
             out << "}\n\n";

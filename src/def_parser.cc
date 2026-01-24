@@ -849,17 +849,18 @@ bool DefSchema::inherits_from(const std::string &derived, const std::string &bas
 
 bool DefSchema::is_handle(const std::string &type_name) const
 {
-    // A handle is a non-builtin type that has methods with @map annotations
+    // A handle is a non-builtin type that has methods with @map or @intrinsic annotations
     auto type_it = types_.find(type_name);
     if (type_it == types_.end())
         return false;
     if (type_it->second.is_builtin)
         return false;
 
-    // Check if it has any @map methods (webcc handle)
+    // Check if it has any @map or @intrinsic methods (webcc handle or intrinsic type)
     for (const auto &method : type_it->second.methods)
     {
-        if (method.mapping_type == MappingType::Map)
+        if (method.mapping_type == MappingType::Map || 
+            method.mapping_type == MappingType::Intrinsic)
         {
             return true;
         }
@@ -930,18 +931,20 @@ std::string DefSchema::get_namespace_for_type(const std::string &type_name) cons
     if (type_it == types_.end())
         return "";
 
-    // Extract namespace from first @map annotation
+    // Extract namespace from first @map or @intrinsic annotation
     for (const auto &method : type_it->second.methods)
     {
-        if (method.mapping_type == MappingType::Map && !method.mapping_value.empty())
-        {
-            // mapping_value is "ns::func_name", extract ns
-            size_t sep = method.mapping_value.find("::");
-            if (sep != std::string::npos)
-            {
-                return method.mapping_value.substr(0, sep);
-            }
-        }
+        if (method.mapping_value.empty())
+            continue;
+
+        size_t sep = std::string::npos;
+        if (method.mapping_type == MappingType::Map)
+            sep = method.mapping_value.find("::"); // "ns::func_name"
+        else if (method.mapping_type == MappingType::Intrinsic)
+            sep = method.mapping_value.find('_');  // "ns_func"
+
+        if (sep != std::string::npos)
+            return method.mapping_value.substr(0, sep);
     }
 
     // Check parent

@@ -1,0 +1,53 @@
+// Test: Multiple concurrent fetch requests - should pass
+// Tests that multiple fetch requests can be tracked independently
+
+component TestFetchMultiple {
+    mut string result1 = "Not started";
+    mut string result2 = "Not started";
+
+    def handleSuccess1(string data) : void {
+        result1 = "Success: " + data.length() + " bytes";
+    }
+
+    def handleError1(string error) : void {
+        result1 = "Error: " + error;
+    }
+
+    def handleSuccess2(string data) : void {
+        result2 = "Success: " + data.length() + " bytes";
+    }
+
+    def handleError2(string error) : void {
+        result2 = "Error: " + error;
+    }
+
+    def fetchBoth() : void {
+        result1 = "Loading...";
+        result2 = "Loading...";
+        
+        // Two concurrent requests with different callbacks
+        FetchRequest.get(
+            "https://httpbin.org/get?id=1",
+            &onSuccess = handleSuccess1,
+            &onError = handleError1
+        );
+        
+        FetchRequest.get(
+            "https://httpbin.org/get?id=2",
+            &onSuccess = handleSuccess2,
+            &onError = handleError2
+        );
+    }
+
+    view {
+        <div>
+            <button onclick={fetchBoth}>Fetch Both</button>
+            <p>Request 1: {result1}</p>
+            <p>Request 2: {result2}</p>
+        </div>
+    }
+}
+
+app {
+    root = TestFetchMultiple;
+}

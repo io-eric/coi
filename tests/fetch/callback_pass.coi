@@ -1,0 +1,39 @@
+// Test: Fetch callback registration - should pass
+// Tests the callback-based Fetch API with named arguments
+
+component TestFetchCallback {
+    mut string result = "Not started";
+    mut bool loading = false;
+
+    def handleSuccess(string data) : void {
+        loading = false;
+        result = data;
+    }
+
+    def handleError(string error) : void {
+        loading = false;
+        result = "Error: " + error;
+    }
+
+    def doFetch() : void {
+        loading = true;
+        result = "Loading...";
+        FetchRequest.get(
+            "https://httpbin.org/get",
+            &onSuccess = handleSuccess,
+            &onError = handleError
+        );
+    }
+
+    view {
+        <div>
+            <button onclick={doFetch}>Fetch Data</button>
+            <p>Status: {loading ? "Loading" : "Idle"}</p>
+            <p>Result: {result}</p>
+        </div>
+    }
+}
+
+app {
+    root = TestFetchCallback;
+}
