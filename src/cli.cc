@@ -8,6 +8,10 @@
 #include <unistd.h>
 #include <limits.h>
 
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
 namespace fs = std::filesystem;
 
 using namespace colors;
@@ -33,13 +37,29 @@ static void print_banner(const char *cmd)
 std::filesystem::path get_executable_dir()
 {
     char path[PATH_MAX];
+    
+#ifdef __APPLE__
+    // macOS: use _NSGetExecutablePath
+    uint32_t size = sizeof(path);
+    if (_NSGetExecutablePath(path, &size) == 0)
+    {
+        char real_path[PATH_MAX];
+        if (realpath(path, real_path) != nullptr)
+        {
+            return fs::path(real_path).parent_path();
+        }
+        return fs::path(path).parent_path();
+    }
+#else
+    // Linux: use /proc/self/exe
     ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
     if (len != -1)
     {
         path[len] = '\0';
         return fs::path(path).parent_path();
     }
-    // Fallback: empty path
+#endif
+
     return fs::path();
 }
 
