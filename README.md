@@ -53,7 +53,7 @@ Whether you're building a typical web app or something graphics-intensive, Coi g
 
 ## Benchmarks
 
-Coi is designed for high-performance and minimal footprint. In [benchmarks](benchmark/) comparing Coi, React, and Vue:
+Coi is designed for high-performance and minimal footprint. In [benchmarks](benchmark/) comparing Coi, React, Vue, and Svelte:
 Coi's fine-grained reactivity and minimal WASM runtime deliver smaller bundles and faster DOM updates with no Virtual DOM overhead.
 
 <p align="center">

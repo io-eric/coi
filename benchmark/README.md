@@ -1,6 +1,6 @@
-# Coi vs React vs Vue Benchmark
+# Coi vs React vs Vue vs Svelte Benchmark
 
-This directory contains benchmarks comparing **Coi**, **React**, and **Vue**.
+This directory contains benchmarks comparing **Coi**, **React**, **Vue**, and **Svelte**.
 
 ## What's Measured
 
@@ -12,7 +12,7 @@ This directory contains benchmarks comparing **Coi**, **React**, and **Vue**.
 ## Prerequisites
 
 - **Python 3**: For the runner script
-- **Node.js & npm**: Required to build React and Vue
+- **Node.js & npm**: Required to build React, Vue, and Svelte
 - **Coi**: The `coi` command must be in PATH
 - **Playwright** (optional): For DOM benchmarks (`pip install playwright && playwright install chromium`)
 
@@ -45,9 +45,11 @@ benchmark/
 ├── coi-counter/     # Coi counter app (bundle size)
 ├── react-counter/   # React counter app (bundle size)
 ├── vue-counter/     # Vue counter app (bundle size)
+├── svelte-counter/  # Svelte counter app (bundle size)
 ├── coi-rows/        # Coi rows app (DOM performance)
 ├── react-rows/      # React rows app (DOM performance)
 ├── vue-rows/        # Vue rows app (DOM performance)
+├── svelte-rows/     # Svelte rows app (DOM performance)
 ├── benchmark.py     # Main benchmark runner
 └── run.sh           # Entry point script
 ```

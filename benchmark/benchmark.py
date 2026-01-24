@@ -22,7 +22,7 @@ try:
 except ImportError:
     pass
 
-FRAMEWORKS = ['coi', 'react', 'vue']
+FRAMEWORKS = ['coi', 'react', 'vue', 'svelte']
 BENCHMARK_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # DOM benchmark operations
@@ -38,7 +38,7 @@ DOM_BENCHMARKS = [
 WARMUP_RUNS = 5
 BENCHMARK_RUNS = 5
 
-COLORS = {"coi": "#9477ff", "react": "#00d8ff", "vue": "#42b883"}
+COLORS = {"coi": "#9477ff", "react": "#00d8ff", "vue": "#42b883", "svelte": "#e97d30"}
 
 
 def parse_browser(ua: str) -> str:
@@ -82,8 +82,8 @@ def build_counter_apps():
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"  ✗ Coi counter failed: {e}")
     
-    # Build React and Vue counters
-    for fw in ['react', 'vue']:
+    # Build React, Vue, and Svelte counters
+    for fw in ['react', 'vue', 'svelte']:
         fw_dir = os.path.join(BENCHMARK_DIR, f'{fw}-counter')
         if os.path.exists(fw_dir):
             try:
@@ -110,8 +110,8 @@ def build_rows_apps():
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"  ✗ Coi rows failed: {e}")
     
-    # Build React and Vue rows
-    for fw in ['react', 'vue']:
+    # Build React, Vue, and Svelte rows
+    for fw in ['react', 'vue', 'svelte']:
         fw_dir = os.path.join(BENCHMARK_DIR, f'{fw}-rows')
         if os.path.exists(fw_dir):
             try:
@@ -332,7 +332,7 @@ def print_dom_results(results: dict):
     for fw in FRAMEWORKS:
         header += f" | {fw.capitalize():>10}"
     print(header)
-    print("-" * 60)
+    print("-" * 75)
     
     # Results
     for bench in benchmarks:
@@ -374,15 +374,15 @@ def generate_svg_report(bundle_sizes: dict, dom_results: dict, browser_name: str
     svg.append(f'<rect width="100%" height="100%" fill="{bg_color}"/>')
     
     # Title
-    svg.append(f'<text x="{width/2}" y="35" text-anchor="middle" fill="{text_main}" font-size="22" font-weight="bold">Coi vs React vs Vue Benchmark</text>')
+    svg.append(f'<text x="{width/2}" y="35" text-anchor="middle" fill="{text_main}" font-size="22" font-weight="bold">Coi vs React vs Vue vs Svelte Benchmark</text>')
     
     # Browser info subtitle (if available)
     if browser_name:
         svg.append(f'<text x="{width/2}" y="52" text-anchor="middle" fill="{text_sub}" font-size="11">{browser_name}</text>')
     
-    # Legend - centered properly (3 items: ~240px total width)
+    # Legend - centered properly (4 items: ~320px total width)
     legend_y = 60
-    legend_start = width/2 - 120
+    legend_start = width/2 - 160
     for i, fw in enumerate(FRAMEWORKS):
         lx = legend_start + i * 85
         svg.append(f'<rect x="{lx}" y="{legend_y}" width="14" height="14" fill="{COLORS[fw]}" rx="3"/>')
