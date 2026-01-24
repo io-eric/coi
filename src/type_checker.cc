@@ -693,8 +693,11 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
 void validate_types(const std::vector<Component> &components, const std::vector<std::unique_ptr<EnumDef>> &global_enums)
 {
     std::set<std::string> component_names;
-    for (const auto &c : components)
+    std::map<std::string, const Component*> component_map;
+    for (const auto &c : components) {
         component_names.insert(c.name);
+        component_map[c.name] = &c;
+    }
 
     // Collect all enum type names (for enum <-> int conversion checking)
     g_enum_types.clear();
@@ -832,9 +835,29 @@ void validate_types(const std::vector<Component> &components, const std::vector<
         for (const auto &method : comp.methods)
         {
             std::map<std::string, std::string> method_scope = scope;
+            std::set<std::string> mutable_vars;  // Track which variables are mutable
+            
+            // Initialize with component's mutable state variables
+            for (const auto &var : comp.state)
+            {
+                if (var->is_mutable) {
+                    mutable_vars.insert(var->name);
+                }
+            }
+            // Initialize with component's mutable parameters
+            for (const auto &param : comp.params)
+            {
+                if (param->is_mutable) {
+                    mutable_vars.insert(param->name);
+                }
+            }
+            
             for (const auto &param : method.params)
             {
                 method_scope[param.name] = normalize_type(param.type);
+                if (param.is_mutable) {
+                    mutable_vars.insert(param.name);
+                }
             }
 
             // Get expected return type for this method
@@ -1010,6 +1033,10 @@ void validate_types(const std::vector<Component> &components, const std::vector<
                         }
                     }
                     current_scope[decl->name] = type;
+                    // Track mutability for const-correctness checks
+                    if (decl->is_mutable) {
+                        mutable_vars.insert(decl->name);
+                    }
                 }
                 else if (auto assign = dynamic_cast<Assignment *>(stmt.get()))
                 {
@@ -1211,6 +1238,50 @@ void validate_types(const std::vector<Component> &components, const std::vector<
                 {
                     // Check expression for use of moved variables
                     check_moved_use(expr_stmt->expression.get(), expr_stmt->line);
+                    
+                    // Check for calling mutating methods on const component variables
+                    if (auto call = dynamic_cast<FunctionCall *>(expr_stmt->expression.get()))
+                    {
+                        size_t dot_pos = call->name.rfind('.');
+                        if (dot_pos != std::string::npos)
+                        {
+                            std::string obj_name = call->name.substr(0, dot_pos);
+                            std::string method_name = call->name.substr(dot_pos + 1);
+                            
+                            // Check if obj_name is a local variable (in scope)
+                            if (current_scope.count(obj_name))
+                            {
+                                std::string obj_type = current_scope.at(obj_name);
+                                
+                                // Check if it's a component type and the variable is not mutable
+                                if (component_map.count(obj_type) && !mutable_vars.count(obj_name))
+                                {
+                                    // Check if the method is mutating (modifies state)
+                                    const Component* target_comp = component_map.at(obj_type);
+                                    for (const auto& m : target_comp->methods)
+                                    {
+                                        if (m.name == method_name)
+                                        {
+                                            // Check if this method modifies any state
+                                            std::set<std::string> modified_vars;
+                                            m.collect_modifications(modified_vars);
+                                            
+                                            if (!modified_vars.empty())
+                                            {
+                                                std::cerr << "\033[1;31mError:\033[0m Cannot call mutating method '" 
+                                                          << method_name << "' on const component variable '" 
+                                                          << obj_name << "'. Declare as 'mut " << obj_type << " " 
+                                                          << obj_name << "' to allow mutation. At line " 
+                                                          << expr_stmt->line << std::endl;
+                                                exit(1);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     
                     // Validate expression type
                     infer_expression_type(expr_stmt->expression.get(), current_scope);

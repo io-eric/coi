@@ -1,0 +1,27 @@
+// Test: mut local component variable can call mutating methods
+component Counter {
+    mut int value = 0;
+
+    pub def increment() : void {
+        value++;
+    }
+
+    view {
+        <span>{value}</span>
+    }
+}
+
+component MutComponentPass {
+    def tryMutate() : void {
+        mut Counter counter;  // mut, so can mutate
+        counter.increment();  // OK: calling method on non-const object
+    }
+
+    view {
+        <button onclick={tryMutate}>Test</button>
+    }
+}
+
+app {
+    root = MutComponentPass;
+}

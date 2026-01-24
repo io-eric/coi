@@ -67,10 +67,7 @@ std::string VarDeclaration::to_webcc()
         }
     }
 
-    // Don't make component types const by default (they need to call mutating methods on members)
-    // Component types start with uppercase and are not handles
-    bool is_component = !type.empty() && std::isupper(type[0]) && !type.ends_with("[]") && !DefSchema::instance().is_handle(type);
-    std::string result = (is_mutable || is_component ? "" : "const ") + convert_type(type);
+    std::string result = (is_mutable ? "" : "const ") + convert_type(type);
     if (is_reference)
         result += "&";
     result += " " + name;

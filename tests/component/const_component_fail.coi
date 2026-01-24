@@ -1,0 +1,27 @@
+// Test: non-mut local component variable should be const and cannot call mutating methods
+component Counter {
+    mut int value = 0;
+
+    pub def increment() : void {
+        value++;
+    }
+
+    view {
+        <span>{value}</span>
+    }
+}
+
+component ConstComponentFail {
+    def tryMutate() : void {
+        Counter counter;
+        counter.increment();  // ERROR: calling non-const method on const object
+    }
+
+    view {
+        <button onclick={tryMutate}>Test</button>
+    }
+}
+
+app {
+    root = ConstComponentFail;
+}
