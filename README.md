@@ -186,6 +186,12 @@ my-app/
 - [Platform APIs](docs/api-reference.md) — Canvas, Storage, Audio, Fetch, and more
 - [Editor Support](docs/tooling.md) — VS Code, Sublime Text, and Zed extensions
 
+## Community
+
+Join the Coi community on Discord to get help, share projects, and discuss the language:
+
+**[Join Discord Server](https://discord.gg/KSpWx78wuR)** 💬
+
 ## Editor Support
 
 Coi has syntax highlighting and language support for VS Code, Sublime Text, and Zed.

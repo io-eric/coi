@@ -228,6 +228,10 @@ import "../shared/Utils.coi";
 
 Imports are relative to the current file's location. All components defined in imported files become available in the current file.
 
+## Getting Help
+
+Getting stuck or need help? Join the [Coi Discord community](https://discord.gg/KSpWx78wuR) for fast support and discussions, or [open an issue](https://github.com/io-eric/coi/issues) on GitHub for bugs and feature requests.
+
 ## Next Steps
 
 - [Language Guide](language-guide.md) — Types, control flow, operators
