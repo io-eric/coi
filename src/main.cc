@@ -213,8 +213,16 @@ static void load_def_schema() {
     if (!exe_dir.empty() && fs::exists(exe_dir / "def")) {
         def_dir = (exe_dir / "def").string();
     } else {
-        ErrorHandler::cli_error("Could not find 'def' directory next to executable",
-                               "Expected location: " + (exe_dir / "def").string());
+        std::string hint;
+        if (exe_dir.empty()) {
+            hint = "Could not determine executable location.\n"
+                   "  If you see this error, please open an issue at:\n"
+                   "  https://github.com/io-eric/coi/issues\n"
+                   "  Include your OS, how you installed coi, and how you ran the command.";
+        } else {
+            hint = "Expected location: " + (exe_dir / "def").string();
+        }
+        ErrorHandler::cli_error("Could not find 'def' directory next to executable", hint);
         exit(1);
     }
     
