@@ -711,6 +711,7 @@ int main(int argc, char **argv)
             out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_fetch_error_dispatcher;\n";
         }
         out << "webcc::function<void(const webcc::string&)> g_popstate_callback;\n";
+        out << "webcc::function<void(double)> g_after_paint_callback;\n";
         out << "bool g_key_state[256] = {};\n";
         out << "int g_view_depth = 0;\n\n";
 
@@ -801,6 +802,8 @@ int main(int argc, char **argv)
         out << "            if (auto evt = e.as<webcc::input::KeyUpEvent>()) { if (evt->key_code >= 0 && evt->key_code < 256) g_key_state[evt->key_code] = false; }\n";
         out << "        } else if (e.opcode == webcc::system::PopstateEvent::OPCODE) {\n";
         out << "            if (auto evt = e.as<webcc::system::PopstateEvent>()) { if (g_popstate_callback) g_popstate_callback(webcc::string(evt->path)); }\n";
+        out << "        } else if (e.opcode == webcc::system::AfterPaintEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::system::AfterPaintEvent>()) { if (g_after_paint_callback) { g_after_paint_callback(evt->duration); g_after_paint_callback = nullptr; } }\n";
         if (uses_websocket) {
             out << "        } else if (e.opcode == webcc::websocket::MessageEvent::OPCODE) {\n";
             out << "            if (auto evt = e.as<webcc::websocket::MessageEvent>()) g_ws_message_dispatcher.dispatch(evt->handle, webcc::string(evt->data));\n";

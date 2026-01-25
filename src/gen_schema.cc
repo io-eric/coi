@@ -446,6 +446,9 @@ int main() {
                 out << "    shared def random(): float\n";
                 out << "    @intrinsic(\"random_seeded\")\n";
                 out << "    shared def random(int seed): float\n";
+                out << "\n    // Measure after paint with callback (receives duration in ms)\n";
+                out << "    @intrinsic(\"measure_after_paint_callback\")\n";
+                out << "    shared def measureAfterPaint(float64 start_time, def callback(float64): void): void\n";
             }
             
             if (!all_handle_types.count(ns_type)) {
