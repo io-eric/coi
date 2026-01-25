@@ -16,7 +16,7 @@ component Row(pub int id, pub mut string label, pub mut bool selected, def onSel
         selected = s;
     }
 
-    style {
+    style global {
         .row {
             display: flex;
             align-items: center;

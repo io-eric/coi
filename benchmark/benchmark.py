@@ -360,7 +360,7 @@ def generate_svg_report(bundle_sizes: dict, dom_results: dict, browser_name: str
     """Generate combined SVG visualization."""
     has_dom = bool(dom_results)
     width = 800
-    height = 750 if has_dom else 280
+    height = 900 if has_dom else 280
     
     bg_color, text_main, text_sub = "#f8f9fa", "#212529", "#6c757d"
     
@@ -463,6 +463,76 @@ def generate_svg_report(bundle_sizes: dict, dom_results: dict, browser_name: str
                 bar_y += bar_height + bar_gap
             
             y += (bar_height + bar_gap) * 3 + group_gap
+        
+        # Summary table: Coi vs Best Other
+        y += 10
+        svg.append(f'<text x="{width/2}" y="{y}" text-anchor="middle" fill="{text_main}" font-size="14" font-weight="bold">Coi vs Best Other</text>')
+        y += 25
+        
+        # Table headers
+        col_metric = 100
+        col_coi = 320
+        col_other = 480
+        col_diff = 640
+        
+        svg.append(f'<text x="{col_metric}" y="{y}" fill="{text_sub}" font-size="11" font-weight="bold">Metric</text>')
+        svg.append(f'<text x="{col_coi}" y="{y}" text-anchor="end" fill="{COLORS["coi"]}" font-size="11" font-weight="bold">Coi</text>')
+        svg.append(f'<text x="{col_other}" y="{y}" text-anchor="end" fill="{text_sub}" font-size="11" font-weight="bold">Best Other</text>')
+        svg.append(f'<text x="{col_diff}" y="{y}" text-anchor="end" fill="{text_sub}" font-size="11" font-weight="bold">Difference</text>')
+        y += 18
+        
+        # Build comparison data
+        comparisons = []
+        
+        # Bundle size
+        if bundle_sizes and 'coi' in bundle_sizes:
+            coi_size = bundle_sizes['coi'] / 1024
+            others = [(fw, s/1024) for fw, s in bundle_sizes.items() if fw != 'coi' and s > 0]
+            if others:
+                best_fw, best_val = min(others, key=lambda x: x[1])
+                win = coi_size <= best_val
+                comparisons.append(('Bundle Size', coi_size, best_val, f'{coi_size:.1f} KB', f'{best_val:.1f} KB ({best_fw.capitalize()})', win, True))
+        
+        # DOM metrics
+        for bench in benchmarks:
+            if 'coi' in dom_results and bench in dom_results['coi']:
+                coi_val = dom_results['coi'][bench].get('mean', 0)
+                others = []
+                for fw in FRAMEWORKS:
+                    if fw != 'coi' and fw in dom_results and bench in dom_results[fw]:
+                        others.append((fw, dom_results[fw][bench].get('mean', 0)))
+                if others:
+                    best_fw, best_val = min(others, key=lambda x: x[1])
+                    if best_val > 0:
+                        win = coi_val <= best_val
+                        comparisons.append((bench, coi_val, best_val, f'{coi_val:.1f} ms', f'{best_val:.1f} ms ({best_fw.capitalize()})', win, True))
+        
+        # Draw rows
+        for metric, coi_val, other_val, coi_str, other_str, is_win, lower_better in comparisons:
+            abs_diff = abs(coi_val - other_val)
+            
+            if is_win:
+                if 'KB' in coi_str:
+                    diff_str = f'✓ {abs_diff:.1f} KB smaller'
+                else:
+                    diff_str = f'✓ {abs_diff:.1f} ms faster'
+                diff_color = '#22c55e'  # green
+            elif abs_diff < 2:  # Less than 2ms/KB difference
+                diff_str = f'≈ Same'
+                diff_color = text_sub
+            else:
+                if 'KB' in coi_str:
+                    diff_str = f'+{abs_diff:.1f} KB'
+                else:
+                    diff_str = f'+{abs_diff:.1f} ms'
+                diff_color = '#f59e0b'  # orange
+            
+            svg.append(f'<text x="{col_metric}" y="{y}" fill="{text_main}" font-size="11">{metric}</text>')
+            coi_weight = 'bold' if is_win else 'normal'
+            svg.append(f'<text x="{col_coi}" y="{y}" text-anchor="end" fill="{text_main}" font-size="11" font-weight="{coi_weight}">{coi_str}</text>')
+            svg.append(f'<text x="{col_other}" y="{y}" text-anchor="end" fill="{text_sub}" font-size="11">{other_str}</text>')
+            svg.append(f'<text x="{col_diff}" y="{y}" text-anchor="end" fill="{diff_color}" font-size="11" font-weight="bold">{diff_str}</text>')
+            y += 18
     
     svg.append('</svg>')
     

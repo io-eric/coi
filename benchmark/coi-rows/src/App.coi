@@ -10,13 +10,6 @@ component App {
     mut int nextId = 1;
     mut int selectedId = -1;
 
-    def randomLabel() : string {
-        int adjIdx = nextId % 25;
-        int colIdx = nextId % 11;
-        int nounIdx = nextId % 13;
-        return adjectives[adjIdx] + " " + colours[colIdx] + " " + nouns[nounIdx];
-    }
-
     def create1000() : void {
         mut Row[] newRows;
         newRows.reserve(1000);
@@ -52,7 +45,6 @@ component App {
     }
 
     def selectRow(int id) : void {
-        // Deselect old
         int len = rows.size();
         for i in 0:len {
             if (rows[i].id == selectedId) {
@@ -79,7 +71,7 @@ component App {
         }
     }
 
-    style {
+    style global {
         * {
             box-sizing: border-box;
         }
