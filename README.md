@@ -166,15 +166,27 @@ Open `http://localhost:8000` in your browser.
 
 ```
 my-app/
+├── assets/
+│   └── images/
 ├── src/
 │   ├── App.coi          # Entry point (required)
-│   └── components/      # Your components
-├── assets/              # Static files (images, fonts, etc.)
-└── dist/                # Build output
+│   ├── layout/
+│   │   ├── Footer.coi
+│   │   └── NavBar.coi
+│   ├── pages/
+│   │   ├── About.coi
+│   │   └── Home.coi
+│   └── ui/
+│       └── Button.coi
+├── styles/
+│   └── reset.css
+├── dist/                # Build output
+└── README.md
 ```
 
 - **`src/App.coi`** — The compiler always looks for this as the entry point.
 - **`assets/`** — Automatically copied to `dist/assets/` on build.
+- **`styles/`** — CSS files here are bundled into `app.css`.
 
 ## Documentation
 
