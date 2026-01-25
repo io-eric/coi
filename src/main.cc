@@ -201,6 +201,276 @@ static std::set<std::string> get_required_headers(const std::vector<Component>& 
 }
 
 // =========================================================
+// RUNTIME FEATURE SYSTEM
+// =========================================================
+
+// Feature flags detected from code analysis
+struct FeatureFlags {
+    // DOM event dispatchers
+    bool click = false;         // onclick handlers
+    bool input = false;         // oninput handlers
+    bool change = false;        // onchange handlers
+    bool keydown = false;       // onkeydown handlers (element-level)
+    // Runtime features
+    bool keyboard = false;      // Global key state tracking (Input.isKeyDown)
+    bool after_paint = false;   // Timing/performance callbacks
+    bool router = false;        // Browser history/popstate (any component)
+    bool websocket = false;     // WebSocket connections
+    bool fetch = false;         // HTTP fetch requests
+};
+
+// Scan view nodes for event handler attributes
+static void scan_view_for_events(ASTNode* node, FeatureFlags& flags) {
+    if (!node) return;
+    
+    if (auto* el = dynamic_cast<HTMLElement*>(node)) {
+        for (const auto& attr : el->attributes) {
+            if (attr.name == "onclick") flags.click = true;
+            else if (attr.name == "oninput") flags.input = true;
+            else if (attr.name == "onchange") flags.change = true;
+            else if (attr.name == "onkeydown") flags.keydown = true;
+        }
+        for (const auto& child : el->children) {
+            scan_view_for_events(child.get(), flags);
+        }
+    }
+    else if (auto* viewIf = dynamic_cast<ViewIfStatement*>(node)) {
+        for (const auto& child : viewIf->then_children) scan_view_for_events(child.get(), flags);
+        for (const auto& child : viewIf->else_children) scan_view_for_events(child.get(), flags);
+    }
+    else if (auto* viewFor = dynamic_cast<ViewForRangeStatement*>(node)) {
+        for (const auto& child : viewFor->children) scan_view_for_events(child.get(), flags);
+    }
+    else if (auto* viewForEach = dynamic_cast<ViewForEachStatement*>(node)) {
+        for (const auto& child : viewForEach->children) scan_view_for_events(child.get(), flags);
+    }
+}
+
+// Detect which features are actually used by analyzing components
+static FeatureFlags detect_features(const std::vector<Component>& components, 
+                                    const std::set<std::string>& headers) {
+    FeatureFlags flags;
+    flags.websocket = headers.count("websocket") > 0;
+    flags.fetch = headers.count("fetch") > 0;
+    
+    // Scan all components for routers
+    for (const auto& comp : components) {
+        if (comp.router) {
+            flags.router = true;
+            break;
+        }
+    }
+    
+    // Scan views for event handlers
+    for (const auto& comp : components) {
+        for (const auto& root : comp.render_roots) {
+            scan_view_for_events(root.get(), flags);
+        }
+    }
+    
+    // Detect keyboard usage (Input.isKeyDown) and after_paint usage
+    // by scanning for specific patterns in method bodies
+    std::function<void(Expression*)> scan_expr = [&](Expression* expr) {
+        if (!expr) return;
+        if (auto* call = dynamic_cast<FunctionCall*>(expr)) {
+            // Check for Input.isKeyDown pattern
+            if (call->name.find("Input.isKeyDown") != std::string::npos) {
+                flags.keyboard = true;
+            }
+            // Check for System.afterPaint pattern  
+            if (call->name.find("System.afterPaint") != std::string::npos) {
+                flags.after_paint = true;
+            }
+            for (auto& arg : call->args) scan_expr(arg.value.get());
+        }
+        else if (auto* member = dynamic_cast<MemberAccess*>(expr)) {
+            // Check for isKeyDown method call
+            if (member->member == "isKeyDown") {
+                if (auto* id = dynamic_cast<Identifier*>(member->object.get())) {
+                    if (id->name == "Input") flags.keyboard = true;
+                }
+            }
+            if (member->member == "afterPaint") {
+                if (auto* id = dynamic_cast<Identifier*>(member->object.get())) {
+                    if (id->name == "System") flags.after_paint = true;
+                }
+            }
+            scan_expr(member->object.get());
+        }
+        else if (auto* binary = dynamic_cast<BinaryOp*>(expr)) {
+            scan_expr(binary->left.get());
+            scan_expr(binary->right.get());
+        }
+        else if (auto* ternary = dynamic_cast<TernaryOp*>(expr)) {
+            scan_expr(ternary->condition.get());
+            scan_expr(ternary->true_expr.get());
+            scan_expr(ternary->false_expr.get());
+        }
+    };
+    
+    std::function<void(Statement*)> scan_stmt = [&](Statement* stmt) {
+        if (!stmt) return;
+        if (auto* expr_stmt = dynamic_cast<ExpressionStatement*>(stmt)) {
+            scan_expr(expr_stmt->expression.get());
+        }
+        else if (auto* var_decl = dynamic_cast<VarDeclaration*>(stmt)) {
+            scan_expr(var_decl->initializer.get());
+        }
+        else if (auto* assign = dynamic_cast<Assignment*>(stmt)) {
+            scan_expr(assign->value.get());
+        }
+        else if (auto* if_stmt = dynamic_cast<IfStatement*>(stmt)) {
+            scan_expr(if_stmt->condition.get());
+            scan_stmt(if_stmt->then_branch.get());
+            scan_stmt(if_stmt->else_branch.get());
+        }
+        else if (auto* block = dynamic_cast<BlockStatement*>(stmt)) {
+            for (auto& s : block->statements) scan_stmt(s.get());
+        }
+        else if (auto* ret = dynamic_cast<ReturnStatement*>(stmt)) {
+            scan_expr(ret->value.get());
+        }
+    };
+    
+    for (const auto& comp : components) {
+        for (const auto& method : comp.methods) {
+            for (const auto& stmt : method.body) {
+                scan_stmt(stmt.get());
+            }
+        }
+    }
+    
+    return flags;
+}
+
+// Emit global declarations for enabled features
+static void emit_feature_globals(std::ostream& out, const FeatureFlags& f) {
+    // DOM event dispatchers
+    if (f.click) {
+        out << "Dispatcher<webcc::function<void()>, 128> g_dispatcher;\n";
+    }
+    if (f.input) {
+        out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_input_dispatcher;\n";
+    }
+    if (f.change) {
+        out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_change_dispatcher;\n";
+    }
+    if (f.keydown) {
+        out << "Dispatcher<webcc::function<void(int)>> g_keydown_dispatcher;\n";
+    }
+    // Runtime features
+    if (f.keyboard) {
+        out << "bool g_key_state[256] = {};\n";
+    }
+    if (f.after_paint) {
+        out << "webcc::function<void(double)> g_after_paint_callback;\n";
+    }
+    if (f.router) {
+        out << "webcc::function<void(const webcc::string&)> g_popstate_callback;\n";
+    }
+    if (f.websocket) {
+        out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_ws_message_dispatcher;\n";
+        out << "Dispatcher<webcc::function<void()>> g_ws_open_dispatcher;\n";
+        out << "Dispatcher<webcc::function<void()>> g_ws_close_dispatcher;\n";
+        out << "Dispatcher<webcc::function<void()>> g_ws_error_dispatcher;\n";
+    }
+    if (f.fetch) {
+        out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_fetch_success_dispatcher;\n";
+        out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_fetch_error_dispatcher;\n";
+    }
+}
+
+// Emit event handlers for enabled features
+static void emit_feature_event_handlers(std::ostream& out, const FeatureFlags& f) {
+    // DOM events
+    if (f.click) {
+        out << "        } else if (e.opcode == webcc::dom::ClickEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::dom::ClickEvent>()) g_dispatcher.dispatch(evt->handle);\n";
+    }
+    if (f.input) {
+        out << "        } else if (e.opcode == webcc::dom::InputEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::dom::InputEvent>()) g_input_dispatcher.dispatch(evt->handle, webcc::string(evt->value));\n";
+    }
+    if (f.change) {
+        out << "        } else if (e.opcode == webcc::dom::ChangeEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::dom::ChangeEvent>()) g_change_dispatcher.dispatch(evt->handle, webcc::string(evt->value));\n";
+    }
+    if (f.keydown) {
+        out << "        } else if (e.opcode == webcc::dom::KeydownEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::dom::KeydownEvent>()) g_keydown_dispatcher.dispatch(evt->handle, evt->keycode);\n";
+    }
+    // Runtime features
+    if (f.keyboard) {
+        out << "        } else if (e.opcode == webcc::input::KeyDownEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::input::KeyDownEvent>()) { if (evt->key_code >= 0 && evt->key_code < 256) g_key_state[evt->key_code] = true; }\n";
+        out << "        } else if (e.opcode == webcc::input::KeyUpEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::input::KeyUpEvent>()) { if (evt->key_code >= 0 && evt->key_code < 256) g_key_state[evt->key_code] = false; }\n";
+    }
+    if (f.router) {
+        out << "        } else if (e.opcode == webcc::system::PopstateEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::system::PopstateEvent>()) { if (g_popstate_callback) g_popstate_callback(webcc::string(evt->path)); }\n";
+    }
+    if (f.after_paint) {
+        out << "        } else if (e.opcode == webcc::system::AfterPaintEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::system::AfterPaintEvent>()) { if (g_after_paint_callback) { g_after_paint_callback(evt->duration); g_after_paint_callback = nullptr; } }\n";
+    }
+    if (f.websocket) {
+        out << "        } else if (e.opcode == webcc::websocket::MessageEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::websocket::MessageEvent>()) g_ws_message_dispatcher.dispatch(evt->handle, webcc::string(evt->data));\n";
+        out << "        } else if (e.opcode == webcc::websocket::OpenEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::websocket::OpenEvent>()) g_ws_open_dispatcher.dispatch(evt->handle);\n";
+        out << "        } else if (e.opcode == webcc::websocket::CloseEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::websocket::CloseEvent>()) {\n";
+        out << "                g_ws_close_dispatcher.dispatch(evt->handle);\n";
+        out << "                g_ws_message_dispatcher.remove(evt->handle);\n";
+        out << "                g_ws_open_dispatcher.remove(evt->handle);\n";
+        out << "                g_ws_close_dispatcher.remove(evt->handle);\n";
+        out << "                g_ws_error_dispatcher.remove(evt->handle);\n";
+        out << "            }\n";
+        out << "        } else if (e.opcode == webcc::websocket::ErrorEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::websocket::ErrorEvent>()) {\n";
+        out << "                g_ws_error_dispatcher.dispatch(evt->handle);\n";
+        out << "                g_ws_message_dispatcher.remove(evt->handle);\n";
+        out << "                g_ws_open_dispatcher.remove(evt->handle);\n";
+        out << "                g_ws_close_dispatcher.remove(evt->handle);\n";
+        out << "                g_ws_error_dispatcher.remove(evt->handle);\n";
+        out << "            }\n";
+    }
+    if (f.fetch) {
+        out << "        } else if (e.opcode == webcc::fetch::SuccessEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::fetch::SuccessEvent>()) {\n";
+        out << "                g_fetch_success_dispatcher.dispatch(evt->id, webcc::string(evt->data));\n";
+        out << "                g_fetch_success_dispatcher.remove(evt->id);\n";
+        out << "                g_fetch_error_dispatcher.remove(evt->id);\n";
+        out << "            }\n";
+        out << "        } else if (e.opcode == webcc::fetch::ErrorEvent::OPCODE) {\n";
+        out << "            if (auto evt = e.as<webcc::fetch::ErrorEvent>()) {\n";
+        out << "                g_fetch_error_dispatcher.dispatch(evt->id, webcc::string(evt->error));\n";
+        out << "                g_fetch_success_dispatcher.remove(evt->id);\n";
+        out << "                g_fetch_error_dispatcher.remove(evt->id);\n";
+        out << "            }\n";
+    }
+}
+
+// Check if the Dispatcher template is needed
+static bool needs_dispatcher(const FeatureFlags& f) {
+    return f.click || f.input || f.change || f.keydown || f.websocket || f.fetch;
+}
+
+// Emit initialization code for enabled features  
+static void emit_feature_init(std::ostream& out, const FeatureFlags& f, const std::string& root_comp) {
+    if (f.keyboard) {
+        out << "    webcc::input::init_keyboard();\n";
+    }
+    if (f.router) {
+        out << "    g_popstate_callback = [](const webcc::string& path) {\n";
+        out << "        if (app) app->_handle_popstate(path);\n";
+        out << "    };\n";
+        out << "    webcc::system::init_popstate();\n";
+    }
+}
+
+// =========================================================
 // DEF SCHEMA INITIALIZATION
 // =========================================================
 
@@ -652,71 +922,60 @@ int main(int argc, char **argv)
         out << "#include \"webcc/core/allocator.h\"\n";
         out << "#include \"webcc/core/new.h\"\n";
         out << "#include \"webcc/core/array.h\"\n";
-        out << "#include \"webcc/core/vector.h\"\n\n";
+        out << "#include \"webcc/core/vector.h\"\n";
         out << "#include \"webcc/core/random.h\"\n\n";
-
-        // Generic event dispatcher template
-        out << "template<typename Callback, int MaxListeners = 64>\n";
-        out << "struct Dispatcher {\n";
-        out << "    int32_t handles[MaxListeners];\n";
-        out << "    Callback callbacks[MaxListeners];\n";
-        out << "    int count = 0;\n";
-        out << "    void set(webcc::handle h, Callback cb) {\n";
-        out << "        int32_t hid = (int32_t)h;\n";
-        out << "        for (int i = 0; i < count; i++) {\n";
-        out << "            if (handles[i] == hid) { callbacks[i] = cb; return; }\n";
-        out << "        }\n";
-        out << "        if (count < MaxListeners) {\n";
-        out << "            handles[count] = hid;\n";
-        out << "            callbacks[count] = cb;\n";
-        out << "            count++;\n";
-        out << "        }\n";
-        out << "    }\n";
-        out << "    void remove(webcc::handle h) {\n";
-        out << "        int32_t hid = (int32_t)h;\n";
-        out << "        for (int i = 0; i < count; i++) {\n";
-        out << "            if (handles[i] == hid) {\n";
-        out << "                handles[i] = handles[count-1];\n";
-        out << "                callbacks[i] = callbacks[count-1];\n";
-        out << "                count--;\n";
-        out << "                return;\n";
-        out << "            }\n";
-        out << "        }\n";
-        out << "    }\n";
-        out << "    template<typename... Args>\n";
-        out << "    bool dispatch(webcc::handle h, Args&&... args) {\n";
-        out << "        int32_t hid = (int32_t)h;\n";
-        out << "        for (int i = 0; i < count; i++) {\n";
-        out << "            if (handles[i] == hid) { callbacks[i](args...); return true; }\n";
-        out << "        }\n";
-        out << "        return false;\n";
-        out << "    }\n";
-        out << "};\n\n";
-        out << "Dispatcher<webcc::function<void()>, 128> g_dispatcher;\n";
-        out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_input_dispatcher;\n";
-        out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_change_dispatcher;\n";
-        out << "Dispatcher<webcc::function<void(int)>> g_keydown_dispatcher;\n";
-        bool uses_websocket = required_headers.count("websocket") > 0;
-        if (uses_websocket) {
-            out << "// WebSocket event dispatchers\n";
-            out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_ws_message_dispatcher;\n";
-            out << "Dispatcher<webcc::function<void()>> g_ws_open_dispatcher;\n";
-            out << "Dispatcher<webcc::function<void()>> g_ws_close_dispatcher;\n";
-            out << "Dispatcher<webcc::function<void()>> g_ws_error_dispatcher;\n";
-        }
-        bool uses_fetch = required_headers.count("fetch") > 0;
-        if (uses_fetch) {
-            out << "// Fetch event dispatchers\n";
-            out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_fetch_success_dispatcher;\n";
-            out << "Dispatcher<webcc::function<void(const webcc::string&)>> g_fetch_error_dispatcher;\n";
-        }
-        out << "webcc::function<void(const webcc::string&)> g_popstate_callback;\n";
-        out << "webcc::function<void(double)> g_after_paint_callback;\n";
-        out << "bool g_key_state[256] = {};\n";
-        out << "int g_view_depth = 0;\n\n";
 
         // Sort components topologically so dependencies come first
         auto sorted_components = topological_sort_components(all_components);
+        
+        // Detect which runtime features are actually used
+        FeatureFlags features = detect_features(all_components, required_headers);
+
+        // Generic event dispatcher template (only if needed)
+        if (needs_dispatcher(features)) {
+            out << "template<typename Callback, int MaxListeners = 64>\n";
+            out << "struct Dispatcher {\n";
+            out << "    int32_t handles[MaxListeners];\n";
+            out << "    Callback callbacks[MaxListeners];\n";
+            out << "    int count = 0;\n";
+            out << "    void set(webcc::handle h, Callback cb) {\n";
+            out << "        int32_t hid = (int32_t)h;\n";
+            out << "        for (int i = 0; i < count; i++) {\n";
+            out << "            if (handles[i] == hid) { callbacks[i] = cb; return; }\n";
+            out << "        }\n";
+            out << "        if (count < MaxListeners) {\n";
+            out << "            handles[count] = hid;\n";
+            out << "            callbacks[count] = cb;\n";
+            out << "            count++;\n";
+            out << "        }\n";
+            out << "    }\n";
+            out << "    void remove(webcc::handle h) {\n";
+            out << "        int32_t hid = (int32_t)h;\n";
+            out << "        for (int i = 0; i < count; i++) {\n";
+            out << "            if (handles[i] == hid) {\n";
+            out << "                handles[i] = handles[count-1];\n";
+            out << "                callbacks[i] = callbacks[count-1];\n";
+            out << "                count--;\n";
+            out << "                return;\n";
+            out << "            }\n";
+            out << "        }\n";
+            out << "    }\n";
+            out << "    template<typename... Args>\n";
+            out << "    bool dispatch(webcc::handle h, Args&&... args) {\n";
+            out << "        int32_t hid = (int32_t)h;\n";
+            out << "        for (int i = 0; i < count; i++) {\n";
+            out << "            if (handles[i] == hid) { callbacks[i](args...); return true; }\n";
+            out << "        }\n";
+            out << "        return false;\n";
+            out << "    }\n";
+            out << "};\n\n";
+        }
+        
+        out << "int g_view_depth = 0;\n";
+        
+        // Emit feature-specific globals (dispatchers, callbacks, etc.)
+        emit_feature_globals(out, features);
+        out << "\n";
 
         // Create compiler session for cross-component state
         CompilerSession session;
@@ -768,15 +1027,7 @@ int main(int argc, char **argv)
         out << "\n"
             << final_app_config.root_component << "* app = nullptr;\n";
         
-        // Check if root component has a router
-        Component* root_comp = nullptr;
-        for (auto* comp : sorted_components) {
-            if (comp->name == final_app_config.root_component) {
-                root_comp = comp;
-                break;
-            }
-        }
-        if (root_comp && root_comp->router) {
+        if (features.router) {
             out << "void g_app_navigate(const webcc::string& route) { if (app) app->navigate(route); }\n";
             out << "webcc::string g_app_get_route() { return app ? app->_current_route : \"\"; }\n";
         } else {
@@ -788,62 +1039,8 @@ int main(int argc, char **argv)
         out << "void dispatch_events(const webcc::Event* events, uint32_t event_count) {\n";
         out << "    for (uint32_t i = 0; i < event_count; i++) {\n";
         out << "        const auto& e = events[i];\n";
-        out << "        if (e.opcode == webcc::dom::ClickEvent::OPCODE) {\n";
-        out << "            if (auto evt = e.as<webcc::dom::ClickEvent>()) g_dispatcher.dispatch(evt->handle);\n";
-        out << "        } else if (e.opcode == webcc::dom::InputEvent::OPCODE) {\n";
-        out << "            if (auto evt = e.as<webcc::dom::InputEvent>()) g_input_dispatcher.dispatch(evt->handle, webcc::string(evt->value));\n";
-        out << "        } else if (e.opcode == webcc::dom::ChangeEvent::OPCODE) {\n";
-        out << "            if (auto evt = e.as<webcc::dom::ChangeEvent>()) g_change_dispatcher.dispatch(evt->handle, webcc::string(evt->value));\n";
-        out << "        } else if (e.opcode == webcc::dom::KeydownEvent::OPCODE) {\n";
-        out << "            if (auto evt = e.as<webcc::dom::KeydownEvent>()) g_keydown_dispatcher.dispatch(evt->handle, evt->keycode);\n";
-        out << "        } else if (e.opcode == webcc::input::KeyDownEvent::OPCODE) {\n";
-        out << "            if (auto evt = e.as<webcc::input::KeyDownEvent>()) { if (evt->key_code >= 0 && evt->key_code < 256) g_key_state[evt->key_code] = true; }\n";
-        out << "        } else if (e.opcode == webcc::input::KeyUpEvent::OPCODE) {\n";
-        out << "            if (auto evt = e.as<webcc::input::KeyUpEvent>()) { if (evt->key_code >= 0 && evt->key_code < 256) g_key_state[evt->key_code] = false; }\n";
-        out << "        } else if (e.opcode == webcc::system::PopstateEvent::OPCODE) {\n";
-        out << "            if (auto evt = e.as<webcc::system::PopstateEvent>()) { if (g_popstate_callback) g_popstate_callback(webcc::string(evt->path)); }\n";
-        out << "        } else if (e.opcode == webcc::system::AfterPaintEvent::OPCODE) {\n";
-        out << "            if (auto evt = e.as<webcc::system::AfterPaintEvent>()) { if (g_after_paint_callback) { g_after_paint_callback(evt->duration); g_after_paint_callback = nullptr; } }\n";
-        if (uses_websocket) {
-            out << "        } else if (e.opcode == webcc::websocket::MessageEvent::OPCODE) {\n";
-            out << "            if (auto evt = e.as<webcc::websocket::MessageEvent>()) g_ws_message_dispatcher.dispatch(evt->handle, webcc::string(evt->data));\n";
-            out << "        } else if (e.opcode == webcc::websocket::OpenEvent::OPCODE) {\n";
-            out << "            if (auto evt = e.as<webcc::websocket::OpenEvent>()) g_ws_open_dispatcher.dispatch(evt->handle);\n";
-            out << "        } else if (e.opcode == webcc::websocket::CloseEvent::OPCODE) {\n";
-            out << "            if (auto evt = e.as<webcc::websocket::CloseEvent>()) {\n";
-            out << "                g_ws_close_dispatcher.dispatch(evt->handle);\n";
-            out << "                // Clean up all dispatchers for this WebSocket (connection is done)\n";
-            out << "                g_ws_message_dispatcher.remove(evt->handle);\n";
-            out << "                g_ws_open_dispatcher.remove(evt->handle);\n";
-            out << "                g_ws_close_dispatcher.remove(evt->handle);\n";
-            out << "                g_ws_error_dispatcher.remove(evt->handle);\n";
-            out << "            }\n";
-            out << "        } else if (e.opcode == webcc::websocket::ErrorEvent::OPCODE) {\n";
-            out << "            if (auto evt = e.as<webcc::websocket::ErrorEvent>()) {\n";
-            out << "                g_ws_error_dispatcher.dispatch(evt->handle);\n";
-            out << "                // Clean up all dispatchers for this WebSocket (connection failed)\n";
-            out << "                g_ws_message_dispatcher.remove(evt->handle);\n";
-            out << "                g_ws_open_dispatcher.remove(evt->handle);\n";
-            out << "                g_ws_close_dispatcher.remove(evt->handle);\n";
-            out << "                g_ws_error_dispatcher.remove(evt->handle);\n";
-            out << "            }\n";
-        }
-        if (uses_fetch) {
-            out << "        } else if (e.opcode == webcc::fetch::SuccessEvent::OPCODE) {\n";
-            out << "            if (auto evt = e.as<webcc::fetch::SuccessEvent>()) {\n";
-            out << "                g_fetch_success_dispatcher.dispatch(evt->id, webcc::string(evt->data));\n";
-            out << "                // Clean up - fetch is one-shot\n";
-            out << "                g_fetch_success_dispatcher.remove(evt->id);\n";
-            out << "                g_fetch_error_dispatcher.remove(evt->id);\n";
-            out << "            }\n";
-            out << "        } else if (e.opcode == webcc::fetch::ErrorEvent::OPCODE) {\n";
-            out << "            if (auto evt = e.as<webcc::fetch::ErrorEvent>()) {\n";
-            out << "                g_fetch_error_dispatcher.dispatch(evt->id, webcc::string(evt->error));\n";
-            out << "                // Clean up - fetch is one-shot\n";
-            out << "                g_fetch_success_dispatcher.remove(evt->id);\n";
-            out << "                g_fetch_error_dispatcher.remove(evt->id);\n";
-            out << "            }\n";
-        }
+        out << "        if (false) {\n";  // Dummy to allow all handlers to use "} else if"
+        emit_feature_event_handlers(out, features);
         out << "        }\n";
         out << "    }\n";
         out << "}\n\n";
@@ -872,15 +1069,7 @@ int main(int argc, char **argv)
         out << "    // We use webcc::malloc to ensure memory is tracked by the framework.\n";
         out << "    void* app_mem = webcc::malloc(sizeof(" << final_app_config.root_component << "));\n";
         out << "    app = new (app_mem) " << final_app_config.root_component << "();\n";
-        out << "    webcc::input::init_keyboard();\n";
-        // Initialize popstate listener for router apps
-        if (root_comp && root_comp->router) {
-            out << "    // Set up browser back/forward button handling\n";
-            out << "    g_popstate_callback = [](const webcc::string& path) {\n";
-            out << "        if (app) app->_handle_popstate(path);\n";
-            out << "    };\n";
-            out << "    webcc::system::init_popstate();\n";
-        }
+        emit_feature_init(out, features, final_app_config.root_component);
 
         out << "    app->view();\n";
         out << "    webcc::system::set_main_loop(update_wrapper);\n";
