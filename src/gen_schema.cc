@@ -29,6 +29,7 @@ static const std::set<std::string> EXCLUDED_FUNCTIONS = {
     "dom::add_change_listener",         // Handled by onChange attribute
     "dom::add_keydown_listener",        // Handled by onKeydown attribute
     "system::random",                   // System.random() - built-in wasm random
+    "system::measure_after_paint",      // System.measureAfterPaint with callback handled via intrinsic
     "websocket::connect",               // WebSocket.connect with callbacks handled via intrinsic
     "fetch::get",                       // FetchRequest.get with callbacks handled via intrinsic
     "fetch::post",                      // FetchRequest.post with callbacks handled via intrinsic

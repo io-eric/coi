@@ -87,7 +87,8 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
     if (intrinsic_name == "measure_after_paint_callback" && args.size() == 2) {
         std::string start_time = args[0].value->to_webcc();
         std::string callback = args[1].value->to_webcc();
-        return "(g_after_paint_callback = " + callback + ", webcc::system::measure_after_paint(" + start_time + "))";
+        // Wrap member function in lambda with this capture
+        return "(g_after_paint_callback = [this](double duration) { this->" + callback + "(duration); }, webcc::system::measure_after_paint(" + start_time + "))";
     }
     
     // WebSocket.connect with named callback arguments
