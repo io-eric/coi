@@ -1235,51 +1235,45 @@ int main(int argc, char **argv)
                 std::ofstream css_out(css_path);
                 if (css_out)
                 {
-                    // Base styles - modern CSS reset for consistent cross-browser behavior
-                    css_out << "/* Base styles */\n";
-                    css_out << "*, *::before, *::after {\n";
-                    css_out << "    box-sizing: border-box;\n";
-                    css_out << "    -webkit-tap-highlight-color: transparent;\n";
-                    css_out << "}\n\n";
-                    css_out << "html {\n";
-                    css_out << "    -webkit-text-size-adjust: 100%;\n";
-                    css_out << "    -moz-tab-size: 4;\n";
-                    css_out << "    tab-size: 4;\n";
-                    css_out << "}\n\n";
-                    css_out << "body {\n";
-                    css_out << "    margin: 0;\n";
-                    css_out << "    line-height: 1.5;\n";
-                    css_out << "    -webkit-font-smoothing: antialiased;\n";
-                    css_out << "    -moz-osx-font-smoothing: grayscale;\n";
-                    css_out << "}\n\n";
-                    css_out << "img, picture, video, canvas, svg {\n";
-                    css_out << "    display: block;\n";
-                    css_out << "    max-width: 100%;\n";
-                    css_out << "}\n\n";
-                    css_out << "input, textarea, select, button {\n";
-                    css_out << "    font: inherit;\n";
-                    css_out << "    color: inherit;\n";
-                    css_out << "}\n\n";
-                    css_out << "button {\n";
-                    css_out << "    cursor: pointer;\n";
-                    css_out << "}\n\n";
-                    css_out << "a {\n";
-                    css_out << "    color: inherit;\n";
-                    css_out << "    text-decoration: inherit;\n";
-                    css_out << "}\n\n";
-                    css_out << "a, button {\n";
-                    css_out << "    touch-action: manipulation;\n";
-                    css_out << "}\n\n";
-                    css_out << "p, h1, h2, h3, h4, h5, h6 {\n";
-                    css_out << "    overflow-wrap: break-word;\n";
-                    css_out << "}\n\n";
-                    css_out << "@media (prefers-reduced-motion: reduce) {\n";
-                    css_out << "    *, *::before, *::after {\n";
-                    css_out << "        animation-duration: 0.01ms !important;\n";
-                    css_out << "        animation-iteration-count: 1 !important;\n";
-                    css_out << "        transition-duration: 0.01ms !important;\n";
-                    css_out << "    }\n";
-                    css_out << "}\n\n";
+                    // Bundle external stylesheets from styles/ folder
+                    fs::path input_dir = fs::path(input_file).parent_path();
+                    fs::path styles_dir = input_dir / "styles";
+                    
+                    if (fs::exists(styles_dir) && fs::is_directory(styles_dir))
+                    {
+                        std::vector<fs::path> css_files;
+                        for (const auto &entry : fs::recursive_directory_iterator(styles_dir))
+                        {
+                            if (entry.is_regular_file() && entry.path().extension() == ".css")
+                            {
+                                css_files.push_back(entry.path());
+                            }
+                        }
+                        
+                        if (!css_files.empty())
+                        {
+                            // Sort for deterministic order
+                            std::sort(css_files.begin(), css_files.end());
+                            
+                            for (const auto &css_path : css_files)
+                            {
+                                std::ifstream style_file(css_path);
+                                if (style_file)
+                                {
+                                    fs::path rel_path = fs::relative(css_path, input_dir);
+                                    css_out << "/* " << rel_path.string() << " */\n";
+                                    css_out << std::string((std::istreambuf_iterator<char>(style_file)),
+                                                            std::istreambuf_iterator<char>());
+                                    css_out << "\n";
+                                }
+                                else
+                                {
+                                    std::cerr << colors::YELLOW << "Warning:" << colors::RESET
+                                              << " Could not open stylesheet: " << css_path.string() << std::endl;
+                                }
+                            }
+                        }
+                    }
 
                     // Collect all CSS from components
                     for (const auto &comp : all_components)
