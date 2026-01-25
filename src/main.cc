@@ -259,7 +259,6 @@ struct FeatureFlags
     bool keydown = false; // onkeydown handlers (element-level)
     // Runtime features
     bool keyboard = false;    // Global key state tracking (Input.isKeyDown)
-    bool after_paint = false; // Timing/performance callbacks
     bool router = false;      // Browser history/popstate (any component)
     bool websocket = false;   // WebSocket connections
     bool fetch = false;       // HTTP fetch requests
@@ -348,12 +347,6 @@ static FeatureFlags detect_features(const std::vector<Component> &components,
             {
                 flags.keyboard = true;
             }
-            // Check for System.afterPaint or System.measureAfterPaint pattern
-            if (
-                call->name.find("System.measureAfterPaint") != std::string::npos)
-            {
-                flags.after_paint = true;
-            }
             for (auto &arg : call->args)
                 scan_expr(arg.value.get());
         }
@@ -366,14 +359,6 @@ static FeatureFlags detect_features(const std::vector<Component> &components,
                 {
                     if (id->name == "Input")
                         flags.keyboard = true;
-                }
-            }
-            if (member->member == "measureAfterPaint")
-            {
-                if (auto *id = dynamic_cast<Identifier *>(member->object.get()))
-                {
-                    if (id->name == "System")
-                        flags.after_paint = true;
                 }
             }
             scan_expr(member->object.get());

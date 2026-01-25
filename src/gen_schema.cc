@@ -31,7 +31,6 @@ static const std::set<std::string> EXCLUDED_FUNCTIONS = {
     "dom::add_change_listener",            // Handled by onChange attribute
     "dom::add_keydown_listener",           // Handled by onKeydown attribute
     "system::random",                      // System.random() - built-in wasm random
-    "system::measure_after_paint",         // System.measureAfterPaint with callback handled via intrinsic
     "websocket::connect",                  // WebSocket.connect with callbacks handled via intrinsic
     "fetch::get",                          // FetchRequest.get with callbacks handled via intrinsic
     "fetch::post",                         // FetchRequest.post with callbacks handled via intrinsic
@@ -535,9 +534,6 @@ int main()
                 out << "    shared def random(): float\n";
                 out << "    @intrinsic(\"random_seeded\")\n";
                 out << "    shared def random(int seed): float\n";
-                out << "\n    // Measure after paint with callback (receives duration in ms)\n";
-                out << "    @intrinsic(\"measure_after_paint_callback\")\n";
-                out << "    shared def measureAfterPaint(float64 start_time, def callback(float64): void): void\n";
                 out << "\n    // Force flush of all pending DOM operations (compiler intrinsic)\n";
                 out << "    @intrinsic(\"flush\")\n";
                 out << "    shared def flush(): void\n";
