@@ -1,0 +1,25 @@
+// Test: Basic data type declaration and initialization
+data User {
+    string name;
+    int age;
+    string email;
+}
+
+component DataTest {
+    mut User user;
+    
+    init {
+        user = User{"Alice", 25, "alice@example.com"};
+    }
+
+    view {
+        <div>
+            <p>Name: {user.name}</p>
+            <p>Age: {user.age}</p>
+        </div>
+    }
+}
+
+app {
+    root = DataTest;
+}

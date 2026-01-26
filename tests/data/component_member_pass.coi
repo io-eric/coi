@@ -1,0 +1,28 @@
+// Test: Data type as component member variable
+data Vec2 {
+    float x;
+    float y;
+}
+
+component MemberTest {
+    mut Vec2 position;
+    mut Vec2 velocity;
+    
+    init {
+        position = Vec2{0.0, 0.0};
+        velocity = Vec2{1.0, 1.0};
+    }
+    
+    def update() : void {
+        position.x += velocity.x;
+        position.y += velocity.y;
+    }
+
+    view {
+        <div>Position: ({position.x}, {position.y})</div>
+    }
+}
+
+app {
+    root = MemberTest;
+}

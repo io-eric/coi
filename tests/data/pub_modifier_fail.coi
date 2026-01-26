@@ -1,0 +1,17 @@
+// Test: pub modifier should not be allowed in data types
+data BadData {
+    pub string name;  // Should fail
+    int age;
+}
+
+component FailTest {
+    mut BadData data;
+
+    view {
+        <div>Test</div>
+    }
+}
+
+app {
+    root = FailTest;
+}

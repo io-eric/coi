@@ -1,0 +1,25 @@
+// Test: Array of data types
+data Item {
+    string name;
+    int quantity;
+}
+
+component ArrayTest {
+    mut Item[] items;
+    
+    init {
+        items = [Item{"Apple", 5}, Item{"Banana", 3}];
+    }
+
+    view {
+        <div>
+            <for item in items key={item.name}>
+                <p>{item.name}: {item.quantity}</p>
+            </for>
+        </div>
+    }
+}
+
+app {
+    root = ArrayTest;
+}
