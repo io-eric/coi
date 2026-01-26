@@ -511,16 +511,16 @@ std::string Component::to_webcc(CompilerSession &session)
     // Generate component as a struct
     ss << "struct " << name << " {\n";
 
-    // Data types
+    // Type aliases for flattened data types (actual definitions emitted before component)
     for (auto &d : data)
     {
-        ss << d->to_webcc() << "\n";
+        ss << "    using " << d->name << " = " << name << "_" << d->name << ";\n";
     }
 
-    // Enums
+    // Type aliases for flattened enums (actual definitions emitted before component)
     for (auto &e : enums)
     {
-        ss << e->to_webcc() << "\n";
+        ss << "    using " << e->name << " = " << name << "_" << e->name << ";\n";
     }
 
     // Component parameters (data members only - callbacks emitted later for proper aggregate init order)

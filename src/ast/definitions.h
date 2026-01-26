@@ -30,6 +30,7 @@ struct DataDef : ASTNode {
     std::vector<DataField> fields;
     bool is_public = false;  // If true, can be imported from other files
     std::string source_file;  // File path where this type was defined
+    std::string owner_component;  // Component that owns this type (empty for global data)
 
     std::string to_webcc() override;
 };

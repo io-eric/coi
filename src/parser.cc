@@ -1687,15 +1687,15 @@ Component Parser::parse_component(){
         }
         // Data definition
         else if(current().type == TokenType::DATA){
-            comp.data.push_back(parse_data());
+            auto data_def = parse_data();
+            data_def->owner_component = comp.name;  // Track owner for flattening
+            comp.data.push_back(std::move(data_def));
         }
         // Enum definition (with optional shared prefix)
         else if(current().type == TokenType::ENUM){
             auto enum_def = parse_enum();
             enum_def->is_shared = is_shared;
-            if (is_shared) {
-                enum_def->owner_component = comp.name;
-            }
+            enum_def->owner_component = comp.name;  // Always track owner for flattening
             comp.enums.push_back(std::move(enum_def));
         }
         // Function definition (with optional pub prefix)

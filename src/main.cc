@@ -1104,7 +1104,9 @@ int main(int argc, char **argv)
         {
             for (const auto &data_def : comp.data)
             {
-                DataTypeRegistry::instance().register_type(data_def->name, data_def->fields);
+                // Register with prefixed name (flattened) for proper type resolution
+                std::string prefixed_name = comp.name + "_" + data_def->name;
+                DataTypeRegistry::instance().register_type(prefixed_name, data_def->fields);
             }
         }
 
@@ -1212,7 +1214,9 @@ int main(int argc, char **argv)
             {
                 for (const auto &data_def : comp.data)
                 {
-                    out << generate_meta_struct(data_def->name);
+                    // Use prefixed name for flattened component data types
+                    std::string prefixed_name = comp.name + "_" + data_def->name;
+                    out << generate_meta_struct(prefixed_name);
                 }
             }
             out << "\n";
@@ -1228,6 +1232,42 @@ int main(int argc, char **argv)
         // Forward declare global navigation functions (defined after components)
         out << "void g_app_navigate(const webcc::string& route);\n";
         out << "webcc::string g_app_get_route();\n\n";
+
+        // Emit flattened component data types and enums BEFORE their owning components
+        // This avoids name conflicts when types are referenced across components
+        for (auto *comp : sorted_components)
+        {
+            // Emit component's data types with prefixed names
+            for (const auto &data_def : comp->data)
+            {
+                out << "struct " << comp->name << "_" << data_def->name << " {\n";
+                for (const auto &field : data_def->fields)
+                {
+                    out << "    " << convert_type(field.type) << " " << field.name << ";\n";
+                }
+                out << "};\n";
+            }
+            // Emit component's enums with prefixed names
+            for (const auto &enum_def : comp->enums)
+            {
+                size_t total_values = enum_def->values.size() + 1;
+                out << "enum struct " << comp->name << "_" << enum_def->name << " : ";
+                if (total_values <= 256)
+                    out << "uint8_t";
+                else if (total_values <= 65536)
+                    out << "uint16_t";
+                else
+                    out << "uint32_t";
+                out << " {\n";
+                for (const auto &val : enum_def->values)
+                {
+                    out << "    " << val << ",\n";
+                }
+                out << "    _COUNT\n";
+                out << "};\n";
+            }
+        }
+        out << "\n";
 
         for (auto *comp : sorted_components)
         {
