@@ -20,6 +20,12 @@ Thank you for your interest in contributing to Coi! We welcome contributions fro
 
 ## How to Contribute
 
+### Philosophy
+
+Coi is an opinionated language. To keep it lean and fast, we follow a **'One-Way-To-Do-It'** and **'Minimal-Dependency'** philosophy.
+
+Please **do not submit feature PRs without discussing them in an issue first**. However, for **bug fixes** and **refactors** that do not affect the core logic, you do not need to open an issue first.
+
 ### Reporting Bugs
 
 If you find a bug, please create a new issue. Include:
