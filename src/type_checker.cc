@@ -690,9 +690,35 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
     return "unknown";
 }
 
+// Helper: Check if a file can access a declaration from another file
+// A file can access a declaration if:
+// 1. The declaration is in the same file, OR
+// 2. The declaration is public AND the declaring file is directly imported
+static bool can_access_declaration(
+    const std::string &accessor_file,
+    const std::string &declaration_file,
+    bool is_public,
+    const std::map<std::string, std::set<std::string>> &file_imports)
+{
+    // Same file - always accessible
+    if (accessor_file == declaration_file)
+        return true;
+    
+    // Different file - must be public AND directly imported
+    if (!is_public)
+        return false;
+    
+    auto it = file_imports.find(accessor_file);
+    if (it == file_imports.end())
+        return false;
+    
+    return it->second.count(declaration_file) > 0;
+}
+
 void validate_types(const std::vector<Component> &components, 
                     const std::vector<std::unique_ptr<EnumDef>> &global_enums,
-                    const std::vector<std::unique_ptr<DataDef>> &global_data)
+                    const std::vector<std::unique_ptr<DataDef>> &global_data,
+                    const std::map<std::string, std::set<std::string>> &file_imports)
 {
     std::set<std::string> component_names;
     std::map<std::string, const Component*> component_map;
@@ -700,6 +726,85 @@ void validate_types(const std::vector<Component> &components,
         component_names.insert(c.name);
         component_map[c.name] = &c;
     }
+    
+    // Build lookup maps for visibility checking
+    std::map<std::string, const DataDef*> data_map;
+    for (const auto &d : global_data) {
+        data_map[d->name] = d.get();
+    }
+    
+    std::map<std::string, const EnumDef*> enum_map;
+    for (const auto &e : global_enums) {
+        enum_map[e->name] = e.get();
+    }
+    
+    // Helper to extract base type from arrays (e.g., "User[]" -> "User", "int[5]" -> "int")
+    auto extract_base_type = [](const std::string &type) -> std::string {
+        std::string t = type;
+        if (t.ends_with("[]")) {
+            return t.substr(0, t.length() - 2);
+        }
+        size_t bracket_pos = t.rfind('[');
+        if (bracket_pos != std::string::npos && t.back() == ']') {
+            return t.substr(0, bracket_pos);
+        }
+        return t;
+    };
+    
+    // Helper to check if a type is accessible from a given source file
+    // Returns empty string if accessible, error message otherwise
+    auto check_type_visibility = [&](const std::string &type_name, const std::string &accessor_file) -> std::string {
+        if (file_imports.empty()) return "";  // No visibility tracking
+        
+        std::string base_type = extract_base_type(type_name);
+        
+        // Check if it's a global data type
+        auto data_it = data_map.find(base_type);
+        if (data_it != data_map.end()) {
+            const DataDef* data_def = data_it->second;
+            if (accessor_file != data_def->source_file) {
+                if (!data_def->is_public) {
+                    return "Data type '" + base_type + "' is not exported (add 'pub' keyword)";
+                }
+                auto imports_it = file_imports.find(accessor_file);
+                if (imports_it == file_imports.end() || imports_it->second.count(data_def->source_file) == 0) {
+                    return "Data type '" + base_type + "' is not accessible. Import the file that defines it";
+                }
+            }
+        }
+        
+        // Check if it's a global enum type
+        auto enum_it = enum_map.find(base_type);
+        if (enum_it != enum_map.end()) {
+            const EnumDef* enum_def = enum_it->second;
+            if (accessor_file != enum_def->source_file) {
+                if (!enum_def->is_public) {
+                    return "Enum type '" + base_type + "' is not exported (add 'pub' keyword)";
+                }
+                auto imports_it = file_imports.find(accessor_file);
+                if (imports_it == file_imports.end() || imports_it->second.count(enum_def->source_file) == 0) {
+                    return "Enum type '" + base_type + "' is not accessible. Import the file that defines it";
+                }
+            }
+        }
+        
+        // Check if it's a component type (for component arrays, state members)
+        auto comp_it = component_map.find(base_type);
+        if (comp_it != component_map.end()) {
+            const Component* target_comp = comp_it->second;
+            if (accessor_file != target_comp->source_file) {
+                if (!target_comp->is_public) {
+                    return "Component '" + base_type + "' is not exported (add 'pub' keyword)";
+                }
+                auto imports_it = file_imports.find(accessor_file);
+                if (imports_it == file_imports.end() || imports_it->second.count(target_comp->source_file) == 0) {
+                    return "Component '" + base_type + "' is not accessible. Import the file that defines it";
+                }
+            }
+        }
+        
+        return "";  // Accessible (or built-in type)
+    };
 
     // Collect all enum type names (for enum <-> int conversion checking)
     g_enum_types.clear();
@@ -769,21 +874,18 @@ void validate_types(const std::vector<Component> &components,
             {
                 std::string field_type = normalize_type(field.type);
                 
+                // Check visibility of field type
+                std::string vis_error = check_type_visibility(field_type, comp.source_file);
+                if (!vis_error.empty())
+                {
+                    std::cerr << "\033[1;31mError:\033[0m In component '" << comp.name 
+                              << "', data field '" << data_def->name << "." << field.name << "': " 
+                              << vis_error << std::endl;
+                    exit(1);
+                }
+                
                 // Extract base type from arrays (e.g., "Canvas[]" -> "Canvas")
-                std::string base_type = field_type;
-                if (field_type.ends_with("[]"))
-                {
-                    base_type = field_type.substr(0, field_type.length() - 2);
-                }
-                else
-                {
-                    // Check for fixed-size array T[N]
-                    size_t bracket_pos = field_type.rfind('[');
-                    if (bracket_pos != std::string::npos && field_type.back() == ']')
-                    {
-                        base_type = field_type.substr(0, bracket_pos);
-                    }
-                }
+                std::string base_type = extract_base_type(field_type);
                 
                 // Check if the field type is a no-copy type
                 if (DefSchema::instance().is_nocopy(base_type))
@@ -800,6 +902,18 @@ void validate_types(const std::vector<Component> &components,
         for (const auto &param : comp.params)
         {
             std::string type = normalize_type(param->type);
+            
+            // Check visibility of parameter type
+            if (!param->is_callback)
+            {
+                std::string vis_error = check_type_visibility(type, comp.source_file);
+                if (!vis_error.empty())
+                {
+                    std::cerr << "\033[1;31mError:\033[0m In component '" << comp.name 
+                              << "', parameter '" << param->name << "': " << vis_error << std::endl;
+                    exit(1);
+                }
+            }
 
             // Disallow pub on reference parameters - references point to parent's data
             // and should never be exposed to third parties
@@ -825,6 +939,15 @@ void validate_types(const std::vector<Component> &components,
         for (const auto &var : comp.state)
         {
             std::string type = normalize_type(var->type);
+            
+            // Check visibility of state variable type
+            std::string vis_error = check_type_visibility(type, comp.source_file);
+            if (!vis_error.empty())
+            {
+                std::cerr << "\033[1;31mError:\033[0m In component '" << comp.name 
+                          << "', state variable '" << var->name << "': " << vis_error << std::endl;
+                exit(1);
+            }
 
             // Disallow pub on reference state variables for the same reason
             if (var->is_public && var->is_reference)
@@ -1476,7 +1599,8 @@ void validate_mutability(const std::vector<Component> &components)
     }
 }
 
-void validate_view_hierarchy(const std::vector<Component> &components)
+void validate_view_hierarchy(const std::vector<Component> &components,
+                             const std::map<std::string, std::set<std::string>> &file_imports)
 {
     std::map<std::string, const Component *> component_map;
     for (const auto &comp : components)
@@ -1513,6 +1637,12 @@ void validate_view_hierarchy(const std::vector<Component> &components)
         return scope;
     };
 
+    // Get the parent component by name for visibility checking
+    auto get_component = [&](const std::string &name) -> const Component* {
+        auto it = component_map.find(name);
+        return it != component_map.end() ? it->second : nullptr;
+    };
+
     std::function<void(ASTNode *, const std::string &, std::map<std::string, std::string> &)> validate_node =
         [&](ASTNode *node, const std::string &parent_comp_name, std::map<std::string, std::string> &scope)
     {
@@ -1524,13 +1654,42 @@ void validate_view_hierarchy(const std::vector<Component> &components)
             auto it = component_map.find(comp_inst->component_name);
             if (it != component_map.end())
             {
-                if (it->second->render_roots.empty())
+                const Component *target_comp = it->second;
+                const Component *parent_comp = get_component(parent_comp_name);
+                
+                // Visibility check: can this component access the target component?
+                if (parent_comp && !file_imports.empty())
+                {
+                    const std::string &accessor_file = parent_comp->source_file;
+                    const std::string &target_file = target_comp->source_file;
+                    
+                    if (accessor_file != target_file)
+                    {
+                        // Different files - check visibility
+                        if (!target_comp->is_public)
+                        {
+                            throw std::runtime_error(
+                                "Component '" + comp_inst->component_name + "' is not exported (add 'pub' keyword). "
+                                "Cannot use private component from another file at line " + std::to_string(comp_inst->line));
+                        }
+                        
+                        // Check if the target file is directly imported
+                        auto imports_it = file_imports.find(accessor_file);
+                        if (imports_it == file_imports.end() || imports_it->second.count(target_file) == 0)
+                        {
+                            throw std::runtime_error(
+                                "Component '" + comp_inst->component_name + "' is not accessible. "
+                                "You need to import the file that defines it at line " + std::to_string(comp_inst->line));
+                        }
+                    }
+                }
+                
+                if (target_comp->render_roots.empty())
                 {
                     throw std::runtime_error("Component '" + comp_inst->component_name + "' is used in a view but has no view definition (logic-only component) at line " + std::to_string(comp_inst->line));
                 }
 
                 // Validate reference params
-                const Component *target_comp = it->second;
                 std::set<std::string> passed_param_names;
 
                 for (auto &passed_prop : comp_inst->props)

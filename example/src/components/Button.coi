@@ -1,4 +1,4 @@
-component Button(
+pub component Button(
     string label = "Button",
     string type = "primary",
     string href = "",

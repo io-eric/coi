@@ -1,4 +1,4 @@
-component InputDemo {
+pub component InputDemo {
     mut string text = "";
     mut int charCount = 0;
 

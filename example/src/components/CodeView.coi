@@ -1,7 +1,7 @@
 // CodeView - A syntax-highlighted code display component with built-in tokenizer
 // Simple character-by-character tokenizer using state machine (no while loops)
 
-component CodeView(
+pub component CodeView(
     string code,
     string width = "420px"
 ) {

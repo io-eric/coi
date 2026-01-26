@@ -3,6 +3,7 @@
 #include "ast/ast.h"
 #include <string>
 #include <map>
+#include <set>
 #include <vector>
 
 // Type normalization: converts user-facing types to internal representation
@@ -20,9 +21,11 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
 // - Parameter and state variable initialization
 // - Method body statements
 // - Return types
+// - Visibility/export rules (file_imports maps each file to its directly imported files)
 void validate_types(const std::vector<Component> &components, 
                     const std::vector<std::unique_ptr<EnumDef>> &global_enums = {},
-                    const std::vector<std::unique_ptr<DataDef>> &global_data = {});
+                    const std::vector<std::unique_ptr<DataDef>> &global_data = {},
+                    const std::map<std::string, std::set<std::string>> &file_imports = {});
 
 // Validate mutability constraints:
 // - Only mutable variables can be modified
@@ -32,4 +35,6 @@ void validate_mutability(const std::vector<Component> &components);
 // - Component instantiation props match declarations
 // - Reference params are passed correctly
 // - Callback argument types match
-void validate_view_hierarchy(const std::vector<Component> &components);
+// - Visibility rules (imports are local to files)
+void validate_view_hierarchy(const std::vector<Component> &components,
+                             const std::map<std::string, std::set<std::string>> &file_imports = {});

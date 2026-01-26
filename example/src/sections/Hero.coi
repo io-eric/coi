@@ -1,6 +1,6 @@
 import "../components/Button.coi";
 
-component Hero {
+pub component Hero {
     mut string popupDisplay = "none";
 
     def openPopup() : void {

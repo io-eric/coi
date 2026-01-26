@@ -24,6 +24,8 @@ struct Component : ASTNode {
     std::string name;
     std::string css;
     std::string global_css;
+    bool is_public = false;  // If true, can be imported from other files
+    std::string source_file;  // File path where this component was defined
     std::vector<std::unique_ptr<DataDef>> data;
     std::vector<std::unique_ptr<EnumDef>> enums;
     std::vector<std::unique_ptr<VarDeclaration>> state;

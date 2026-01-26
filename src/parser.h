@@ -43,8 +43,8 @@ class Parser{
         std::unique_ptr<Expression> parse_multiplicative();
         std::unique_ptr<Expression> parse_primary();
         std::unique_ptr<Statement> parse_statement();
-        std::unique_ptr<DataDef> parse_data();
-        std::unique_ptr<EnumDef> parse_enum();
+        std::unique_ptr<DataDef> parse_data(bool is_public = false);
+        std::unique_ptr<EnumDef> parse_enum(bool is_public = false);
         std::string parse_style_block();
         std::unique_ptr<ASTNode> parse_html_element();
         std::unique_ptr<ASTNode> parse_view_node();  // Parse HTML element or view if/else/for

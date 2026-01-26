@@ -30,6 +30,44 @@ def HandleClick()  // Error: Method name must start with lowercase
 
 **Why this matters:** When you write `Name(...)`, Coi treats it as component/type construction. Writing `name(...)` is a function call. This distinction enables clean JSX-like syntax without ambiguity.
 
+## Export Visibility
+
+By default, components, data types, and enums are **file-private** — they can only be used within the file where they're defined. To make them accessible from other files, use the `pub` keyword:
+
+```tsx
+// Exported - can be imported by other files
+pub component Button { ... }
+pub data User { ... }
+pub enum Status { ... }
+
+// File-private - only usable in this file
+component InternalHelper { ... }
+data PrivateConfig { ... }
+enum LocalState { ... }
+```
+
+### Import Rules
+
+When you import a `.coi` file, only `pub` declarations are accessible:
+
+```tsx
+// Button.coi
+pub component Button { ... }      // ✓ Accessible after import
+component ButtonIcon { ... }       // ✗ Not accessible (file-private)
+
+// App.coi
+import "Button.coi";
+
+component App {
+    view {
+        <Button />                 // ✓ Works
+        <ButtonIcon />             // ✗ Error: ButtonIcon is not exported
+    }
+}
+```
+
+This allows you to expose a clean public API while keeping implementation details private.
+
 ## Types
 
 ### Primitive Types
@@ -153,14 +191,20 @@ Data types are simple value types (like structs in other languages) that group r
 
 ### Declaring Data Types
 
-Data types can be declared globally or inside components:
+Data types can be declared globally or inside components. Use `pub` to export them for use in other files:
 
 ```tsx
-// Global data type
-data User {
+// Exported global data type (accessible from other files)
+pub data User {
     string name;
     int age;
     string email;
+}
+
+// File-private global data type
+data InternalConfig {
+    string key;
+    string value;
 }
 
 // Inside a component
@@ -358,12 +402,12 @@ component UserProfile {
 
 ## Enums
 
-Enums define a set of named constants. They can be declared inside components, as shared (accessible from other components), or globally.
+Enums define a set of named constants. They can be declared inside components, as shared (accessible from other components), or globally. Use `pub` to export global enums for use in other files.
 
 ### Basic Enums
 
 ```tsx
-// Inside a component
+// Inside a component (always file-private)
 component App {
     enum Mode {
         Idle,
@@ -378,11 +422,17 @@ component App {
     }
 }
 
-// Global enum (outside any component)
-enum Status {
+// Exported global enum (accessible from other files)
+pub enum Status {
     Pending,
     Success,
     Error
+}
+
+// File-private global enum
+enum InternalState {
+    Loading,
+    Ready
 }
 
 component Handler {

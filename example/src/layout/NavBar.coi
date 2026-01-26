@@ -1,4 +1,4 @@
-component NavBar {
+pub component NavBar {
     style {
         .nav-wrapper {
             position: fixed;

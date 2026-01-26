@@ -1,6 +1,6 @@
 import "../components/Button.coi";
 
-component Counter {
+pub component Counter {
     mut int count = 0;
 
     def increment() : void {

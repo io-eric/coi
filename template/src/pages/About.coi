@@ -1,4 +1,4 @@
-component About {
+pub component About {
     style {
         .hero {
             flex: 1;

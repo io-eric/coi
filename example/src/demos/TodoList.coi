@@ -88,7 +88,7 @@ component TodoItem(pub int id, pub string text, pub mut bool done, def onRemove(
     }
 }
 
-component TodoList {
+pub component TodoList {
     mut TodoItem[] todos;
     mut int nextId = 0;
 

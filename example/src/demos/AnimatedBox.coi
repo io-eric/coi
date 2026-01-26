@@ -1,4 +1,4 @@
-component AnimatedBox {
+pub component AnimatedBox {
     mut float x = 0;
     mut int direction = 1;
 

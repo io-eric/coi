@@ -1,4 +1,4 @@
-component FeatureCard(
+pub component FeatureCard(
     string title,
     string description,
     string icon

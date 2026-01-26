@@ -1,4 +1,4 @@
-component NavBar {
+pub component NavBar {
     def navigateTo(string path) : void {
         System.navigate(path);
     }

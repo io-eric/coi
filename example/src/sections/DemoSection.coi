@@ -6,7 +6,7 @@ import "../demos/InputDemo.coi";
 import "../demos/AudioPlayer.coi";
 import "../components/CodeView.coi";
 
-component DemoSection {
+pub component DemoSection {
     string counterCode = "component Counter \{
     mut int count = 0;
 

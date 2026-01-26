@@ -28,6 +28,8 @@ struct DataField {
 struct DataDef : ASTNode {
     std::string name;
     std::vector<DataField> fields;
+    bool is_public = false;  // If true, can be imported from other files
+    std::string source_file;  // File path where this type was defined
 
     std::string to_webcc() override;
 };
@@ -37,6 +39,8 @@ struct EnumDef : ASTNode {
     std::string name;
     std::vector<std::string> values;
     bool is_shared = false;
+    bool is_public = false;  // If true, can be imported from other files
+    std::string source_file;  // File path where this enum was defined
     std::string owner_component;
 
     std::string to_webcc() override;

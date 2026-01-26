@@ -1,6 +1,6 @@
 import "../components/Button.coi";
 
-component CanvasDemo {
+pub component CanvasDemo {
     mut Canvas canvas;
     mut CanvasContext2D ctx;
     

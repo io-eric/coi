@@ -1,6 +1,6 @@
 import "../components/FeatureCard.coi";
 
-component Features {
+pub component Features {
     style {
         .features {
             padding: 100px 20px;

@@ -1,6 +1,6 @@
 import "../components/Button.coi";
 
-component AudioPlayer {
+pub component AudioPlayer {
     mut Audio audio;
     mut bool playing = false;
     mut float currentTime = 0;

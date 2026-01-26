@@ -1,4 +1,4 @@
-component Footer {
+pub  component Footer {
     style {
         footer {
             padding: 32px;

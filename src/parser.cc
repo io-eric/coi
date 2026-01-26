@@ -849,7 +849,7 @@ std::unique_ptr<Statement> Parser::parse_statement(){
     // throw std::runtime_error("Unexpected statement");
 }
 
-std::unique_ptr<DataDef> Parser::parse_data(){
+std::unique_ptr<DataDef> Parser::parse_data(bool is_public){
     expect(TokenType::DATA, "Expected 'data'");
     std::string name = current().value;
     int name_line = current().line;
@@ -864,6 +864,7 @@ std::unique_ptr<DataDef> Parser::parse_data(){
 
     auto def = std::make_unique<DataDef>();
     def->name = name;
+    def->is_public = is_public;
 
     while(current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
         std::string type = current().value;
@@ -886,7 +887,7 @@ std::unique_ptr<DataDef> Parser::parse_data(){
     return def;
 }
 
-std::unique_ptr<EnumDef> Parser::parse_enum(){
+std::unique_ptr<EnumDef> Parser::parse_enum(bool is_public){
     expect(TokenType::ENUM, "Expected 'enum'");
     std::string name = current().value;
     int name_line = current().line;
@@ -901,6 +902,7 @@ std::unique_ptr<EnumDef> Parser::parse_enum(){
 
     auto def = std::make_unique<EnumDef>();
     def->name = name;
+    def->is_public = is_public;
 
     while(current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE){
         std::string valueName = current().value;
@@ -1998,14 +2000,28 @@ void Parser::parse_file(){
             expect(TokenType::STRING_LITERAL, "Expected import path");
             imports.push_back(tokens[pos-1].value);
             expect(TokenType::SEMICOLON, "Expected ';'");
+        } else if(current().type == TokenType::PUB){
+            // pub component, pub data, or pub enum
+            advance();
+            if(current().type == TokenType::COMPONENT){
+                Component comp = parse_component();
+                comp.is_public = true;
+                components.push_back(std::move(comp));
+            } else if(current().type == TokenType::DATA){
+                global_data.push_back(parse_data(true));
+            } else if(current().type == TokenType::ENUM){
+                global_enums.push_back(parse_enum(true));
+            } else {
+                ErrorHandler::compiler_error("Expected 'component', 'data', or 'enum' after 'pub'", current().line);
+            }
         } else if(current().type == TokenType::COMPONENT){
             components.push_back(parse_component());
         } else if(current().type == TokenType::ENUM){
             // Global enum (outside any component)
-            global_enums.push_back(parse_enum());
+            global_enums.push_back(parse_enum(false));
         } else if(current().type == TokenType::DATA){
             // Global data type (outside any component)
-            global_data.push_back(parse_data());
+            global_data.push_back(parse_data(false));
         } else if(current().type == TokenType::IDENTIFIER && current().value == "app"){
             advance();
             parse_app();
