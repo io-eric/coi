@@ -1,0 +1,23 @@
+// Test: Data types support move semantics
+data Config {
+    string host;
+    int port;
+}
+
+component MoveTest {
+    mut Config config1;
+    mut Config config2;
+    
+    init {
+        config1 = Config{"localhost", 8080};
+        config2 := config1;  // Move is also allowed
+    }
+
+    view {
+        <div>Move test</div>
+    }
+}
+
+app {
+    root = MoveTest;
+}

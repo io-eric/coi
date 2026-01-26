@@ -1,0 +1,29 @@
+// Test: Data types support references
+data Settings {
+    bool darkMode;
+    int fontSize;
+}
+
+component RefTest {
+    mut Settings settings;
+    
+    init {
+        settings = Settings{true, 16};
+    }
+    
+    def updateSettings(mut Settings& s) : void {
+        s.fontSize = 20;
+    }
+    
+    def test() : void {
+        updateSettings(&settings);
+    }
+
+    view {
+        <div>Reference test</div>
+    }
+}
+
+app {
+    root = RefTest;
+}

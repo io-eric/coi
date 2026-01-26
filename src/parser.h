@@ -24,6 +24,11 @@ class Parser{
         void advance();
         bool match(TokenType type);
         void expect(TokenType type, const std::string& msg);
+        
+        // Helper methods
+        bool is_type_token();                    // INT, STRING, FLOAT, FLOAT32, BOOL, IDENTIFIER, VOID
+        bool is_identifier_token();              // IDENTIFIER, KEY, DATA (keywords usable as names)
+        std::vector<CallArg> parse_call_args(TokenType end_token);  // Parse (args) or {args}
 
         std::unique_ptr<Expression> parse_expression();
         std::unique_ptr<Expression> parse_expression_no_gt();  // Parse expression without > as comparison
@@ -38,7 +43,7 @@ class Parser{
         std::unique_ptr<Expression> parse_multiplicative();
         std::unique_ptr<Expression> parse_primary();
         std::unique_ptr<Statement> parse_statement();
-        std::unique_ptr<StructDef> parse_struct();
+        std::unique_ptr<DataDef> parse_data();
         std::unique_ptr<EnumDef> parse_enum();
         std::string parse_style_block();
         std::unique_ptr<ASTNode> parse_html_element();
@@ -51,6 +56,7 @@ class Parser{
 
     public:
         std::vector<Component> components;
+        std::vector<std::unique_ptr<DataDef>> global_data;    // Data types declared outside components
         std::vector<std::unique_ptr<EnumDef>> global_enums;  // Enums declared outside components
         std::vector<std::string> imports;
         AppConfig app_config;

@@ -1,0 +1,17 @@
+// Test: Data types cannot contain no-copy types like Canvas, Audio, etc.
+data GameState {
+    string name;
+    Canvas canvas;  // Should fail - Canvas is a no-copy type
+}
+
+component FailTest {
+    mut GameState state;
+
+    view {
+        <div>Test</div>
+    }
+}
+
+app {
+    root = FailTest;
+}

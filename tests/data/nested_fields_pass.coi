@@ -1,0 +1,27 @@
+// Test: Data type with multiple field types
+data Profile {
+    string username;
+    int level;
+    float score;
+    bool premium;
+}
+
+component NestedTest {
+    mut Profile profile;
+    
+    init {
+        profile = Profile{"player1", 42, 99.5, true};
+    }
+
+    view {
+        <div>
+            <p>User: {profile.username}</p>
+            <p>Level: {profile.level}</p>
+            <p>Score: {profile.score}</p>
+        </div>
+    }
+}
+
+app {
+    root = NestedTest;
+}

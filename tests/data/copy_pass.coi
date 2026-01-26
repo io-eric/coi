@@ -1,0 +1,26 @@
+// Test: Data types are value types - copying should work
+data Point {
+    float x;
+    float y;
+}
+
+component CopyTest {
+    mut Point p1;
+    mut Point p2;
+    
+    init {
+        p1 = Point{10.0, 20.0};
+        p2 = p1;  // Should work - data types are copyable
+    }
+
+    view {
+        <div>
+            <p>P1: ({p1.x}, {p1.y})</p>
+            <p>P2: ({p2.x}, {p2.y})</p>
+        </div>
+    }
+}
+
+app {
+    root = CopyTest;
+}

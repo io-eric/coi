@@ -2,6 +2,34 @@
 
 Coi is a statically-typed language. This guide covers the core language features.
 
+## Naming Conventions
+
+Coi enforces naming conventions to distinguish between different constructs:
+
+| Construct | Convention | Example | Enforced |
+|-----------|------------|---------|----------|
+| Components | `UpperCase` | `component Counter` | ✓ Yes |
+| Data types | `UpperCase` | `data User` | ✓ Yes |
+| Enums | `UpperCase` | `enum Mode` | ✓ Yes |
+| Methods | `lowerCase` | `def handleClick()` | ✓ Yes |
+| Variables | `lowerCase` | `mut int count` | Recommended |
+
+**Enforced conventions** will cause compile errors:
+
+```tsx
+// ✓ Correct
+data User { string name; }
+enum Status { Active, Inactive }
+def handleClick() : void { }
+
+// ✗ Compile errors
+data user { }      // Error: Data type name must start with uppercase
+enum status { }    // Error: Enum type name must start with uppercase  
+def HandleClick()  // Error: Method name must start with lowercase
+```
+
+**Why this matters:** When you write `Name(...)`, Coi treats it as component/type construction. Writing `name(...)` is a function call. This distinction enables clean JSX-like syntax without ambiguity.
+
 ## Types
 
 ### Primitive Types
@@ -117,6 +145,215 @@ bool has = text.contains("World"); // Check if substring exists
 string trimmed = text.trim();       // Remove whitespace from both ends
 string left = text.trimStart();     // Remove leading whitespace
 string right = text.trimEnd();      // Remove trailing whitespace
+```
+
+## Data Types
+
+Data types are simple value types (like structs in other languages) that group related fields together. Unlike platform types (Canvas, Audio, etc.), data types are **copyable** and can be freely passed around.
+
+### Declaring Data Types
+
+Data types can be declared globally or inside components:
+
+```tsx
+// Global data type
+data User {
+    string name;
+    int age;
+    string email;
+}
+
+// Inside a component
+component App {
+    data Config {
+        string host;
+        int port;
+        bool secure;
+    }
+    
+    mut Config config;
+}
+```
+
+### Field Rules
+
+- **No modifiers**: Data fields cannot use `pub` or `mut` modifiers
+- **Value types only**: Data fields cannot contain no-copy types like `Canvas`, `Audio`, `WebSocket`, etc.
+- **Any primitive or data type**: Can use `int`, `float`, `string`, `bool`, arrays, and other data types
+
+```tsx
+data Point {
+    float x;
+    float y;
+}
+
+data Rectangle {
+    Point topLeft;     // Nested data type - OK
+    Point bottomRight;
+    string label;
+}
+
+data BadData {
+    Canvas canvas;     // ERROR: Canvas is a no-copy type
+    Audio sound;       // ERROR: Audio is a no-copy type
+}
+```
+
+### Initialization
+
+Use aggregate initialization syntax with curly braces. Both positional and named field syntax are supported:
+
+```tsx
+component App {
+    mut User user;
+    
+    init {
+        // Positional initialization (fields in declaration order)
+        user = User{"Alice", 25, "alice@example.com"};
+        
+        // Named initialization (any order, more readable)
+        user = User{name = "Alice", age = 25, email = "alice@example.com"};
+        
+        // Named with trailing comma
+        user = User{
+            name = "Bob",
+            age = 30,
+            email = "bob@example.com",
+        };
+        
+        // Move with named syntax
+        mut string email = "charlie@example.com";
+        user = User{name = "Charlie", age = 35, email := email};
+    }
+}
+```
+
+### Copying and Moving
+
+Data types are value types and support both copying and moving:
+
+```tsx
+mut User user1 = User{"Bob", 30, "bob@example.com"};
+
+// Copy (both variables are valid)
+mut User user2 = user1;
+
+// Move (user3 becomes invalid after move)
+mut User user3 = User{"Charlie", 35, "charlie@example.com"};
+mut User user4 := user3;  // user3 is now invalid
+```
+
+### References
+
+Data types support references like any other type:
+
+```tsx
+def updateUser(mut User& u) : void {
+    u.age = u.age + 1;
+}
+
+mut User user = User{"Dave", 28, "dave@example.com"};
+updateUser(&user);  // Pass by reference
+```
+
+### Arrays of Data Types
+
+You can create arrays of data types:
+
+```tsx
+data Item {
+    string name;
+    int quantity;
+}
+
+mut Item[] inventory = [
+    Item{"Apple", 5},
+    Item{"Banana", 3},
+    Item{"Orange", 7}
+];
+
+// Use in loops
+for item in inventory {
+    print(item.name);
+}
+```
+
+### JSON Parsing
+
+Data types can be automatically parsed from JSON using `Json.parse()`:
+
+```tsx
+data User {
+    string name;
+    int age;
+    string email;
+}
+
+component App {
+    mut User user;
+    
+    def handleParsed(User data, UserMeta meta) : void {
+        user = data;
+        
+        // Meta struct provides presence detection
+        if (meta.has_name()) {
+            System.log("Name found: " + data.name);
+        }
+    }
+    
+    def handleError(string error) : void {
+        System.log("Parse error: " + error);
+    }
+    
+    init {
+        string json = "\{\"name\": \"Alice\", \"age\": 25\}";
+        Json.parse(
+            User,
+            json,
+            &onSuccess = handleParsed,
+            &onError = handleError
+        );
+    }
+}
+```
+
+For each data type, a corresponding **Meta struct** is automatically generated with `has_fieldName()` methods to check field presence:
+
+```tsx
+// UserMeta is generated automatically:
+// struct UserMeta {
+//     bool has_name();
+//     bool has_age();
+//     bool has_email();
+// }
+```
+
+See [API Reference - JSON](api-reference.md#json) for more details and examples.
+
+### Reactivity
+
+Data types participate in Coi's reactivity system. When you modify a field of a data type, the entire object is marked as modified:
+
+```tsx
+component UserProfile {
+    mut User user;
+    
+    init {
+        user = User{"Eve", 22, "eve@example.com"};
+    }
+    
+    def updateEmail(string newEmail) : void {
+        user.email = newEmail;  // Marks 'user' as modified
+        // View will automatically re-render
+    }
+    
+    view {
+        <div>
+            <p>Name: {user.name}</p>
+            <p>Email: {user.email}</p>
+        </div>
+    }
+}
 ```
 
 ## Enums
