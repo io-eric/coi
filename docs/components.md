@@ -2,6 +2,40 @@
 
 Components are the building blocks of Coi applications. This guide covers component syntax, state management, lifecycle, and communication patterns.
 
+## Export & Visibility
+
+By default, components, data types, and enums are **file-private** — accessible only within the file where they're defined. To make them accessible from other files, use the `pub` keyword:
+
+```tsx
+// Exported - can be imported by other files
+pub component Button { ... }
+pub data ButtonProps { ... }
+pub enum ButtonType { ... }
+
+// File-private - only usable in this file
+component InternalHelper { ... }
+data PrivateConfig { ... }
+enum LocalState { ... }
+```
+
+When you import a file, only `pub` declarations become available:
+
+```tsx
+// button.coi
+pub component Button { ... }
+component ButtonIcon { ... }
+
+// app.coi
+import "button.coi";
+
+component App {
+    view {
+        <Button />        // ✓ Works (pub)
+        <ButtonIcon />    // ✗ Error: not exported
+    }
+}
+```
+
 ## Basic Structure
 
 Component names **must start with an uppercase letter**:

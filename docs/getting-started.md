@@ -235,7 +235,30 @@ import "layout/Header.coi";
 import "../shared/Utils.coi";
 ```
 
-Imports are relative to the current file's location. All components defined in imported files become available in the current file.
+Imports are relative to the current file's location. **Only `pub` declarations** from imported files become available:
+
+```tsx
+// Button.coi
+pub component Button { ... }      // ✓ Available after import
+pub data ButtonConfig { ... }      // ✓ Available after import
+pub enum ButtonType { ... }        // ✓ Available after import
+
+component InternalHelper { ... }   // ✗ Not accessible (file-private)
+data PrivateConfig { ... }         // ✗ Not accessible (file-private)
+enum LocalState { ... }            // ✗ Not accessible (file-private)
+
+// App.coi
+import "Button.coi";
+
+component App {
+    view {
+        <Button />          // ✓ Works (pub component)
+        <InternalHelper />  // ✗ Error: not accessible
+    }
+}
+```
+
+This allows you to expose a clean public API while keeping implementation details private within each file.
 
 ## Getting Help
 

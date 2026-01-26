@@ -41,7 +41,7 @@ Whether you're building a typical web app or something graphics-intensive, Coi g
 - **Strict Typing**: Compile-time error checking with strongly typed parameters and state.
 - **Reference Parameters**: Pass state by reference with `&` for seamless parent-child synchronization.
 - **Move Semantics**: Explicit ownership transfer with `:` to prevent accidental copying.
-- **Private by Default**: Component members are private; use `pub` to expose them.
+- **Private by Default**: Components, data types, and enums are file-private by default; use `pub` to export them for use in other files.
 
 ### Developer Experience
 - **Component-Based**: Composable, reusable components with props, state, and lifecycle blocks.
