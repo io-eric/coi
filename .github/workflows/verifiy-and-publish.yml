@@ -33,7 +33,7 @@ jobs:
         run: echo "$PWD/deps/webcc" >> $GITHUB_PATH
 
       - name: Run Tests
-        run: ./tests/run.sh
+        run: python3 tests/run.py unit
 
       - name: Build Example
         run: cd example && ../coi build
@@ -44,7 +44,7 @@ jobs:
           node-version: "20"
 
       - name: Install web test deps
-        run: cd tests/visual && npm ci
+        run: cd tests/integration/web && npm ci
 
       - name: Ensure headless Chrome
         run: |
@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Run web integration tests
-        run: bash tests/run_web_integration.sh
+        run: python3 tests/run.py integration
 
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
