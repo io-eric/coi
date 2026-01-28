@@ -65,6 +65,25 @@ component App {
 
     DOMElement active = DOMElement.getActiveElement();
     active_valid = active.isValid() ? 1 : 0;
+
+    // Expose results as stable data-* attributes for integration tests.
+    DOMElement results = body.querySelector("#results");
+    if (results.isValid()) {
+      results.setAttribute("data-root-valid", "{root_valid}");
+      results.setAttribute("data-missing-valid", "{missing_valid}");
+      results.setAttribute("data-contains-ok", "{contains_ok}");
+      results.setAttribute("data-contains-not-ok", "{contains_not_ok}");
+      results.setAttribute("data-closest-ok", "{closest_ok}");
+      results.setAttribute("data-parent-valid", "{parent_valid}");
+      results.setAttribute("data-parent-contains-root", "{parent_contains_root}");
+      results.setAttribute("data-connected-ok", "{connected_ok}");
+      results.setAttribute("data-qsa-count", "{qsa_count}");
+      results.setAttribute("data-qsa-first-idx", qsa_first_idx);
+      results.setAttribute("data-child-count", "{child_count}");
+      results.setAttribute("data-child-first-id", child_first_id);
+      results.setAttribute("data-active-valid", "{active_valid}");
+      results.setAttribute("data-ready", "1");
+    }
   }
 
   style {
@@ -99,7 +118,7 @@ component App {
 
   view {
     <div id="root" class="root root">
-      <div class="status status">
+      <div id="results" class="status status">
         dom query test
         rootValid={root_valid}
         missingValid={missing_valid}

@@ -1,27 +1,29 @@
 export async function run({ page, expect }) {
-  const status = page.locator(".status");
-  await expect.textContains(status, "dom query test");
+  const results = page.locator("#results");
 
   // Wait for mount() to run and populate results.
-  await page.waitForFunction(() => {
-    const t = document.querySelector(".status")?.textContent ?? "";
-    return t.includes("rootValid=1") && t.includes("missingValid=0");
-  });
+  await page.waitForFunction(() => document.querySelector("#results")?.getAttribute("data-ready") === "1");
 
-  await expect.textContains(status, "rootValid=1");
-  await expect.textContains(status, "missingValid=0");
-  await expect.textContains(status, "containsOk=1");
-  await expect.textContains(status, "containsNotOk=0");
-  await expect.textContains(status, "closestOk=1");
-  await expect.textContains(status, "parentValid=1");
-  await expect.textContains(status, "parentContainsRoot=1");
-  await expect.textContains(status, "connectedOk=1");
+  async function attr(name) {
+    const v = await results.getAttribute(name);
+    expect.ok(v !== null, `Expected ${name} to be present`);
+    return v;
+  }
 
-  await expect.textContains(status, "qsaCount=2");
-  await expect.textContains(status, "qsaFirstIdx=0");
+  expect.ok((await attr("data-root-valid")) === "1");
+  expect.ok((await attr("data-missing-valid")) === "0");
+  expect.ok((await attr("data-contains-ok")) === "1");
+  expect.ok((await attr("data-contains-not-ok")) === "0");
+  expect.ok((await attr("data-closest-ok")) === "1");
+  expect.ok((await attr("data-parent-valid")) === "1");
+  expect.ok((await attr("data-parent-contains-root")) === "1");
+  expect.ok((await attr("data-connected-ok")) === "1");
 
-  await expect.textContains(status, "childCount=2");
-  await expect.textContains(status, "childFirstId=");
+  expect.ok((await attr("data-qsa-count")) === "2");
+  expect.ok((await attr("data-qsa-first-idx")) === "0");
 
-  await expect.textContains(status, "activeValid=1");
+  expect.ok((await attr("data-child-count")) === "2");
+  expect.ok((await attr("data-child-first-id")) === "");
+
+  expect.ok((await attr("data-active-valid")) === "1");
 }
