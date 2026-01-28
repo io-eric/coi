@@ -167,7 +167,7 @@ pub component Button {  // Explicitly exported
 }
 
 // Now importable from other files:
-// import { Button } from "./Button.coi";
+// import "./Button.coi";
 ```
 
 **What Requires `pub`:**
