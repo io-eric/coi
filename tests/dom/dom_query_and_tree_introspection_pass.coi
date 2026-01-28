@@ -1,0 +1,49 @@
+// Test: DOM query + tree introspection APIs are available and type-check.
+component DomQueryAndTreeIntrospectionPass {
+    init {
+        DOMElement body = DOMElement.getBody();
+
+        // Document-level
+        DOMElement active = DOMElement.getActiveElement();
+        bool _active_ok = active.isValid();
+
+        // Traversal / introspection
+        DOMElement parent = body.getParentNode();
+        bool _connected = body.isConnected();
+        bool _contains = body.contains(body);
+
+        // Selectors
+        DOMElement maybeDiv = body.querySelector("div");
+        DOMElement maybeClosest = maybeDiv.closest("section");
+        bool _selector_ok = maybeClosest.isValid();
+
+        // Multi-result (count + fill)
+        int32 count = body.childElementCount();
+        int32 start = Webcc.reserveDeferredHandles(count);
+        body.childElementFill(start, count);
+        if (count > 0) {
+            DOMElement first = DOMElement.fromHandle(start);
+            bool _first_ok = first.isValid();
+        }
+
+        int32 divCount = body.querySelectorAllCount("div");
+        int32 divStart = Webcc.reserveDeferredHandles(divCount);
+        body.querySelectorAllFill("div", divStart, divCount);
+        if (divCount > 0) {
+            DOMElement firstDiv = DOMElement.fromHandle(divStart);
+            bool _first_div_ok = firstDiv.isValid();
+        }
+    }
+
+    view {
+        <div>
+            <section>
+                <div>Ok</div>
+            </section>
+        </div>
+    }
+}
+
+app {
+    root = DomQueryAndTreeIntrospectionPass;
+}

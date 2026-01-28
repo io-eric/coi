@@ -1,0 +1,128 @@
+component App {
+  mut int ran = 0;
+
+  mut int root_valid = 0;
+  mut int missing_valid = 0;
+  mut int contains_ok = 0;
+  mut int contains_not_ok = 0;
+  mut int closest_ok = 0;
+  mut int parent_valid = 0;
+  mut int parent_contains_root = 0;
+  mut int connected_ok = 0;
+
+  mut int qsa_count = 0;
+  mut string qsa_first_idx = "";
+
+  mut int child_count = 0;
+  mut string child_first_id = "";
+
+  mut int active_valid = 0;
+
+  mount {
+    if (ran == 1) return;
+    ran = 1;
+
+    DOMElement body = DOMElement.getBody();
+    DOMElement root = body.querySelector("#root");
+    root_valid = root.isValid() ? 1 : 0;
+
+    DOMElement missing = body.querySelector("#missing");
+    missing_valid = missing.isValid() ? 1 : 0;
+
+    DOMElement container = root.querySelector("#container");
+    DOMElement item0 = root.querySelector("[data-idx=\"0\"]");
+    DOMElement inner0 = root.querySelector("#inner0");
+
+    contains_ok = container.contains(item0) ? 1 : 0;
+    contains_not_ok = container.contains(root) ? 1 : 0;
+
+    DOMElement closest_container = inner0.closest("#container");
+    closest_ok = closest_container.contains(item0) ? 1 : 0;
+
+    DOMElement parent = root.getParentNode();
+    parent_valid = parent.isValid() ? 1 : 0;
+    parent_contains_root = parent.contains(root) ? 1 : 0;
+
+    connected_ok = root.isConnected() ? 1 : 0;
+
+    qsa_count = container.querySelectorAllCount(".item");
+    if (qsa_count > 0) {
+      int32 start = Webcc.reserveDeferredHandles(qsa_count);
+      container.querySelectorAllFill(".item", start, qsa_count);
+      DOMElement first = DOMElement.fromHandle(start);
+      qsa_first_idx = first.getAttribute("data-idx");
+    }
+
+    // Children are: .status, #container, #footer (3).
+    // Use container for a stable 2-child assertion (.item[0], .item[1]).
+    child_count = container.childElementCount();
+    if (child_count > 0) {
+      int32 start = Webcc.reserveDeferredHandles(child_count);
+      container.childElementFill(start, child_count);
+      DOMElement first = DOMElement.fromHandle(start);
+      child_first_id = first.getAttribute("id");
+    }
+
+    DOMElement active = DOMElement.getActiveElement();
+    active_valid = active.isValid() ? 1 : 0;
+  }
+
+  style {
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0f1117;
+      color: #e8e8e8;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    .root { padding: 24px; }
+    .status {
+      display: inline-block;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 2px solid rgba(148, 119, 255, 0.55);
+      background: rgba(148, 119, 255, 0.10);
+      user-select: none;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .container {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 14px;
+      border: 2px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+    }
+    .item { padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.05); }
+    .item + .item { margin-top: 8px; }
+  }
+
+  view {
+    <div id="root" class="root root">
+      <div class="status status">
+        dom query test
+        rootValid={root_valid}
+        missingValid={missing_valid}
+        containsOk={contains_ok}
+        containsNotOk={contains_not_ok}
+        closestOk={closest_ok}
+        parentValid={parent_valid}
+        parentContainsRoot={parent_contains_root}
+        connectedOk={connected_ok}
+        qsaCount={qsa_count}
+        qsaFirstIdx={qsa_first_idx}
+        childCount={child_count}
+        childFirstId={child_first_id}
+        activeValid={active_valid}
+      </div>
+
+      <div id="container" class="container container">
+        <div class="item item" data-idx="0"><span id="inner0">inner0</span></div>
+        <div class="item item" data-idx="1"><span>inner1</span></div>
+      </div>
+      <div id="footer">footer</div>
+    </div>
+  }
+}
+
+app { root = App; }

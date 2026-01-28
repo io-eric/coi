@@ -11,4 +11,4 @@ node_modules/
 **/.cache/
 **/.coi_cache
 **/__pycache__
-
+.tmp/

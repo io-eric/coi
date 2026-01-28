@@ -1,0 +1,14 @@
+// WebCC/Coi interop helpers that are not generated from schema.def
+
+// Low-level helper to reserve a contiguous range of deferred handles.
+// These handles can be filled by WebCC APIs like `querySelectorAllFill`.
+type Webcc {
+    @inline("webcc::reserve_deferred_handles(${0})")
+    shared def reserveDeferredHandles(int32 count): int32
+}
+
+// DOM handle utilities
+type DOMElement {
+    @inline("webcc::DOMElement(${0})")
+    shared def fromHandle(int32 handle): DOMElement
+}
