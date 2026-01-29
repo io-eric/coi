@@ -285,7 +285,14 @@ std::unique_ptr<Expression> Parser::parse_primary(){
     if(current().type == TokenType::STRING_LITERAL){
         std::string value = current().value;
         advance();
-        return std::make_unique<StringLiteral>(value);
+        return std::make_unique<StringLiteral>(value, false);
+    }
+
+    // Template string (backticks)
+    if(current().type == TokenType::TEMPLATE_STRING){
+        std::string value = current().value;
+        advance();
+        return std::make_unique<StringLiteral>(value, true);
     }
 
     // Boolean literal

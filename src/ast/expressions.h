@@ -25,7 +25,8 @@ struct BoolLiteral : Expression {
 
 struct StringLiteral : Expression {
     std::string value;
-    StringLiteral(const std::string& v) : value(v){}
+    bool is_template = false;  // true for backtick strings, false for double-quote strings
+    StringLiteral(const std::string& v, bool tmpl = false) : value(v), is_template(tmpl){}
     
     struct Part {
         bool is_expr;

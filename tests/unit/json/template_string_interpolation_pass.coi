@@ -1,7 +1,7 @@
-// Test: JSON array parsing with Json.parse(Type[], ...)
-// Tests parsing of root-level JSON arrays into vector of data types
+// Test: Template string with interpolation
+// Template strings (backticks) support both raw JSON and {expr} interpolation
 
-component JsonArrayTest {
+component TemplateStringTest {
     data Show {
         string title;
         int id;
@@ -24,7 +24,17 @@ component JsonArrayTest {
     }
     
     mount {
-        string jsonArray = `[{"title":"Breaking Bad","id":1},{"title":"Game of Thrones","id":2}]`;
+        // Template strings support interpolation!
+        string show1 = "Breaking Bad";
+        string show2 = "Game of Thrones";
+        int id1 = 1;
+        int id2 = 2;
+        
+        string jsonArray = `[
+            {"title": "{show1}", "id": {id1}},
+            {"title": "{show2}", "id": {id2}}
+        ]`;
+        
         Json.parse(Show[], jsonArray, &onSuccess = onSuccess, &onError = onError);
     }
     
@@ -34,5 +44,5 @@ component JsonArrayTest {
 }
 
 app {
-    root = JsonArrayTest;
+    root = TemplateStringTest;
 }
