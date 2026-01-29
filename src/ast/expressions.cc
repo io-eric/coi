@@ -3,6 +3,7 @@
 #include "node.h" 
 #include "../defs/def_parser.h"
 #include "../codegen/json_codegen.h"
+#include "../cli/error.h"
 #include <cctype>
 
 // Reference to per-component context for reference props
@@ -109,6 +110,10 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
         const char* positional_names[] = {"onMessage", "onOpen", "onClose", "onError"};
         for (size_t i = 1; i < args.size(); i++) {
             const auto& arg = args[i];
+            // Enforce & prefix for callback arguments
+            if (!arg.is_reference) {
+                ErrorHandler::compiler_error("Callback argument must use '&' prefix (e.g., &" + arg.value->to_webcc() + ")");
+            }
             std::string callback = arg.value->to_webcc();
             std::string event_name;
             
@@ -139,6 +144,10 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
         
         for (size_t i = 1; i < args.size(); i++) {
             const auto& arg = args[i];
+            // Enforce & prefix for callback arguments
+            if (!arg.is_reference) {
+                ErrorHandler::compiler_error("Callback argument must use '&' prefix (e.g., &" + arg.value->to_webcc() + ")");
+            }
             std::string callback = arg.value->to_webcc();
             std::string event_name = !arg.name.empty() ? arg.name : (i == 1 ? "onSuccess" : "onError");
             int param_count = ComponentTypeContext::instance().get_method_param_count(callback);
@@ -174,6 +183,10 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
         
         for (size_t i = 2; i < args.size(); i++) {
             const auto& arg = args[i];
+            // Enforce & prefix for callback arguments
+            if (!arg.is_reference) {
+                ErrorHandler::compiler_error("Callback argument must use '&' prefix (e.g., &" + arg.value->to_webcc() + ")");
+            }
             std::string callback = arg.value->to_webcc();
             std::string event_name = !arg.name.empty() ? arg.name : (i == 2 ? "onSuccess" : "onError");
             int param_count = ComponentTypeContext::instance().get_method_param_count(callback);
@@ -223,6 +236,10 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
         std::string on_success, on_error;
         for (size_t i = 2; i < args.size(); i++) {
             const auto& arg = args[i];
+            // Enforce & prefix for callback arguments
+            if (!arg.is_reference) {
+                ErrorHandler::compiler_error("Callback argument must use '&' prefix (e.g., &" + arg.value->to_webcc() + ")");
+            }
             if (!arg.name.empty()) {
                 // Named argument
                 if (arg.name == "onSuccess") {
@@ -470,8 +487,13 @@ std::string FunctionCall::to_webcc() {
         // Check for static type call (e.g., System.random, Input.isKeyDown)
         if (std::isupper(type_or_obj[0])) {
             if (auto* method_def = DefSchema::instance().lookup_method(type_or_obj, method)) {
-                // Check arg count matches (for overloads)
-                if (method_def->params.size() == args.size()) {
+                // For intrinsics, allow fewer args (they handle optional params internally)
+                // For others, require exact match
+                bool arg_count_ok = (method_def->mapping_type == MappingType::Intrinsic)
+                    ? args.size() <= method_def->params.size()
+                    : args.size() == method_def->params.size();
+                    
+                if (arg_count_ok) {
                     switch (method_def->mapping_type) {
                         case MappingType::Intrinsic: {
                             std::string code = generate_intrinsic(method_def->mapping_value, args);
