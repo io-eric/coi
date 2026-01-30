@@ -209,6 +209,93 @@ string example = `Use \` for backticks`;
 - Template strings: Preserve whitespace/newlines, only escape `` \` ``
 - Both: Support `{variable}` interpolation and `\{` `\}` escaping
 
+## Math Library
+
+Coi provides a built-in `Math` type with mathematical constants and functions. All members are accessed using `Math.name` syntax.
+
+### Constants
+
+```tsx
+float pi = Math.PI;          // π ≈ 3.14159
+float halfPi = Math.HALF_PI; // π/2 ≈ 1.57079
+float tau = Math.TAU;        // 2π ≈ 6.28318
+float d2r = Math.DEG2RAD;    // Degrees to radians multiplier
+float r2d = Math.RAD2DEG;    // Radians to degrees multiplier
+```
+
+### Basic Functions
+
+```tsx
+float absolute = Math.abs(-5.0);      // 5.0
+float squareRoot = Math.sqrt(16.0);   // 4.0
+```
+
+### Trigonometric Functions
+
+All trig functions use radians:
+
+```tsx
+float sineValue = Math.sin(Math.PI / 2.0);     // 1.0
+float cosineValue = Math.cos(0.0);              // 1.0
+float tangentValue = Math.tan(Math.PI / 4.0);  // 1.0
+
+// Convert degrees to radians
+float angleRad = 90.0 * Math.DEG2RAD;
+float sine = Math.sin(angleRad);  // 1.0
+```
+
+### Random Number Generation
+
+```tsx
+// Random float between 0.0 and 1.0
+float rand = Math.random();
+
+// Seeded random (for reproducible sequences)
+float seeded = Math.random(42);  // Same seed produces same result
+```
+
+### Utility Functions
+
+```tsx
+// Min/Max
+float smaller = Math.min(10.0, 20.0);   // 10.0
+float larger = Math.max(10.0, 20.0);    // 20.0
+
+// Clamp value between min and max
+float clamped = Math.clamp(15.0, 0.0, 10.0);  // 10.0
+
+// Linear interpolation
+float mid = Math.lerp(0.0, 100.0, 0.5);  // 50.0 (t=0.5 is halfway)
+
+// Rounding
+float down = Math.floor(3.7);   // 3.0
+float up = Math.ceil(3.2);      // 4.0
+float nearest = Math.round(3.5); // 4.0
+```
+
+### Example Usage
+
+```tsx
+component Circle {
+    mut float angle = 0.0;
+    mut float x = 0.0;
+    mut float y = 0.0;
+    
+    def update() : void {
+        angle = angle + 0.1;
+        
+        // Calculate circular motion
+        x = Math.cos(angle) * 100.0;
+        y = Math.sin(angle) * 100.0;
+        
+        // Keep angle in valid range
+        if (angle > Math.TAU) {
+            angle = 0.0;
+        }
+    }
+}
+```
+
 ## Data Types
 
 Data types are simple value types (like structs in other languages) that group related fields together. Unlike platform types (Canvas, Audio, etc.), data types are **copyable** and can be freely passed around.

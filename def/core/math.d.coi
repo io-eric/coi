@@ -4,19 +4,19 @@
 type Math {
     // Constants
     @inline("webcc::PI")
-    shared def PI() : float
+    shared float PI;
 
     @inline("webcc::HALF_PI")
-    shared def HALF_PI() : float
+    shared float HALF_PI;
 
     @inline("webcc::TAU")
-    shared def TAU() : float
+    shared float TAU;
 
     @inline("webcc::DEG2RAD")
-    shared def DEG2RAD() : float
+    shared float DEG2RAD;
 
     @inline("webcc::RAD2DEG")
-    shared def RAD2DEG() : float
+    shared float RAD2DEG;
 
     // Basic Math Functions
     @inline("webcc::abs(${0})")

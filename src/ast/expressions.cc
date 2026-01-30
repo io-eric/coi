@@ -676,6 +676,20 @@ MemberAccess::MemberAccess(std::unique_ptr<Expression> obj, const std::string& m
     : object(std::move(obj)), member(mem) {}
 
 std::string MemberAccess::to_webcc() {
+    // Check if this is a shared constant access (e.g., Math.PI)
+    if (auto id = dynamic_cast<Identifier*>(object.get())) {
+        // Check if it's a type with a shared constant
+        if (!id->name.empty() && std::isupper(id->name[0])) {
+            if (auto* method_def = DefSchema::instance().lookup_method(id->name, member)) {
+                if (method_def->is_shared && method_def->is_constant) {
+                    // For constants, just return the inline value directly
+                    if (method_def->mapping_type == MappingType::Inline) {
+                        return method_def->mapping_value;
+                    }
+                }
+            }
+        }
+    }
     return object->to_webcc() + "." + member;
 }
 

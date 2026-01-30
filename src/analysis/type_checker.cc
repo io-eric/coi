@@ -336,10 +336,26 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
         if (auto id = dynamic_cast<Identifier *>(member->object.get()))
         {
             // If it's an enum type, this is valid (e.g., Color::Red)
-            if (!is_enum_type(id->name) && scope.find(id->name) == scope.end())
+            // Also valid if it's a type in DefSchema (e.g., Math.PI, System.log)
+            if (!is_enum_type(id->name) && 
+                scope.find(id->name) == scope.end() &&
+                DefSchema::instance().lookup_type(id->name) == nullptr)
             {
                 ErrorHandler::type_error("Undefined variable '" + id->name + "' in member access", member->line);
                 exit(1);
+            }
+            
+            // Check if this is a shared constant or method access on a type
+            if (auto type_def = DefSchema::instance().lookup_type(id->name))
+            {
+                // Look for a shared member with this name
+                if (auto method = DefSchema::instance().lookup_method(id->name, member->member))
+                {
+                    if (method->is_shared && method->is_constant)
+                    {
+                        return normalize_type(method->return_type);
+                    }
+                }
             }
         }
         
