@@ -62,7 +62,7 @@ Coi gives you composable components, fine-grained reactivity, type safety, and t
 > [!NOTE]
 > **Work in Progress:** Coi currently trails in DOM performance benchmarks. Improvements to DOM node allocation and rendering are in progress.
 
-In [benchmarks](benchmark/) comparing Coi, React, Vue, and Svelte, Coi delivers the smallest bundle size. DOM performance is still being optimized—see the chart below for current results.
+In [benchmarks](benchmark/) comparing Coi, React, Vue, and Svelte, Coi delivers the smallest bundle size. DOM performance is still being optimized, see the chart below for current results.
 
 <p align="center">
   <img src="benchmark/benchmark_results.svg" alt="Benchmark Results" width="600">
