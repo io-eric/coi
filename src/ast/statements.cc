@@ -26,15 +26,43 @@ std::string VarDeclaration::to_webcc()
     if (auto repeat = dynamic_cast<ArrayRepeatLiteral *>(initializer.get()))
     {
         std::string elem_type = type;
+        std::string fixed_size;
+        
+        // Strip array suffix to get element type
         if (elem_type.ends_with("[]"))
         {
+            // Dynamic array type: int[]
             elem_type = elem_type.substr(0, elem_type.length() - 2);
         }
-        // Use count expression directly - works for literals and const identifiers
-        std::string arr_type = "webcc::array<" + convert_type(elem_type) + ", " + repeat->count->to_webcc() + ">";
-        std::string result = (is_mutable ? "" : "const ") + arr_type + " " + name + "; ";
-        result += name + ".fill(" + repeat->value->to_webcc() + ");";
-        return result;
+        else
+        {
+            // Fixed-size array type: int[N] - extract N and strip it
+            size_t bracket_pos = elem_type.rfind('[');
+            if (bracket_pos != std::string::npos && elem_type.back() == ']')
+            {
+                fixed_size = elem_type.substr(bracket_pos + 1, elem_type.length() - bracket_pos - 2);
+                elem_type = elem_type.substr(0, bracket_pos);
+            }
+        }
+        
+        // Use count from repeat initializer (overrides fixed_size if both present)
+        std::string count_str = repeat->count->to_webcc();
+        std::string arr_type = "webcc::array<" + convert_type(elem_type) + ", " + count_str + ">";
+        
+        if (is_mutable)
+        {
+            // Mutable: declare then fill
+            std::string result = arr_type + " " + name + "; ";
+            result += name + ".fill(" + repeat->value->to_webcc() + ");";
+            return result;
+        }
+        else
+        {
+            // Immutable: use IIFE to initialize const array
+            std::string result = "const " + arr_type + " " + name + " = []{ ";
+            result += arr_type + " _tmp; _tmp.fill(" + repeat->value->to_webcc() + "); return _tmp; }();";
+            return result;
+        }
     }
 
     // Dynamic array literal initializer
