@@ -295,9 +295,41 @@ std::string ExpressionStatement::to_webcc()
         size_t dot_pos = call->name.rfind('.');
         if (dot_pos != std::string::npos)
         {
-            std::string arr_name = call->name.substr(0, dot_pos);
+            std::string obj_expr = call->name.substr(0, dot_pos);
             std::string method = call->name.substr(dot_pos + 1);
+            
+            // Check if this is a mutating method call on a component field
+            // e.g., rows[i].label.append() -> need to call rows[i]._update_label()
+            // Pattern: arrayName[index].fieldName.mutatingMethod()
+            size_t second_dot = obj_expr.rfind('.');
+            if (second_dot != std::string::npos)
+            {
+                std::string component_expr = obj_expr.substr(0, second_dot); // e.g., "rows[i]"
+                std::string field_name = obj_expr.substr(second_dot + 1);     // e.g., "label"
+                
+                // Check if this is a mutating method (returns void)
+                std::vector<std::string> types_to_check = {"string", "array", "int", "float", "bool"};
+                bool is_mutating = false;
+                for (const auto& type : types_to_check)
+                {
+                    auto* method_def = DefSchema::instance().lookup_method(type, method);
+                    if (method_def && method_def->return_type == "void")
+                    {
+                        is_mutating = true;
+                        break;
+                    }
+                }
+                
+                if (is_mutating)
+                {
+                    // Generate: field mutation + component update call
+                    std::string result = call->to_webcc() + ";\n";
+                    result += component_expr + "._update_" + field_name + "();\n";
+                    return result;
+                }
+            }
 
+            std::string arr_name = obj_expr;
             auto it = g_component_array_loops.find(arr_name);
             if (it != g_component_array_loops.end() && it->second.is_member_ref_loop)
             {
