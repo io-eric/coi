@@ -489,14 +489,52 @@ void collect_mods_recursive(Statement *stmt, std::set<std::string> &mods)
             if (dot_pos != std::string::npos)
             {
                 std::string method = call->name.substr(dot_pos + 1);
-                std::string obj = call->name.substr(0, dot_pos);
+                std::string obj_expr = call->name.substr(0, dot_pos);
                 
-                // Check if this is a mutating array method via DefSchema
-                // Array methods that return void are mutating (push, pop, clear, sort, remove, fill, etc.)
-                auto* method_def = DefSchema::instance().lookup_method("array", method);
-                if (method_def && method_def->return_type == "void")
+                // Check if this is a mutating method (returns void) on ANY type
+                // This includes: string.append(), array.push(), etc.
+                // We need to check all possible types since we don't have type info here
+                bool is_mutating = false;
+                std::vector<std::string> types_to_check = {"string", "array", "int", "float", "bool"};
+                for (const auto& type : types_to_check)
                 {
-                    mods.insert(obj);
+                    auto* method_def = DefSchema::instance().lookup_method(type, method);
+                    if (method_def && method_def->return_type == "void")
+                    {
+                        is_mutating = true;
+                        break;
+                    }
+                }
+                
+                if (is_mutating)
+                {
+                    // For simple identifiers like "label.append()", track "label"
+                    // For member access like "rows[i].label.append()", track the root variable
+                    // We need to parse obj_expr to find the root identifier
+                    
+                    // Find the root variable name (leftmost identifier before any . or [)
+                    size_t first_dot = obj_expr.find('.');
+                    size_t first_bracket = obj_expr.find('[');
+                    size_t split_pos = std::string::npos;
+                    
+                    if (first_dot != std::string::npos && first_bracket != std::string::npos)
+                    {
+                        split_pos = std::min(first_dot, first_bracket);
+                    }
+                    else if (first_dot != std::string::npos)
+                    {
+                        split_pos = first_dot;
+                    }
+                    else if (first_bracket != std::string::npos)
+                    {
+                        split_pos = first_bracket;
+                    }
+                    
+                    std::string root_var = (split_pos != std::string::npos) 
+                        ? obj_expr.substr(0, split_pos) 
+                        : obj_expr;
+                    
+                    mods.insert(root_var);
                 }
             }
         }
