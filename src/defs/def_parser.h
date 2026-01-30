@@ -28,7 +28,8 @@ struct MethodDef
     std::string name;
     std::vector<MethodParam> params;
     std::string return_type;
-    bool is_shared = false; // static method
+    bool is_shared = false;   // static method
+    bool is_constant = false; // shared constant (no params, accessed as property)
 
     MappingType mapping_type = MappingType::Map;
     std::string mapping_value; // The string in the annotation

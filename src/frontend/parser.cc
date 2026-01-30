@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <limits>
+#include <cctype>
 
 Parser::Parser(const std::vector<Token>& toks) : tokens(toks){}
 
@@ -43,7 +44,7 @@ bool Parser::is_type_token() {
 // Check if current token can be used as an identifier (including keywords that are allowed as names)
 bool Parser::is_identifier_token() {
     TokenType t = current().type;
-    return t == TokenType::IDENTIFIER || t == TokenType::KEY || t == TokenType::DATA || t == TokenType::SHARED || t == TokenType::PUB || t == TokenType::MUT;
+    return t == TokenType::IDENTIFIER || t == TokenType::KEY || t == TokenType::DATA || t == TokenType::SHARED || t == TokenType::PUB;
 }
 
 // Parse comma-separated arguments until end_token (RPAREN or RBRACE)
@@ -253,7 +254,8 @@ std::unique_ptr<Expression> Parser::parse_primary(){
     if(current().type == TokenType::INT_LITERAL){
         int value;
         try {
-            long long ll_value = std::stoll(current().value);
+            // Use base 0 to auto-detect decimal (10) or hexadecimal (0x)
+            long long ll_value = std::stoll(current().value, nullptr, 0);
             if (ll_value > std::numeric_limits<int>::max() || ll_value < std::numeric_limits<int>::min()) {
                 throw std::out_of_range("overflow");
             }
@@ -323,7 +325,7 @@ std::unique_ptr<Expression> Parser::parse_primary(){
 
         while(true) {
             // Data literal initialization: TypeName{val1, val2, ...} or TypeName{name = val, ...}
-            if(current().type == TokenType::LBRACE && std::isupper(name[0])){
+            if(current().type == TokenType::LBRACE && std::isupper(name[0]) && allow_brace_init){
                 advance();
                 auto parsed_args = parse_call_args(TokenType::RBRACE);
                 expect(TokenType::RBRACE, "Expected '}'");
@@ -415,12 +417,8 @@ std::unique_ptr<Expression> Parser::parse_primary(){
             auto repeat = std::make_unique<ArrayRepeatLiteral>();
             repeat->value = std::move(first_expr);
 
-            // Count must be an integer literal (compile-time constant)
-            if (current().type != TokenType::INT_LITERAL) {
-                ErrorHandler::compiler_error("Array repeat count must be an integer literal", current().line);
-            }
-            repeat->count = std::stoi(current().value);
-            advance();
+            // Parse count expression (type checker validates it's a compile-time constant integer)
+            repeat->count = parse_expression();
 
             expect(TokenType::RBRACKET, "Expected ']'");
             return repeat;
@@ -500,7 +498,11 @@ std::unique_ptr<Statement> Parser::parse_statement(){
                 auto rangeFor = std::make_unique<ForRangeStatement>();
                 rangeFor->var_name = var_name;
                 rangeFor->start = std::move(first_expr);
+                // Disable brace init so Name{ isn't parsed as data literal before the block
+                bool old_allow_brace = allow_brace_init;
+                allow_brace_init = false;
                 rangeFor->end = parse_expression();
+                allow_brace_init = old_allow_brace;
                 rangeFor->body = parse_statement();
                 return rangeFor;
             }

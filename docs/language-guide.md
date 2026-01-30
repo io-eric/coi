@@ -48,6 +48,11 @@ uint16 port = 8080;        // 16-bit unsigned
 uint32 id = 4000000000;    // 32-bit unsigned
 uint64 huge = 10000000000; // 64-bit unsigned
 
+// Hexadecimal literals (0x prefix)
+int GL_ARRAY_BUFFER = 0x8892;      // WebGL constant
+uint32 color = 0xFF00FF;           // RGB color value
+int mask = 0x4000;                 // Bit mask
+
 // Floating point
 float32 precise = 3.14;    // 32-bit float (single precision)
 float64 speed = 3.14159;   // 64-bit float (double precision)
@@ -203,6 +208,93 @@ string example = `Use \` for backticks`;
 - Regular strings: Need `\"`, `\n`, `\\` for quotes, newlines, backslashes
 - Template strings: Preserve whitespace/newlines, only escape `` \` ``
 - Both: Support `{variable}` interpolation and `\{` `\}` escaping
+
+## Math Library
+
+Coi provides a built-in `Math` type with mathematical constants and functions. All members are accessed using `Math.name` syntax.
+
+### Constants
+
+```tsx
+float pi = Math.PI;          // π ≈ 3.14159
+float halfPi = Math.HALF_PI; // π/2 ≈ 1.57079
+float tau = Math.TAU;        // 2π ≈ 6.28318
+float d2r = Math.DEG2RAD;    // Degrees to radians multiplier
+float r2d = Math.RAD2DEG;    // Radians to degrees multiplier
+```
+
+### Basic Functions
+
+```tsx
+float absolute = Math.abs(-5.0);      // 5.0
+float squareRoot = Math.sqrt(16.0);   // 4.0
+```
+
+### Trigonometric Functions
+
+All trig functions use radians:
+
+```tsx
+float sineValue = Math.sin(Math.PI / 2.0);     // 1.0
+float cosineValue = Math.cos(0.0);              // 1.0
+float tangentValue = Math.tan(Math.PI / 4.0);  // 1.0
+
+// Convert degrees to radians
+float angleRad = 90.0 * Math.DEG2RAD;
+float sine = Math.sin(angleRad);  // 1.0
+```
+
+### Random Number Generation
+
+```tsx
+// Random float between 0.0 and 1.0
+float rand = Math.random();
+
+// Seeded random (for reproducible sequences)
+float seeded = Math.random(42);  // Same seed produces same result
+```
+
+### Utility Functions
+
+```tsx
+// Min/Max
+float smaller = Math.min(10.0, 20.0);   // 10.0
+float larger = Math.max(10.0, 20.0);    // 20.0
+
+// Clamp value between min and max
+float clamped = Math.clamp(15.0, 0.0, 10.0);  // 10.0
+
+// Linear interpolation
+float mid = Math.lerp(0.0, 100.0, 0.5);  // 50.0 (t=0.5 is halfway)
+
+// Rounding
+float down = Math.floor(3.7);   // 3.0
+float up = Math.ceil(3.2);      // 4.0
+float nearest = Math.round(3.5); // 4.0
+```
+
+### Example Usage
+
+```tsx
+component Circle {
+    mut float angle = 0.0;
+    mut float x = 0.0;
+    mut float y = 0.0;
+    
+    def update() : void {
+        angle = angle + 0.1;
+        
+        // Calculate circular motion
+        x = Math.cos(angle) * 100.0;
+        y = Math.sin(angle) * 100.0;
+        
+        // Keep angle in valid range
+        if (angle > Math.TAU) {
+            angle = 0.0;
+        }
+    }
+}
+```
 
 ## Data Types
 

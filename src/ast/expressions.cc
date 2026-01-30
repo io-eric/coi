@@ -451,7 +451,8 @@ std::string BinaryOp::to_webcc() {
         flatten_string_concat(this, parts);
         return generate_formatter_expr(parts);
     }
-    return left->to_webcc() + " " + op + " " + right->to_webcc();
+    // Wrap in parentheses to preserve operator precedence
+    return "(" + left->to_webcc() + " " + op + " " + right->to_webcc() + ")";
 }
 
 void BinaryOp::collect_dependencies(std::set<std::string>& deps) {
@@ -675,6 +676,20 @@ MemberAccess::MemberAccess(std::unique_ptr<Expression> obj, const std::string& m
     : object(std::move(obj)), member(mem) {}
 
 std::string MemberAccess::to_webcc() {
+    // Check if this is a shared constant access (e.g., Math.PI)
+    if (auto id = dynamic_cast<Identifier*>(object.get())) {
+        // Check if it's a type with a shared constant
+        if (!id->name.empty() && std::isupper(id->name[0])) {
+            if (auto* method_def = DefSchema::instance().lookup_method(id->name, member)) {
+                if (method_def->is_shared && method_def->is_constant) {
+                    // For constants, just return the inline value directly
+                    if (method_def->mapping_type == MappingType::Inline) {
+                        return method_def->mapping_value;
+                    }
+                }
+            }
+        }
+    }
     return object->to_webcc() + "." + member;
 }
 
@@ -768,18 +783,14 @@ bool ArrayLiteral::is_static() {
 }
 
 std::string ArrayRepeatLiteral::to_webcc() {
-    std::string val = value->to_webcc();
-    std::string code = "{";
-    for (int i = 0; i < count; ++i) {
-        if (i > 0) code += ", ";
-        code += val;
-    }
-    code += "}";
-    return code;
+    // Generate initialization - webcc::array constructor will fill with the value
+    // The actual array type and initialization is handled by VarDeclaration::to_webcc
+    return value->to_webcc();
 }
 
 void ArrayRepeatLiteral::collect_dependencies(std::set<std::string>& deps) {
     value->collect_dependencies(deps);
+    count->collect_dependencies(deps);
 }
 
 bool ArrayRepeatLiteral::is_static() {
@@ -803,7 +814,9 @@ std::string EnumAccess::to_webcc() {
 }
 
 std::string ComponentConstruction::to_webcc() {
-    std::string result = component_name + "(";
+    // Resolve component-local data types (e.g., Body -> App_Body)
+    std::string resolved_name = ComponentTypeContext::instance().resolve(component_name);
+    std::string result = resolved_name + "(";
     for (size_t i = 0; i < args.size(); i++) {
         if (i > 0) result += ", ";
         result += args[i].value->to_webcc();

@@ -239,6 +239,10 @@ bool is_compatible_type(const std::string &source, const std::string &target)
         return true;  // Allow narrowing from float64 to float32
     if (source == "float32" && target == "float64")
         return true;  // Allow widening from float32 to float64
+    // int32 can be assigned to unsigned types (for hex literals like 0x8B31)
+    // C++ handles the conversion correctly
+    if (source == "int32" && (target == "uint32" || target == "uint16" || target == "uint64"))
+        return true;
     // int32 can be used as handle (for raw handle values)
     if (source == "int32" && DefSchema::instance().is_handle(target))
         return true;
@@ -286,7 +290,16 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
     if (auto arr = dynamic_cast<ArrayRepeatLiteral *>(expr))
     {
         std::string elem_type = infer_expression_type(arr->value.get(), scope);
-        return elem_type + "[" + std::to_string(arr->count) + "]";
+        // Get count as string - either int literal value or identifier name
+        std::string count_str;
+        if (auto int_lit = dynamic_cast<IntLiteral *>(arr->count.get())) {
+            count_str = std::to_string(int_lit->value);
+        } else if (auto id = dynamic_cast<Identifier *>(arr->count.get())) {
+            count_str = id->name;
+        } else {
+            count_str = "?"; // Unknown - will be caught by type checker
+        }
+        return elem_type + "[" + count_str + "]";
     }
 
     // Index access type inference
@@ -323,10 +336,26 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
         if (auto id = dynamic_cast<Identifier *>(member->object.get()))
         {
             // If it's an enum type, this is valid (e.g., Color::Red)
-            if (!is_enum_type(id->name) && scope.find(id->name) == scope.end())
+            // Also valid if it's a type in DefSchema (e.g., Math.PI, System.log)
+            if (!is_enum_type(id->name) && 
+                scope.find(id->name) == scope.end() &&
+                DefSchema::instance().lookup_type(id->name) == nullptr)
             {
                 ErrorHandler::type_error("Undefined variable '" + id->name + "' in member access", member->line);
                 exit(1);
+            }
+            
+            // Check if this is a shared constant or method access on a type
+            if (auto type_def = DefSchema::instance().lookup_type(id->name))
+            {
+                // Look for a shared member with this name
+                if (auto method = DefSchema::instance().lookup_method(id->name, member->member))
+                {
+                    if (method->is_shared && method->is_constant)
+                    {
+                        return normalize_type(method->return_type);
+                    }
+                }
             }
         }
         
@@ -475,8 +504,12 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
                     current_type = parent_type;
                 }
                 
-                // If not in scope and not a handle/enum/schema-namespace, it's undefined
-                if (!is_handle && !is_enum && !is_valid_schema_call)
+                // Check if obj_name is a static utility type (e.g., Math, Json)
+                auto* static_method = DefSchema::instance().lookup_method(obj_name, method_name);
+                bool has_static_method = static_method && static_method->is_shared;
+                
+                // If not in scope and not a handle/enum/schema-namespace/static-method-type, it's undefined
+                if (!is_handle && !is_enum && !is_valid_schema_call && !has_static_method)
                 {
                     std::cerr << "\033[1;31mError:\033[0m Undefined variable '" << obj_name 
                               << "' in method call at line " << func->line << std::endl;

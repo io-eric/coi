@@ -362,6 +362,55 @@ std::optional<MethodDef> DefParser::parse_method(const std::vector<std::pair<std
         advance();
     }
 
+    // Check if this is a shared constant (e.g., "shared float PI;")
+    // vs a shared method (e.g., "shared def foo() : void")
+    if (method.is_shared && current_.type == Token::Identifier && current_.value != "def")
+    {
+        // This is a shared constant: "shared <type> <name>;"
+        method.return_type = current_.value;
+        advance();
+
+        // Handle array types
+        if (current_.type == Token::LBracket)
+        {
+            method.return_type += "[]";
+            advance();
+            if (current_.type == Token::RBracket)
+                advance();
+        }
+
+        // Constant name
+        method.name = current_.value;
+        method.is_constant = true;
+        advance();
+
+        // Process annotations (same as methods)
+        for (const auto &[name, value] : annotations)
+        {
+            if (name == "map")
+            {
+                method.mapping_type = MappingType::Map;
+                method.mapping_value = value;
+            }
+            else if (name == "inline")
+            {
+                method.mapping_type = MappingType::Inline;
+                method.mapping_value = value;
+            }
+            else if (name == "intrinsic")
+            {
+                method.mapping_type = MappingType::Intrinsic;
+                method.mapping_value = value;
+            }
+        }
+
+        // Skip semicolon if present
+        if (current_.type == Token::Identifier && current_.value == ";")
+            advance();
+
+        return method;
+    }
+
     if (!expect(Token::KwDef, "expected 'def'"))
         return std::nullopt;
 
@@ -726,6 +775,7 @@ bool DefSchema::load_cache(const std::string &cache_path)
             method.name = read_string();
             method.return_type = read_string();
             method.is_shared = file.get() != 0;
+            method.is_constant = file.get() != 0;
             method.mapping_type = static_cast<MappingType>(file.get());
             method.mapping_value = read_string();
 
@@ -783,6 +833,7 @@ bool DefSchema::save_cache(const std::string &cache_path)
             write_string(method.name);
             write_string(method.return_type);
             file.put(method.is_shared ? 1 : 0);
+            file.put(method.is_constant ? 1 : 0);
             file.put(static_cast<uint8_t>(method.mapping_type));
             write_string(method.mapping_value);
 
@@ -954,7 +1005,7 @@ std::string DefSchema::get_namespace_for_type(const std::string &type_name) cons
     if (type_it == types_.end())
         return "";
 
-    // Extract namespace from first @map or @intrinsic annotation
+    // Extract namespace from first @map, @intrinsic, or @inline annotation
     for (const auto &method : type_it->second.methods)
     {
         if (method.mapping_value.empty())
@@ -965,6 +1016,11 @@ std::string DefSchema::get_namespace_for_type(const std::string &type_name) cons
             sep = method.mapping_value.find("::"); // "ns::func_name"
         else if (method.mapping_type == MappingType::Intrinsic)
             sep = method.mapping_value.find('_');  // "ns_func"
+        else if (method.mapping_type == MappingType::Inline)
+        {
+            // For @inline("webcc::func(${0})"), extract namespace before ::
+            sep = method.mapping_value.find("::");
+        }
 
         if (sep != std::string::npos)
             return method.mapping_value.substr(0, sep);
