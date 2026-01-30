@@ -197,8 +197,9 @@ string jsonData = `
     {"title": "Game of Thrones", "id": 2}
 ]`;
 
-// No need to escape quotes or braces
-string html = `<div class="card">{"title": "${title}"}</div>`;
+// Literal braces don't need escaping (only ${} is interpolation)
+string json = `{"name": "Alice", "age": 25}`;
+string html = `<div class="title">${title}</div>`;
 
 // Only escape backticks themselves
 string example = `Use \` for backticks`;
