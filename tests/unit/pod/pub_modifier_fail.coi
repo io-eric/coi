@@ -1,6 +1,6 @@
-// Test: mut modifier should not be allowed in data types
-data BadData {
-    mut string name;  // Should fail
+// Test: pub modifier should not be allowed in pod types
+pod BadData {
+    pub string name;  // Should fail
     int age;
 }
 

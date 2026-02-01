@@ -1,8 +1,8 @@
-// Test: JSON parsing with component-local data types
+// Test: JSON parsing with component-local pod types
 // Component-local types should work with Json.parse and have correct Meta types
 
 component JsonApp {
-    data User {
+    pod User {
         string name;
         int age;
     }

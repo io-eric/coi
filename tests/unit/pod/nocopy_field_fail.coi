@@ -1,5 +1,5 @@
-// Test: Data types cannot contain no-copy types like Canvas, Audio, etc.
-data GameState {
+// Test: Pod types cannot contain no-copy types like Canvas, Audio, etc.
+pod GameState {
     string name;
     Canvas canvas;  // Should fail - Canvas is a no-copy type
 }

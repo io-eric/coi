@@ -9,7 +9,7 @@ Coi enforces naming conventions to distinguish between different constructs:
 | Construct | Convention | Example | Enforced |
 |-----------|------------|---------|----------|
 | Components | `UpperCase` | `component Counter` | ✓ Yes |
-| Data types | `UpperCase` | `data User` | ✓ Yes |
+| Pod types | `UpperCase` | `pod User` | ✓ Yes |
 | Enums | `UpperCase` | `enum Mode` | ✓ Yes |
 | Methods | `lowerCase` | `def handleClick()` | ✓ Yes |
 | Variables | `lowerCase` | `mut int count` | Recommended |
@@ -18,12 +18,12 @@ Coi enforces naming conventions to distinguish between different constructs:
 
 ```tsx
 // ✓ Correct
-data User { string name; }
+pod User { string name; }
 enum Status { Active, Inactive }
 def handleClick() : void { }
 
 // ✗ Compile errors
-data user { }      // Error: Data type name must start with uppercase
+pod user { }       // Error: Pod type name must start with uppercase
 enum status { }    // Error: Enum type name must start with uppercase  
 def HandleClick()  // Error: Method name must start with lowercase
 ```
@@ -297,17 +297,17 @@ component Circle {
 }
 ```
 
-## Data Types
+## Pod Types
 
-Data types are simple value types (like structs in other languages) that group related fields together. Unlike platform types (Canvas, Audio, etc.), data types are **copyable** and can be freely passed around.
+Pod types (Plain Old Data) are simple value types (like structs in other languages) that group related fields together. Unlike platform types (Canvas, Audio, etc.), pod types are **copyable** and can be freely passed around.
 
-### Declaring Data Types
+### Declaring Pod Types
 
-Data types can be declared globally or inside components:
+Pod types can be declared globally or inside components:
 
 ```tsx
-// Global data type
-data User {
+// Global pod type
+pod User {
     string name;
     int age;
     string email;
@@ -315,7 +315,7 @@ data User {
 
 // Inside a component
 component App {
-    data Config {
+    pod Config {
         string host;
         int port;
         bool secure;
@@ -327,23 +327,23 @@ component App {
 
 ### Field Rules
 
-- **No modifiers**: Data fields cannot use `pub` or `mut` modifiers
-- **Value types only**: Data fields cannot contain no-copy types like `Canvas`, `Audio`, `WebSocket`, etc.
-- **Any primitive or data type**: Can use `int`, `float`, `string`, `bool`, arrays, and other data types
+- **No modifiers**: Pod fields cannot use `pub` or `mut` modifiers
+- **Value types only**: Pod fields cannot contain no-copy types like `Canvas`, `Audio`, `WebSocket`, etc.
+- **Any primitive or pod type**: Can use `int`, `float`, `string`, `bool`, arrays, and other pod types
 
 ```tsx
-data Point {
+pod Point {
     float x;
     float y;
 }
 
-data Rectangle {
-    Point topLeft;     // Nested data type - OK
+pod Rectangle {
+    Point topLeft;     // Nested pod type - OK
     Point bottomRight;
     string label;
 }
 
-data BadData {
+pod BadData {
     Canvas canvas;     // ERROR: Canvas is a no-copy type
     Audio sound;       // ERROR: Audio is a no-copy type
 }
@@ -380,7 +380,7 @@ component App {
 
 ### Copying and Moving
 
-Data types are value types and support both copying and moving:
+Pod types are value types and support both copying and moving:
 
 ```tsx
 mut User user1 = User{"Bob", 30, "bob@example.com"};
@@ -395,7 +395,7 @@ mut User user4 := user3;  // user3 is now invalid
 
 ### References
 
-Data types support references like any other type:
+Pod types support references like any other type:
 
 ```tsx
 def updateUser(mut User& u) : void {
@@ -406,12 +406,12 @@ mut User user = User{"Dave", 28, "dave@example.com"};
 updateUser(&user);  // Pass by reference
 ```
 
-### Arrays of Data Types
+### Arrays of Pod Types
 
-You can create arrays of data types:
+You can create arrays of pod types:
 
 ```tsx
-data Item {
+pod Item {
     string name;
     int quantity;
 }
@@ -430,10 +430,10 @@ for item in inventory {
 
 ### JSON Parsing
 
-Data types can be automatically parsed from JSON using `Json.parse()`:
+Pod types can be automatically parsed from JSON using `Json.parse()`:
 
 ```tsx
-data User {
+pod User {
     string name;
     int age;
     string email;
@@ -467,7 +467,7 @@ component App {
 }
 ```
 
-For each data type, a corresponding **Meta struct** is automatically generated with `has_fieldName()` methods to check field presence:
+For each pod type, a corresponding **Meta struct** is automatically generated with `has_fieldName()` methods to check field presence:
 
 ```tsx
 // UserMeta is generated automatically:
@@ -482,7 +482,7 @@ See [API Reference - JSON](api-reference.md#json) for more details and examples.
 
 ### Reactivity
 
-Data types participate in Coi's reactivity system. When you modify a field of a data type, the entire object is marked as modified:
+Pod types participate in Coi's reactivity system. When you modify a field of a pod type, the entire object is marked as modified:
 
 ```tsx
 component UserProfile {

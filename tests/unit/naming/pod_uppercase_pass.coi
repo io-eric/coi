@@ -1,5 +1,5 @@
-// Test: data type names with uppercase are valid
-data User {
+// Test: pod type names with uppercase are valid
+pod User {
     string name;
     int age;
 }

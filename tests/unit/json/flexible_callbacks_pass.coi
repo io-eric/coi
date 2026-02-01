@@ -1,5 +1,5 @@
 // Test: Flexible callback signatures - users can omit params they don't need
-data User {
+pod User {
     string name;
     int age;
 }
