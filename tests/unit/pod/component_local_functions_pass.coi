@@ -1,13 +1,13 @@
-// Test: Component-local data types used in function parameters and return types
+// Test: Component-local pod types used in function parameters and return types
 // Tests that type resolution works correctly for component-local types
 
 component TypeTest {
-    data Point {
+    pod Point {
         float x;
         float y;
     }
     
-    data Rectangle {
+    pod Rectangle {
         Point topLeft;
         Point bottomRight;
     }

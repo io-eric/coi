@@ -1,8 +1,8 @@
 // Test: JSON array parsing with Json.parse(Type[], ...)
-// Tests parsing of root-level JSON arrays into vector of data types
+// Tests parsing of root-level JSON arrays into vector of pod types
 
 component JsonArrayTest {
-    data Show {
+    pod Show {
         string title;
         int id;
     }

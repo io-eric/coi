@@ -1,8 +1,8 @@
-// Test: Component-local data types are flattened to global scope with ComponentName_ prefix
+// Test: Component-local pod types are flattened to global scope with ComponentName_ prefix
 // This ensures component-local types don't conflict and are properly scoped
 
 component App {
-    data TestStruct {
+    pod TestStruct {
         int a;
         string b;
     }
@@ -23,8 +23,8 @@ component App {
 }
 
 component Other {
-    // Different component can have same-named data type
-    data TestStruct {
+    // Different component can have same-named pod type
+    pod TestStruct {
         float x;
         float y;
     }

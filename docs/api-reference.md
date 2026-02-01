@@ -573,22 +573,22 @@ Type-safe JSON parsing with compile-time schema validation and presence tracking
 
 | Method | Description |
 |--------|-------------|
-| `Json.parse(Type, json, &onSuccess=..., &onError=...)` | Parse JSON object into a data type (static) |
-| `Json.parse(Type[], json, &onSuccess=..., &onError=...)` | Parse JSON array into a vector of data types (static) |
-| `Json.stringify(value)` | Convert data type to JSON string (static) |
+| `Json.parse(Type, json, &onSuccess=..., &onError=...)` | Parse JSON object into a pod type (static) |
+| `Json.parse(Type[], json, &onSuccess=..., &onError=...)` | Parse JSON array into a vector of pod types (static) |
+| `Json.stringify(value)` | Convert pod type to JSON string (static) |
 
-### Defining Data Types
+### Defining Pod Types
 
-JSON parsing requires a `data` definition that describes the expected structure:
+JSON parsing requires a `pod` definition that describes the expected structure:
 
 ```tsx
-data Address {
+pod Address {
     string street;
     string city;
     int zipcode;
 }
 
-data User {
+pod User {
     string name;
     int age;
     string email;
@@ -689,11 +689,11 @@ component UserLoader {
 
 ### Example: Array Parsing
 
-Parsing JSON arrays returns a vector of data types with corresponding meta structs:
+Parsing JSON arrays returns a vector of pod types with corresponding meta structs:
 
 ```tsx
 component ShowList {
-    data Show {
+    pod Show {
         string title;
         int id;
     }
@@ -748,7 +748,7 @@ component ShowList {
 | `int` | `123` | 32-bit signed integer |
 | `float` | `3.14` | 64-bit double |
 | `bool` | `true`/`false` | |
-| `Type` | `{...}` | Nested data types |
+| `Type` | `{...}` | Nested pod types |
 | `string[]` | `[...]` | Array of strings |
 | `int[]` | `[...]` | Array of integers |
 | `Type[]` | `[...]` | Array of nested objects |

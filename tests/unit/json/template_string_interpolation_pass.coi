@@ -2,7 +2,7 @@
 // Template strings (backticks) support both raw JSON and {expr} interpolation
 
 component TemplateStringTest {
-    data Show {
+    pod Show {
         string title;
         int id;
     }

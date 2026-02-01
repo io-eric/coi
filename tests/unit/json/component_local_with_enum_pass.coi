@@ -1,4 +1,4 @@
-// Test: Component-local enum with JSON data type in same component
+// Test: Component-local enum with JSON pod type in same component
 // Both should be flattened with ComponentName_ prefix
 
 component MixedTypes {
@@ -8,7 +8,7 @@ component MixedTypes {
         Error
     }
     
-    data Response {
+    pod Response {
         string message;
         int code;
     }
