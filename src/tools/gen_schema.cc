@@ -19,28 +19,36 @@
 // Format: "namespace::function_name" to allow same function names in different namespaces
 static const std::set<std::string> EXCLUDED_FUNCTIONS = {
     "system::set_main_loop",               // Handled by tick {}
-    "dom::add_click_listener",             // Handled by onClick attribute
     "input::init_keyboard",                // Called internally when Input.isKeyDown is used
     "input::init_mouse",                   // Handled by onMouseDown/onMouseMove/onMouseUp attributes
+    "dom::add_click_listener",             // Handled by onClick attribute
     "dom::create_element_deferred",        // Internal compiler function
+    "dom::create_comment",                 // Internal compiler function
     "dom::create_element_deferred_scoped", // Internal compiler function (scoped CSS)
     "dom::create_element_scoped",          // Internal compiler function (scoped CSS)
     "dom::create_comment_deferred",        // Internal compiler function
     "dom::add_input_listener",             // Handled by onInput attribute
     "dom::add_change_listener",            // Handled by onChange attribute
     "dom::add_keydown_listener",           // Handled by onKeydown attribute
+    "dom::insert_before",                  // Internal compiler function
+    "dom::move_before",                    // Internal compiler function
+    "dom::remove_element",                 // Internal compiler function
+    "dom::get_attribute",                 // Internal compiler function
+    "dom::set_property",                 // Internal compiler function
+    "dom::get_body",                 // Internal compiler function
+    "dom::get_element_by_id",                 // Internal compiler function
     "websocket::connect",                  // WebSocket.connect with callbacks handled via intrinsic
     "fetch::get",                          // FetchRequest.get with callbacks handled via intrinsic
     "fetch::post",                         // FetchRequest.post with callbacks handled via intrinsic
     // Direct DOM manipulation - use declarative view instead
-    "dom::create_element",                 // Use view {} block for structure
-    "dom::append_child",                   // Use view {} block for structure
-    "dom::set_inner_html",                 // Use <raw>{html}</raw> in view
-    "dom::set_inner_text",                 // Use {text} interpolation in view
-    "dom::add_class",                      // Use class={expr} attribute binding
-    "dom::remove_class",                   // Use class={expr} attribute binding
+    "dom::create_element", // Use view {} block for structure
+    "dom::append_child",   // Use view {} block for structure
+    "dom::set_inner_html", // Use <raw>{html}</raw> in view
+    "dom::set_inner_text", // Use {text} interpolation in view
+    "dom::add_class",      // Use class={expr} attribute binding
+    "dom::remove_class",   // Use class={expr} attribute binding
     // Canvas initialization - use declarative view binding
-    "canvas::create_canvas",               // Use <canvas &={canvas}> in view, then canvas.setSize()
+    "canvas::create_canvas", // Use <canvas &={canvas}> in view, then canvas.setSize()
 };
 
 // Convert snake_case to camelCase for Coi function names
