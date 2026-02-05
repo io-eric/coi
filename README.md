@@ -36,7 +36,7 @@ Coi gives you composable components, fine-grained reactivity, type safety, and t
 
 ### Performance
 - **Fine-Grained Reactivity**: State changes map directly to DOM elements at compile-time. No Virtual DOM overhead.
-- **No Garbage Collector**: Deterministic memory management with zero GC pauses. Predictable performance for animations and real-time apps.
+- **No Garbage Collector**: Deterministic memory management with zero internal GC pauses. Predictable performance for animations and real-time apps.
 - **Batched Operations**: Browser API calls (DOM, Canvas, Storage, etc.) are batched to minimize WASM-JS interop overhead, reducing boundary-crossing costs (see [WebCC](https://github.com/io-eric/webcc) for implementation details).
 - **Minimal Runtime**: Tiny WASM binaries with high-performance updates for DOM, Canvas, and more.
 
