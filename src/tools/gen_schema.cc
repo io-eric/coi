@@ -39,6 +39,8 @@ static const std::set<std::string> EXCLUDED_FUNCTIONS = {
     "dom::set_inner_text",                 // Use {text} interpolation in view
     "dom::add_class",                      // Use class={expr} attribute binding
     "dom::remove_class",                   // Use class={expr} attribute binding
+    // Canvas initialization - use declarative view binding
+    "canvas::create_canvas",               // Use <canvas &={canvas}> in view, then canvas.setSize()
 };
 
 // Convert snake_case to camelCase for Coi function names
