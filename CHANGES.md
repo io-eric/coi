@@ -7,7 +7,7 @@
 
 ## ⚠️ Direct DOM Manipulation → Declarative View
 
-### The Shift from Imperative to Declarative
+### DOM Manipulation Methods Have Been Removed
 
 Direct DOM manipulation via `DOMElement` methods (such as `.appendChild()`, `.setInnerHtml()`, or `.addClass()`) **have been removed** from the public API.
 
