@@ -65,8 +65,12 @@ mut Audio[] backup := sounds;  // sounds is now invalid
 
 | Method | Description |
 |--------|-------------|
+| `Canvas.createCanvas(dom_id, width, height)` | Create a new canvas element |
 | `canvas.getContext2d()` | Get 2D rendering context |
+| `canvas.getContextWebgl()` | Get WebGL rendering context |
+| `canvas.getContextWebgpu()` | Get WebGPU rendering context |
 | `canvas.setSize(width, height)` | Set canvas dimensions |
+| `canvas.logCanvasInfo()` | Log canvas information |
 
 ### CanvasContext2D Methods
 
