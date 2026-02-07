@@ -4,7 +4,7 @@
   <img src="https://raw.githubusercontent.com/io-eric/coi/main/docs/images/logo.png" alt="COI Logo" width="128"/>
 </p>
 
-Language support for [COI](https://github.com/io-eric/coi) — a component-based language for high-performance web apps that compiles to WASM.
+Language support for [Coi](https://github.com/io-eric/coi) — a component-based language for high-performance web apps that compiles to WASM.
 
 ## Features
 
