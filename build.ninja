@@ -65,7 +65,8 @@ build build/obj/codegen/json_codegen.o: cxx src/codegen/json_codegen.cc
 build build/obj/codegen/css_generator.o: cxx src/codegen/css_generator.cc
 
 # Generate version header
-build src/cli/version.h: gen_version | .git/HEAD
+# Depend on .git/logs/HEAD so it updates whenever HEAD moves (pull/reset/checkout)
+build src/cli/version.h: gen_version | .git/HEAD .git/logs/HEAD
 
 # CLI module (command-line interface)
 build build/obj/cli/cli.o: cxx src/cli/cli.cc | src/cli/version.h

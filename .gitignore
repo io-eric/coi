@@ -6,6 +6,7 @@ coi
 .ninja_log
 src/coi_schema.h
 src/coi_schema.cc
+src/cli/version.h
 node_modules/
 *.vsix
 **/.cache/
