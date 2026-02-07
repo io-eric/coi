@@ -217,19 +217,20 @@ void ComponentInstantiation::generate_code(std::stringstream &ss, const std::str
         return;
     }
 
-    int id = component_counters[component_name]++;
+    std::string qname = qualified_name(module_prefix, component_name);
+    int id = component_counters[qname]++;
 
     if (in_loop)
     {
-        std::string vector_name = "_loop_" + component_name + "s";
+        std::string vector_name = "_loop_" + qname + "s";
         instance_name = vector_name + "[" + vector_name + ".size() - 1]";
-        ss << "        " << vector_name << ".push_back(" << component_name << "());\n";
+        ss << "        " << vector_name << ".push_back(" << qname << "());\n";
         ss << "        auto& _inst = " << instance_name << ";\n";
         instance_name = "_inst";
     }
     else
     {
-        instance_name = component_name + "_" + std::to_string(id);
+        instance_name = qname + "_" + std::to_string(id);
     }
 
     // Set props

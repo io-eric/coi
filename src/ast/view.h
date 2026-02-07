@@ -89,6 +89,7 @@ struct IfRegion {
 
 struct ComponentInstantiation : ASTNode {
     std::string component_name;
+    std::string module_prefix;        // Module prefix for cross-module access (e.g., "TurboUI" in TurboUI::Button)
     std::vector<ComponentProp> props;
     bool is_member_reference = false;  // True if this refers to a member variable (e.g., <a/> for "mut Test a;")
     std::string member_name;           // Name of the member variable if is_member_reference is true

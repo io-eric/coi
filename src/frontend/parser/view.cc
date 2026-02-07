@@ -289,6 +289,21 @@ std::unique_ptr<ASTNode> Parser::parse_html_element()
         return route_placeholder;
     }
 
+    // Check for Module::Component syntax (cross-module access)
+    std::string module_prefix;
+    if (current().type == TokenType::DOUBLE_COLON)
+    {
+        // tag is actually the module name
+        module_prefix = tag;
+        advance(); // consume ::
+        if (current().type != TokenType::IDENTIFIER)
+        {
+            ErrorHandler::compiler_error("Expected component name after '" + module_prefix + "::'", current().line);
+        }
+        tag = current().value;
+        advance();
+    }
+
     // Components must start with uppercase
     // Lowercase tags are always HTML elements
     // Use <{var}/> syntax for component variables
@@ -305,6 +320,7 @@ std::unique_ptr<ASTNode> Parser::parse_html_element()
         auto comp = std::make_unique<ComponentInstantiation>();
         comp->line = start_line;
         comp->component_name = tag;
+        comp->module_prefix = module_prefix;  // Store module prefix if specified
 
         // Props: &prop={value} = reference, :prop={value} = move, prop={value} = copy
         parse_component_props(*comp);
