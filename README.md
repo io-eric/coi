@@ -39,7 +39,7 @@ Coi gives you composable components, fine-grained reactivity, type safety, and t
 - **Type Safety from Day One**: Catch bugs at compile-time, not runtime. Props, state, and platform APIs are fully typed.
 - **No Virtual DOM**: Coi uses a fine-grained reactive system. Instead of "diffing" a virtual tree, the compiler generates surgical DOM updates that execute at native speed.
 - **WASM Performance**: Computation-heavy features run at native speed. Great for simulations, physics, data processing, and canvas-based apps.
-- **One Codebase, Multiple Platforms**: Web today, native platforms and server-side Coi tomorrow. Full-stack with a single language.
+- **One Codebase, Multiple Platforms** *(Roadmap)*: Web today, native platforms and server-side Coi tomorrow. Full-stack with a single language.
 
 ## Features
 
