@@ -53,14 +53,6 @@ Coi gives you composable components, fine-grained reactivity, type safety, and t
 - **Type-Safe Platform APIs**: Full type safety for Canvas, Storage, Audio, Fetch, and other browser APIs.
 - **Editor Extensions**: Syntax highlighting and completions available for [VS Code, Sublime Text, and Zed](docs/tooling.md).
 
-## Benchmarks
-
-In [benchmarks](benchmark/) comparing Coi, React, Vue, and Svelte, Coi delivers the smallest bundle size and competitive DOM performance. See the results below:
-
-<p align="center">
-  <img src="benchmark/benchmark_results.svg" alt="Benchmark Results" width="600">
-</p>
-
 ## Example
 
 ```tsx
@@ -126,6 +118,15 @@ app {
 }
 ```
 
+## Benchmarks
+
+In [benchmarks](benchmark/) comparing Coi, React, Vue, and Svelte, Coi delivers the smallest bundle size and competitive DOM performance. See the results below:
+
+<p align="center">
+  <img src="benchmark/benchmark_results.svg" alt="Benchmark Results" width="600">
+</p>
+
+
 ## Quick Start
 
 ### Install
@@ -190,13 +191,13 @@ my-app/
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md) — Installation, first project, imports
-- [Language Guide](docs/language-guide.md) — Types, enums, control flow, operators
-- [Components](docs/components.md) — State, lifecycle, props, references
-- [View Syntax](docs/view-syntax.md) — JSX-like templates, `<if>`, `<for>`, events
-- [Styling](docs/styling.md) — Scoped and global CSS
-- [Platform APIs](docs/api-reference.md) — Canvas, Storage, Audio, Fetch, and more
-- [Editor Support](docs/tooling.md) — VS Code, Sublime Text, and Zed extensions
+- [Getting Started](docs/getting-started.md): Installation, first project, imports
+- [Language Guide](docs/language-guide.md): Types, enums, control flow, operators
+- [Components](docs/components.md): State, lifecycle, props, references
+- [View Syntax](docs/view-syntax.md): JSX-like templates, `<if>`, `<for>`, events
+- [Styling](docs/styling.md): Scoped and global CSS
+- [Platform APIs](docs/api-reference.md): Canvas, Storage, Audio, Fetch, and more
+- [Editor Support](docs/tooling.md): VS Code, Sublime Text, and Zed extensions
 
 ## Community
 
