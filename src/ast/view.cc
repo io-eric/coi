@@ -1,1219 +1,699 @@
-#include "view.h"
-#include "formatter.h"
-#include "../codegen/codegen_utils.h"
+#include "parser.h"
+#include "defs/def_parser.h"
+#include "cli/error.h"
+#include <stdexcept>
+#include <cctype>
 
-// Global set of components with scoped CSS (populated in main.cc before code generation)
-std::set<std::string> g_components_with_scoped_css;
-
-// Helper to map Coi types to C++ types for lambda params
-static std::string coi_type_to_cpp(const std::string& type) {
-    if (type == "int" || type == "int32") return "int32_t";
-    if (type == "float" || type == "float64") return "double";
-    if (type == "float32") return "float";
-    if (type == "bool") return "bool";
-    if (type == "string") return "webcc::string";
-    return "int32_t";  // default
-}
-
-// Helper to build lambda parameter list from callback param types
-static std::string build_lambda_params_from_types(const std::vector<std::string>& param_types)
+// Parse a prop/attribute value: string, number (with optional unary -), or {expression}
+std::unique_ptr<Expression> Parser::parse_prop_or_attr_value()
 {
-    std::string params;
-    for (size_t i = 0; i < param_types.size(); i++)
-    {
-        if (i > 0)
-            params += ", ";
-        params += coi_type_to_cpp(param_types[i]) + " _arg" + std::to_string(i);
-    }
-    return params;
-}
+    int err_line = current().line;
 
-// Helper to build function call args list for forwarding
-static std::string build_forward_args(size_t count)
-{
-    std::string args;
-    for (size_t i = 0; i < count; i++)
+    if (current().type == TokenType::STRING_LITERAL)
     {
-        if (i > 0)
-            args += ", ";
-        args += "_arg" + std::to_string(i);
+        auto val = std::make_unique<StringLiteral>(current().value);
+        advance();
+        return val;
     }
-    return args;
-}
 
-// Helper to transform append_child calls to insert_before for anchor-based if regions
-// Transforms: webcc::dom::append_child(_if_X_parent, el[N]);
-// To:         webcc::dom::insert_before(_if_X_parent, el[N], _if_X_anchor);
-static std::string transform_to_insert_before(const std::string& code, const std::string& if_parent, const std::string& if_anchor) {
-    std::string result;
-    std::string search_pattern = "webcc::dom::append_child(" + if_parent + ", ";
-    size_t pos = 0;
-    size_t last_pos = 0;
-    
-    while ((pos = code.find(search_pattern, last_pos)) != std::string::npos) {
-        // Copy everything up to this point
-        result += code.substr(last_pos, pos - last_pos);
-        
-        // Find the closing ");
-        size_t end_pos = code.find(");", pos);
-        if (end_pos == std::string::npos) {
-            // Malformed, just copy the rest
-            result += code.substr(pos);
-            return result;
-        }
-        
-        // Extract the element being appended
-        size_t elem_start = pos + search_pattern.length();
-        std::string elem = code.substr(elem_start, end_pos - elem_start);
-        
-        // Generate insert_before call
-        result += "webcc::dom::insert_before(" + if_parent + ", " + elem + ", " + if_anchor + ");";
-        
-        last_pos = end_pos + 2; // Skip past ");"
-    }
-    
-    // Copy remaining content
-    result += code.substr(last_pos);
-    return result;
-}
-
-// Helper to build lambda parameter list from function call args
-static std::string build_lambda_params(FunctionCall *func_call)
-{
-    std::string params;
-    for (size_t i = 0; i < func_call->args.size(); i++)
+    if (current().type == TokenType::INT_LITERAL)
     {
-        if (i > 0)
-            params += ", ";
-        if (auto *id = dynamic_cast<Identifier *>(func_call->args[i].value.get()))
+        auto val = std::make_unique<IntLiteral>(std::stoi(current().value));
+        advance();
+        return val;
+    }
+
+    if (current().type == TokenType::FLOAT_LITERAL)
+    {
+        auto val = std::make_unique<FloatLiteral>(std::stod(current().value));
+        advance();
+        return val;
+    }
+
+    if (match(TokenType::MINUS))
+    {
+        if (current().type == TokenType::INT_LITERAL)
         {
-            params += "int32_t " + id->name;
+            auto val = std::make_unique<IntLiteral>(-std::stoi(current().value));
+            advance();
+            return val;
+        }
+        else if (current().type == TokenType::FLOAT_LITERAL)
+        {
+            auto val = std::make_unique<FloatLiteral>(-std::stod(current().value));
+            advance();
+            return val;
+        }
+        ErrorHandler::compiler_error("Expected number after '-' in prop or attribute value", err_line);
+    }
+
+    if (match(TokenType::LBRACE))
+    {
+        auto expr = parse_expression();
+        expect(TokenType::RBRACE, "Expected '}'");
+        return expr;
+    }
+
+    ErrorHandler::compiler_error("Expected prop or attribute value", err_line);
+}
+
+std::string Parser::parse_style_block()
+{
+    expect(TokenType::LBRACE, "Expected '{'");
+    std::string css = "";
+    int brace_count = 1;
+
+    Token prev = tokens[pos - 1]; // The '{' we just consumed
+
+    while (current().type != TokenType::END_OF_FILE)
+    {
+        if (current().type == TokenType::RBRACE && brace_count == 1)
+        {
+            advance(); // Consume closing '}'
+            break;
+        }
+
+        if (current().type == TokenType::LBRACE)
+            brace_count++;
+        if (current().type == TokenType::RBRACE)
+            brace_count--;
+
+        Token tok = current();
+
+        int prev_len = prev.value.length();
+        if (prev.type == TokenType::STRING_LITERAL)
+            prev_len += 2;
+
+        if (tok.line > prev.line)
+        {
+            css += " ";
+        }
+        else if (tok.column > prev.column + prev_len)
+        {
+            css += " ";
+        }
+
+        if (tok.type == TokenType::STRING_LITERAL)
+        {
+            css += "\"" + tok.value + "\"";
         }
         else
         {
-            params += "int32_t _arg" + std::to_string(i);
+            css += tok.value;
         }
+
+        prev = tok;
+        advance();
     }
-    return params;
+    return css;
 }
 
-// Helper to build function call using lambda params instead of original args
-// This ensures callbacks use the passed-in values rather than captured loop variables
-static std::string build_lambda_call(FunctionCall *func_call)
+std::unique_ptr<ASTNode> Parser::parse_html_element()
 {
-    // Extract function name (before the arguments)
-    std::string name = func_call->name;
-    std::string result = name + "(";
-    for (size_t i = 0; i < func_call->args.size(); i++)
-    {
-        if (i > 0)
-            result += ", ";
-        if (auto *id = dynamic_cast<Identifier *>(func_call->args[i].value.get()))
+    expect(TokenType::LT, "Expected '<'");
+    int start_line = current().line;
+
+    auto parse_component_props = [&](ComponentInstantiation &comp) {
+        while (current().type == TokenType::IDENTIFIER || current().type == TokenType::AMPERSAND || current().type == TokenType::COLON)
         {
-            result += id->name;
-        }
-        else
-        {
-            result += "_arg" + std::to_string(i);
-        }
-    }
-    result += ")";
-    return result;
-}
-
-// Build minimal lambda capture: [this] outside loops, [this, var] inside loops.
-static std::string build_lambda_capture(const std::string &loop_var_name)
-{
-    if (loop_var_name.empty())  // Not in a loop - just capture this
-    {
-        return "[this]";
-    }
-    // In loop: capture loop var by value so lambda survives loop iteration
-    return "[this, " + loop_var_name + "]";
-}
-
-// Collect member reference names from view children (recursive)
-static void collect_member_refs(ASTNode* node, std::vector<std::string>& refs) {
-    if (auto comp = dynamic_cast<ComponentInstantiation*>(node)) {
-        if (comp->is_member_reference) {
-            refs.push_back(comp->member_name);
-        }
-    }
-    if (auto el = dynamic_cast<HTMLElement*>(node)) {
-        for (auto& child : el->children) {
-            collect_member_refs(child.get(), refs);
-        }
-    }
-    if (auto viewIf = dynamic_cast<ViewIfStatement*>(node)) {
-        for (auto& child : viewIf->then_children) {
-            collect_member_refs(child.get(), refs);
-        }
-        for (auto& child : viewIf->else_children) {
-            collect_member_refs(child.get(), refs);
-        }
-    }
-}
-
-std::string TextNode::to_webcc() { return "\"" + text + "\""; }
-
-std::string ComponentInstantiation::to_webcc() { return ""; }
-
-void ComponentInstantiation::generate_code(std::stringstream &ss, const std::string &parent, int &counter,
-                                           std::vector<EventHandler> &event_handlers,
-                                           std::vector<Binding> &bindings,
-                                           std::map<std::string, int> &component_counters,
-                                           const std::set<std::string> &method_names,
-                                           const std::string &parent_component_name,
-                                           bool in_loop,
-                                           std::vector<LoopRegion> *loop_regions,
-                                           int *loop_counter,
-                                           std::vector<IfRegion> *if_regions,
-                                           int *if_counter,
-                                           const std::string &loop_var_name)
-{
-    std::string instance_name;
-
-    // Handle member reference (e.g., <a/> where "a" is a member variable of component type)
-    if (is_member_reference)
-    {
-        instance_name = member_name;
-        
-        // Set props on the existing member
-        for (auto &prop : props)
-        {
-            std::string val = prop.value->to_webcc();
-            if (prop.is_callback && !prop.callback_param_types.empty())
+            bool is_ref_prop = false;
+            bool is_move_prop = false;
+            if (match(TokenType::AMPERSAND))
             {
-                // Callback with params: generate lambda that forwards args
-                std::string lambda_params = build_lambda_params_from_types(prop.callback_param_types);
-                std::string forward_args = build_forward_args(prop.callback_param_types.size());
-                ss << "        " << instance_name << "." << prop.name << " = [this](" << lambda_params << ") { this->" << val << "(" << forward_args << "); };\n";
+                is_ref_prop = true;
             }
-            else if (method_names.count(val) || prop.is_callback)
+            else if (match(TokenType::COLON))
             {
-                // No-param callback or method reference
-                ss << "        " << instance_name << "." << prop.name << " = [this]() { this->" << val << "(); };\n";
+                is_move_prop = true;
             }
-            else if (prop.is_reference)
+
+            std::string prop_name = current().value;
+            expect(TokenType::IDENTIFIER, "Expected prop name");
+
+            std::unique_ptr<Expression> prop_value;
+            if (match(TokenType::ASSIGN))
             {
-                // Actual reference: pointer to variable
-                ss << "        " << instance_name << "." << prop.name << " = &(" << val << ");\n";
+                prop_value = parse_prop_or_attr_value();
             }
             else
             {
-                ss << "        " << instance_name << "." << prop.name << " = " << val << ";\n";
+                prop_value = std::make_unique<BoolLiteral>(true);
             }
-        }
 
-        // Call view on the existing member (component persists, only view is re-rendered)
-        if (!parent.empty())
-        {
-            ss << "        " << instance_name << ".view(" << parent << ");\n";
+            ComponentProp cprop;
+            cprop.name = prop_name;
+            cprop.value = std::move(prop_value);
+            cprop.is_reference = is_ref_prop;
+            cprop.is_move = is_move_prop;
+            comp.props.push_back(std::move(cprop));
         }
-        else
-        {
-            ss << "        " << instance_name << ".view();\n";
-        }
-        return;
-    }
+    };
 
-    std::string qname = qualified_name(module_prefix, component_name);
-    int id = component_counters[qname]++;
-
-    if (in_loop)
+    // Check for component variable syntax: <{varName} props... />
+    // Used to project component variables into the view
+    if (current().type == TokenType::LBRACE)
     {
-        std::string vector_name = "_loop_" + qname + "s";
-        instance_name = vector_name + "[" + vector_name + ".size() - 1]";
-        ss << "        " << vector_name << ".push_back(" << qname << "());\n";
-        ss << "        auto& _inst = " << instance_name << ";\n";
-        instance_name = "_inst";
-    }
-    else
-    {
-        instance_name = qname + "_" + std::to_string(id);
-    }
+        advance(); // consume '{'
 
-    // Set props
-    for (auto &prop : props)
-    {
-        std::string val = prop.value->to_webcc();
-        if (prop.is_callback && !prop.callback_param_types.empty())
-        {
-            // Callback with params: generate lambda that forwards args
-            std::string lambda_params = build_lambda_params_from_types(prop.callback_param_types);
-            std::string forward_args = build_forward_args(prop.callback_param_types.size());
-            ss << "        " << instance_name << "." << prop.name << " = [this](" << lambda_params << ") { this->" << val << "(" << forward_args << "); };\n";
-        }
-        else if (method_names.count(val) || prop.is_callback)
-        {
-            // No-param callback or method reference
-            ss << "        " << instance_name << "." << prop.name << " = [this]() { this->" << val << "(); };\n";
-        }
-        else if (prop.is_reference)
-        {
-            // Actual reference: pointer to variable
-            ss << "        " << instance_name << "." << prop.name << " = &(" << val << ");\n";
-        }
-        else
-        {
-            ss << "        " << instance_name << "." << prop.name << " = " << val << ";\n";
-        }
-    }
+        // Parse the expression (typically just an identifier)
+        auto expr = parse_expression();
+        expect(TokenType::RBRACE, "Expected '}' after component variable expression");
 
-    // For reference props, set up onChange callback
-    if (!in_loop)
-    {
-        for (auto &prop : props)
+        // Get the variable name from the expression
+        std::string member_name;
+        std::string component_type;
+
+        if (auto *ident = dynamic_cast<Identifier *>(expr.get()))
         {
-            if (prop.is_reference && prop.is_mutable_def)
+            member_name = ident->name;
+            // Look up the component type
+            auto it = component_member_types.find(member_name);
+            if (it != component_member_types.end())
             {
-                std::string callback_name = "on" + std::string(1, std::toupper(prop.name[0])) + prop.name.substr(1) + "Change";
+                component_type = it->second;
 
-                std::set<std::string> prop_deps;
-                prop.value->collect_dependencies(prop_deps);
-
-                std::string update_calls;
-                for (const auto &dep : prop_deps)
+                // Error if type is a built-in handle (not a component)
+                if (DefSchema::instance().is_handle(component_type))
                 {
-                    bool has_dependent_binding = false;
-                    for (const auto &binding : bindings)
-                    {
-                        if (binding.dependencies.count(dep))
-                        {
-                            has_dependent_binding = true;
-                            break;
-                        }
-                    }
-                    if (has_dependent_binding)
-                    {
-                        update_calls += "_update_" + dep + "(); ";
-                    }
-                }
-
-                if (!update_calls.empty())
-                {
-                    ss << "        " << instance_name << "." << callback_name << " = [this]() { " << update_calls << "};\n";
+                    throw std::runtime_error("Variable '" + member_name + "' has type '" + component_type + "' which is a built-in type, not a component. Usage: <{" + member_name + "}/> is only for components at line " + std::to_string(start_line));
                 }
             }
-        }
-    }
-
-    // Call view
-    if (!parent.empty())
-    {
-        ss << "        " << instance_name << ".view(" << parent << ");\n";
-    }
-    else
-    {
-        ss << "        " << instance_name << ".view();\n";
-    }
-}
-
-void ComponentInstantiation::collect_dependencies(std::set<std::string> &deps)
-{
-    for (auto &prop : props)
-    {
-        prop.value->collect_dependencies(deps);
-    }
-}
-
-std::string HTMLElement::to_webcc() { return ""; }
-
-// Helper to generate code for a view child node
-// loop_var_name: empty at top-level, set to iterator name (e.g. "row") inside for-loops
-static void generate_view_child(ASTNode *child, std::stringstream &ss, const std::string &parent, int &counter,
-                                std::vector<EventHandler> &event_handlers,
-                                std::vector<Binding> &bindings,
-                                std::map<std::string, int> &component_counters,
-                                const std::set<std::string> &method_names,
-                                const std::string &parent_component_name,
-                                bool in_loop = false,
-                                std::vector<LoopRegion> *loop_regions = nullptr,
-                                int *loop_counter = nullptr,
-                                std::vector<IfRegion> *if_regions = nullptr,
-                                int *if_counter = nullptr,
-                                const std::string &loop_var_name = "")  // Propagated for lambda captures
-{
-    if (auto el = dynamic_cast<HTMLElement *>(child))
-    {
-        el->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-    }
-    else if (auto comp = dynamic_cast<ComponentInstantiation *>(child))
-    {
-        comp->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-    }
-    else if (auto viewIf = dynamic_cast<ViewIfStatement *>(child))
-    {
-        viewIf->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-    }
-    else if (auto viewFor = dynamic_cast<ViewForRangeStatement *>(child))
-    {
-        viewFor->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-    }
-    else if (auto viewForEach = dynamic_cast<ViewForEachStatement *>(child))
-    {
-        viewForEach->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-    }
-    else if (auto rawEl = dynamic_cast<ViewRawElement *>(child))
-    {
-        rawEl->generate_code(ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-    }
-    else if (auto routePlaceholder = dynamic_cast<RoutePlaceholder *>(child))
-    {
-        // Route placeholder - create anchor comment for inserting routed components
-        ss << "        _route_parent = " << parent << ";\n";
-        ss << "        _route_anchor = webcc::DOMElement(webcc::next_deferred_handle());\n";
-        ss << "        webcc::dom::create_comment_deferred(_route_anchor, \"coi-route\");\n";
-        ss << "        webcc::dom::append_child(" << parent << ", _route_anchor);\n";
-    }
-    else if (auto textNode = dynamic_cast<TextNode *>(child))
-    {
-        // Handle text nodes mixed with elements - create a text node
-        int text_id = counter++;
-        std::string text_var = in_loop ? "_el_" + std::to_string(text_id) : "el[" + std::to_string(text_id) + "]";
-        if (in_loop) {
-            ss << "        webcc::handle " << text_var << " = webcc::handle(webcc::next_deferred_handle());\n";
-        } else {
-            ss << "        " << text_var << " = webcc::DOMElement(webcc::next_deferred_handle());\n";
-        }
-        ss << "        webcc::dom::create_text_node_deferred(" << text_var << ", " << textNode->to_webcc() << ");\n";
-        ss << "        webcc::dom::append_child(" << parent << ", " << text_var << ");\n";
-    }
-    else if (auto expr = dynamic_cast<Expression *>(child))
-    {
-        // Handle expression children (interpolations like {feature.text}) mixed with elements
-        int text_id = counter++;
-        std::string text_var = in_loop ? "_el_" + std::to_string(text_id) : "el[" + std::to_string(text_id) + "]";
-        if (in_loop) {
-            ss << "        webcc::handle " << text_var << " = webcc::handle(webcc::next_deferred_handle());\n";
-        } else {
-            ss << "        " << text_var << " = webcc::DOMElement(webcc::next_deferred_handle());\n";
-        }
-        
-        std::string code = expr->to_webcc();
-        bool is_static = expr->is_static();
-        
-        if (is_static) {
-            ss << "        webcc::dom::create_text_node_deferred(" << text_var << ", " << code << ");\n";
-        } else {
-            // Use formatter for dynamic content
-            std::vector<std::string> parts = {code};
-            ss << "        " << generate_formatter_block(parts, "webcc::dom::create_text_node_deferred(" + text_var + ", ") << "\n";
-            
-            // Add binding for reactivity (only outside loops)
-            if (!in_loop) {
-                Binding b;
-                b.element_id = text_id;
-                b.type = "textnode";  // Special type for standalone text nodes
-                b.value_code = code;
-                b.expr = expr;
-                expr->collect_dependencies(b.dependencies);
-                expr->collect_member_dependencies(b.member_dependencies);
-                bindings.push_back(b);
+            else
+            {
+                throw std::runtime_error("Variable '" + member_name + "' is not a known component member. Use <{var}/> only for component-typed variables at line " + std::to_string(start_line));
             }
-        }
-        ss << "        webcc::dom::append_child(" << parent << ", " << text_var << ");\n";
-    }
-}
-
-void HTMLElement::generate_code(std::stringstream &ss, const std::string &parent, int &counter,
-                                std::vector<EventHandler> &event_handlers,
-                                std::vector<Binding> &bindings,
-                                std::map<std::string, int> &component_counters,
-                                const std::set<std::string> &method_names,
-                                const std::string &parent_component_name,
-                                bool in_loop,
-                                std::vector<LoopRegion> *loop_regions,
-                                int *loop_counter,
-                                std::vector<IfRegion> *if_regions,
-                                int *if_counter,
-                                const std::string &loop_var_name)
-{
-    int my_id = counter++;
-    std::string var;
-
-    bool has_scoped_css = g_components_with_scoped_css.count(parent_component_name) > 0;
-
-    if (in_loop)
-    {
-        // In loops, use local variable but still deferred creation
-        var = "_el_" + std::to_string(my_id);
-        ss << "        webcc::handle " << var << " = webcc::handle(webcc::next_deferred_handle());\n";
-        if (has_scoped_css) {
-            ss << "        webcc::dom::create_element_deferred_scoped(" << var << ", \"" << tag << "\", \"" << parent_component_name << "\");\n";
-        } else {
-            ss << "        webcc::dom::create_element_deferred(" << var << ", \"" << tag << "\");\n";
-        }
-    }
-    else
-    {
-        // Outside loops, store in el[] array with deferred creation
-        var = "el[" + std::to_string(my_id) + "]";
-        ss << "        " << var << " = webcc::DOMElement(webcc::next_deferred_handle());\n";
-        if (has_scoped_css) {
-            ss << "        webcc::dom::create_element_deferred_scoped(" << var << ", \"" << tag << "\", \"" << parent_component_name << "\");\n";
-        } else {
-            ss << "        webcc::dom::create_element_deferred(" << var << ", \"" << tag << "\");\n";
-        }
-    }
-
-    if (!ref_binding.empty())
-    {
-        ss << "        " << ref_binding << " = " << var << ";\n";
-    }
-
-    // Attributes
-    for (auto &attr : attributes)
-    {
-        if (attr.name == "onclick")
-        {
-            ss << "        webcc::dom::add_click_listener(" << var << ");\n";
-            bool is_call = dynamic_cast<FunctionCall *>(attr.value.get()) != nullptr;
-            event_handlers.push_back({my_id, "click", attr.value->to_webcc(), is_call});
-        }
-        else if (attr.name == "oninput")
-        {
-            ss << "        webcc::dom::add_input_listener(" << var << ");\n";
-            bool is_call = dynamic_cast<FunctionCall *>(attr.value.get()) != nullptr;
-            event_handlers.push_back({my_id, "input", attr.value->to_webcc(), is_call});
-        }
-        else if (attr.name == "onchange")
-        {
-            ss << "        webcc::dom::add_change_listener(" << var << ");\n";
-            bool is_call = dynamic_cast<FunctionCall *>(attr.value.get()) != nullptr;
-            event_handlers.push_back({my_id, "change", attr.value->to_webcc(), is_call});
-        }
-        else if (attr.name == "onkeydown")
-        {
-            ss << "        webcc::dom::add_keydown_listener(" << var << ");\n";
-            bool is_call = dynamic_cast<FunctionCall *>(attr.value.get()) != nullptr;
-            event_handlers.push_back({my_id, "keydown", attr.value->to_webcc(), is_call});
         }
         else
         {
-            std::string val = attr.value->to_webcc();
-            ss << "        webcc::dom::set_attribute(" << var << ", \"" << attr.name << "\", " << val << ");\n";
+            throw std::runtime_error("Expected identifier in <{...}/> syntax at line " + std::to_string(start_line));
+        }
 
-            if (!attr.value->is_static() && !in_loop)
+        auto comp = std::make_unique<ComponentInstantiation>();
+        comp->line = start_line;
+        comp->is_member_reference = true;
+        comp->member_name = member_name;
+        comp->component_name = component_type;
+
+        // Parse props (same as regular component props): &prop={value} = reference, :prop={value} = move
+        parse_component_props(*comp);
+
+        // Must be self-closing: <{var}/>
+        expect(TokenType::SLASH, "Expected '/>' - component variable projection must be self-closing: <{" + member_name + "}/>");
+        expect(TokenType::GT, "Expected '>'");
+
+        return comp;
+    }
+
+    std::string tag = current().value;
+    expect(TokenType::IDENTIFIER, "Expected tag name");
+    // Special tag: <raw> - raw HTML injection
+    if (tag == "raw")
+    {
+        auto rawEl = std::make_unique<ViewRawElement>();
+        rawEl->line = start_line;
+
+        expect(TokenType::GT, "Expected '>' after <raw");
+
+        // Parse children (expressions/text) until </raw>
+        while (true)
+        {
+            if (current().type == TokenType::LT && peek().type == TokenType::SLASH)
             {
-                Binding b;
-                b.element_id = my_id;
-                b.type = "attr";
-                b.name = attr.name;
-                b.value_code = val;
-                b.expr = attr.value.get();
-                attr.value->collect_dependencies(b.dependencies);
-                attr.value->collect_member_dependencies(b.member_dependencies);
-                bindings.push_back(b);
+                break;
+            }
+            if (current().type == TokenType::END_OF_FILE)
+            {
+                throw std::runtime_error("Unexpected end of file, expected </raw> at line " + std::to_string(start_line));
+            }
+            if (current().type == TokenType::LBRACE)
+            {
+                advance();
+                rawEl->children.push_back(parse_expression());
+                expect(TokenType::RBRACE, "Expected '}'");
+            }
+            else
+            {
+                // Text content
+                std::string text;
+                bool first = true;
+                Token prev_token = current();
+                while (current().type != TokenType::LT && current().type != TokenType::LBRACE &&
+                       current().type != TokenType::END_OF_FILE)
+                {
+                    if (!first)
+                    {
+                        int prev_len = prev_token.value.length();
+                        if (prev_token.type == TokenType::STRING_LITERAL)
+                            prev_len += 2;
+                        if (prev_token.line != current().line || prev_token.column + prev_len != current().column)
+                            text += " ";
+                    }
+                    text += current().value;
+                    prev_token = current();
+                    advance();
+                    first = false;
+                }
+                if (!text.empty())
+                {
+                    rawEl->children.push_back(std::make_unique<TextNode>(text));
+                }
             }
         }
+
+        // </raw>
+        expect(TokenType::LT, "Expected '<'");
+        expect(TokenType::SLASH, "Expected '/'");
+        if (current().value != "raw")
+        {
+            throw std::runtime_error("Mismatched closing tag: expected raw, got " + current().value);
+        }
+        expect(TokenType::IDENTIFIER, "Expected 'raw'");
+        expect(TokenType::GT, "Expected '>'");
+
+        return rawEl;
+    }
+    // Special tag: <route /> - placeholder for router
+    if (tag == "route")
+    {
+        auto route_placeholder = std::make_unique<RoutePlaceholder>();
+        route_placeholder->line = start_line;
+
+        // Must be self-closing
+        if (current().type != TokenType::SLASH)
+        {
+            throw std::runtime_error("<route> must be self-closing: <route /> at line " + std::to_string(start_line));
+        }
+        expect(TokenType::SLASH, "Expected '/>'");
+        expect(TokenType::GT, "Expected '>'");
+
+        return route_placeholder;
     }
 
-    // Append to parent
-    if (!parent.empty())
+    // Check for Module::Component syntax (cross-module access)
+    std::string module_prefix;
+    if (current().type == TokenType::DOUBLE_COLON)
     {
-        ss << "        webcc::dom::append_child(" << parent << ", " << var << ");\n";
+        // tag is actually the module name
+        module_prefix = tag;
+        advance(); // consume ::
+        if (current().type != TokenType::IDENTIFIER)
+        {
+            ErrorHandler::compiler_error("Expected component name after '" + module_prefix + "::'", current().line);
+        }
+        tag = current().value;
+        advance();
     }
+
+    // Components must start with uppercase
+    // Lowercase tags are always HTML elements
+    // Use <{var}/> syntax for component variables
+    bool is_component = std::isupper(tag[0]);
+
+    if (is_component)
+    {
+        // Error if tag is a built-in handle type
+        if (DefSchema::instance().is_handle(tag))
+        {
+            ErrorHandler::compiler_error("Type '" + tag + "' cannot be used as a component tag", start_line);
+        }
+
+        auto comp = std::make_unique<ComponentInstantiation>();
+        comp->line = start_line;
+        comp->component_name = tag;
+        comp->module_prefix = module_prefix;  // Store module prefix if specified
+
+        // Props: &prop={value} = reference, :prop={value} = move, prop={value} = copy
+        parse_component_props(*comp);
+
+        // Self-closing
+        if (match(TokenType::SLASH))
+        {
+            expect(TokenType::GT, "Expected '>'");
+            return comp;
+        }
+
+        expect(TokenType::GT, "Expected '>'");
+        ErrorHandler::compiler_error("Custom components must be self-closing for now: " + tag, -1);
+    }
+
+    auto el = std::make_unique<HTMLElement>();
+    el->line = start_line;
+    el->tag = tag;
+
+    // Attributes - accept any token as attribute name except those that end the tag
+    while (current().type != TokenType::SLASH && current().type != TokenType::GT && current().type != TokenType::END_OF_FILE)
+    {
+        // Check for element ref binding: &={varName}
+        if (match(TokenType::AMPERSAND))
+        {
+            expect(TokenType::ASSIGN, "Expected '=' after '&' for element binding");
+            expect(TokenType::LBRACE, "Expected '{' after '&='");
+            if (current().type != TokenType::IDENTIFIER)
+            {
+                throw std::runtime_error("Expected variable name in element binding &={varName}");
+            }
+            el->ref_binding = current().value;
+            advance();
+            expect(TokenType::RBRACE, "Expected '}' after variable name");
+            continue;
+        }
+
+        std::string attrName = current().value;
+        advance();
+
+        // Handle hyphenated attribute names (e.g., fill-opacity, stroke-width, data-id)
+        while (current().type == TokenType::MINUS && peek().type == TokenType::IDENTIFIER)
+        {
+            attrName += "-";
+            advance(); // consume '-'
+            attrName += current().value;
+            advance(); // consume identifier part
+        }
+
+        std::unique_ptr<Expression> attrValue;
+        if (match(TokenType::ASSIGN))
+        {
+            attrValue = parse_prop_or_attr_value();
+        }
+        else
+        {
+            // Boolean attribute? Treat as "true"
+            attrValue = std::make_unique<BoolLiteral>(true);
+        }
+        el->attributes.push_back({attrName, std::move(attrValue)});
+    }
+
+    // Self-closing
+    if (match(TokenType::SLASH))
+    {
+        expect(TokenType::GT, "Expected '>'");
+        return el;
+    }
+
+    expect(TokenType::GT, "Expected '>'");
 
     // Children
-    bool has_elements = false;
-    for (auto &child : children)
+    // Track the last token position to detect leading whitespace for text nodes
+    Token last_non_text_token = tokens[pos - 1];  // The '>' we just consumed
+    while (true)
     {
-        if (dynamic_cast<HTMLElement *>(child.get()) || dynamic_cast<ComponentInstantiation *>(child.get()) ||
-            dynamic_cast<ViewIfStatement *>(child.get()) || dynamic_cast<ViewForRangeStatement *>(child.get()) ||
-            dynamic_cast<ViewForEachStatement *>(child.get()) || dynamic_cast<ViewRawElement *>(child.get()))
-            has_elements = true;
-    }
-
-    if (has_elements)
-    {
-        // Check if there's exactly one child and it's a for-each loop
-        if (children.size() == 1) {
-            if (auto forEach = dynamic_cast<ViewForEachStatement *>(children[0].get())) {
-                forEach->is_only_child = true;
-            }
-        }
-        for (auto &child : children)
+        if (current().type == TokenType::LT)
         {
-            generate_view_child(child.get(), ss, var, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-        }
-    }
-    else
-    {
-        // Text content
-        std::string code;
-        bool all_static = true;
-        bool generated_inline = false;
-
-        for (auto &child : children)
-        {
-            std::string c = child->to_webcc();
-            if (!(c.size() >= 2 && c.front() == '"' && c.back() == '"'))
+            if (peek().type == TokenType::SLASH)
             {
-                all_static = false;
+                // Closing tag
+                break;
+            }
+            // Check for special tags: <if>, <for>
+            if (peek().type == TokenType::IF)
+            {
+                el->children.push_back(parse_view_if());
+            }
+            else if (peek().type == TokenType::FOR)
+            {
+                el->children.push_back(parse_view_for());
+            }
+            else
+            {
+                // Regular child element
+                el->children.push_back(parse_html_element());
+            }
+            last_non_text_token = tokens[pos - 1];  // Update after parsing element
+        }
+        else if (current().type == TokenType::LBRACE)
+        {
+            // Expression
+            advance();
+            el->children.push_back(parse_expression());
+            expect(TokenType::RBRACE, "Expected '}'");
+            last_non_text_token = tokens[pos - 1];  // The '}' we just consumed
+        }
+        else
+        {
+            // Text content
+            std::string text;
+            bool first = true;
+            Token prev_token = current();
+            
+            // Check for leading whitespace (gap between last non-text token and first text token)
+            int last_len = last_non_text_token.value.length();
+            if (last_non_text_token.type == TokenType::STRING_LITERAL)
+                last_len += 2;
+            if (last_non_text_token.line != current().line || last_non_text_token.column + last_len != current().column)
+            {
+                text += " ";
+            }
+            // Text continues until we hit '<' or '{'
+            while (current().type != TokenType::LT && current().type != TokenType::LBRACE &&
+                   current().type != TokenType::END_OF_FILE)
+            {
+                if (!first)
+                {
+                    int prev_len = prev_token.value.length();
+                    if (prev_token.type == TokenType::STRING_LITERAL)
+                        prev_len += 2;
+
+                    if (prev_token.line != current().line || prev_token.column + prev_len != current().column)
+                    {
+                        text += " ";
+                    }
+                }
+                if (current().type == TokenType::STRING_LITERAL)
+                    text += current().value;
+                else
+                    text += current().value;
+
+                prev_token = current();
+                advance();
+                first = false;
+            }
+            if (!text.empty())
+            {
+                // Check if there was whitespace between the last text token and the next token (<, {, or EOF)
+                // If so, preserve the trailing space
+                if (current().type != TokenType::END_OF_FILE)
+                {
+                    int prev_len = prev_token.value.length();
+                    if (prev_token.type == TokenType::STRING_LITERAL)
+                        prev_len += 2;
+
+                    if (prev_token.line != current().line || prev_token.column + prev_len != current().column)
+                    {
+                        text += " ";
+                    }
+                }
+                el->children.push_back(std::make_unique<TextNode>(text));
+            }
+
+            if (current().type == TokenType::END_OF_FILE)
+                break;
+        }
+    }
+
+    expect(TokenType::LT, "Expected '<'");
+    expect(TokenType::SLASH, "Expected '/'");
+    if (current().value != tag)
+    {
+        throw std::runtime_error("Mismatched closing tag: expected " + tag + ", got " + current().value);
+    }
+    expect(TokenType::IDENTIFIER, "Expected tag name");
+    expect(TokenType::GT, "Expected '>'");
+
+    return el;
+}
+
+std::unique_ptr<ASTNode> Parser::parse_view_node()
+{
+    // Must start with '<'
+    if (current().type != TokenType::LT)
+    {
+        throw std::runtime_error("Expected '<' at line " + std::to_string(current().line));
+    }
+
+    // Check for special tags
+    if (peek().type == TokenType::IF)
+    {
+        return parse_view_if();
+    }
+    if (peek().type == TokenType::FOR)
+    {
+        return parse_view_for();
+    }
+    // Regular HTML element
+    return parse_html_element();
+}
+
+std::unique_ptr<ViewIfStatement> Parser::parse_view_if()
+{
+    // Syntax: <if condition> ... <else> ... </else> </if>
+    //     or: <if condition> ... </if>
+    auto viewIf = std::make_unique<ViewIfStatement>();
+    viewIf->line = current().line;
+
+    expect(TokenType::LT, "Expected '<'");
+    expect(TokenType::IF, "Expected 'if'");
+
+    // Parse condition (everything until '>')
+    // Use parse_expression_no_gt so > is not treated as comparison
+    viewIf->condition = parse_expression_no_gt();
+    expect(TokenType::GT, "Expected '>'");
+
+    // Parse then children until we hit </if> or <else>
+    while (current().type != TokenType::END_OF_FILE)
+    {
+        if (current().type == TokenType::LT)
+        {
+            if (peek().type == TokenType::SLASH && peek(2).type == TokenType::IF)
+            {
+                // </if> - end of if block
+                break;
+            }
+            if (peek().type == TokenType::ELSE)
+            {
+                // <else> block
                 break;
             }
         }
-
-        if (children.size() == 1 && all_static)
-        {
-            code = children[0]->to_webcc();
-        }
-        else if (children.size() == 1 && !all_static)
-        {
-            generated_inline = true;
-            std::vector<std::string> parts = {children[0]->to_webcc()};
-            ss << "        " << generate_formatter_block(parts, "webcc::dom::set_inner_text(" + var + ", ") << "\n";
-        }
-        else if (children.size() > 1)
-        {
-            if (all_static)
-            {
-                std::string args;
-                bool first = true;
-                for (auto &child : children)
-                {
-                    if (!first)
-                        args += ", ";
-                    args += child->to_webcc();
-                    first = false;
-                }
-                code = "webcc::string::concat(" + args + ")";
-            }
-            else
-            {
-                generated_inline = true;
-                std::vector<std::string> parts;
-                for (auto &child : children)
-                {
-                    parts.push_back(child->to_webcc());
-                }
-                ss << "        " << generate_formatter_block(parts, "webcc::dom::set_inner_text(" + var + ", ") << "\n";
-            }
-        }
-
-        if (!code.empty())
-        {
-            ss << "        webcc::dom::set_inner_text(" << var << ", " << code << ");\n";
-        }
-
-        if (!all_static && !in_loop)
-        {
-            Binding b;
-            b.element_id = my_id;
-            b.type = "text";
-            if (children.size() == 1)
-            {
-                b.expr = dynamic_cast<Expression *>(children[0].get());
-            }
-            std::string args;
-            bool first = true;
-            for (auto &child : children)
-            {
-                if (!first)
-                    args += ", ";
-                args += child->to_webcc();
-                first = false;
-            }
-            b.value_code = (children.size() == 1) ? children[0]->to_webcc() : "webcc::string::concat(" + args + ")";
-            for (auto &child : children) {
-                child->collect_dependencies(b.dependencies);
-                child->collect_member_dependencies(b.member_dependencies);
-            }
-            bindings.push_back(b);
-        }
+        viewIf->then_children.push_back(parse_view_node());
     }
+
+    // Check for <else>
+    if (current().type == TokenType::LT && peek().type == TokenType::ELSE)
+    {
+        advance(); // <
+        advance(); // else
+        expect(TokenType::GT, "Expected '>'");
+
+        // Parse else children until </else>
+        while (current().type != TokenType::END_OF_FILE)
+        {
+            if (current().type == TokenType::LT && peek().type == TokenType::SLASH && peek(2).type == TokenType::ELSE)
+            {
+                break;
+            }
+            viewIf->else_children.push_back(parse_view_node());
+        }
+
+        // </else>
+        expect(TokenType::LT, "Expected '<'");
+        expect(TokenType::SLASH, "Expected '/'");
+        expect(TokenType::ELSE, "Expected 'else'");
+        expect(TokenType::GT, "Expected '>'");
+    }
+
+    // </if>
+    expect(TokenType::LT, "Expected '<'");
+    expect(TokenType::SLASH, "Expected '/'");
+    expect(TokenType::IF, "Expected 'if'");
+    expect(TokenType::GT, "Expected '>'");
+
+    return viewIf;
 }
 
-void HTMLElement::collect_dependencies(std::set<std::string> &deps)
+std::unique_ptr<ASTNode> Parser::parse_view_for()
 {
-    for (auto &attr : attributes)
+    // Syntax: <for var in start:end> ... </for>
+    //     or: <for var in iterable> ... </for>
+    int start_line = current().line;
+
+    expect(TokenType::LT, "Expected '<'");
+    expect(TokenType::FOR, "Expected 'for'");
+
+    std::string var_name = current().value;
+    expect(TokenType::IDENTIFIER, "Expected loop variable name");
+    expect(TokenType::IN, "Expected 'in'");
+
+    // Use parse_expression_no_gt so > is not treated as comparison
+    auto first_expr = parse_expression_no_gt();
+
+    // Check if this is a range (has colon) or foreach
+    if (current().type == TokenType::COLON)
     {
-        if (attr.value)
-            attr.value->collect_dependencies(deps);
-    }
-    for (auto &child : children)
-    {
-        child->collect_dependencies(deps);
-    }
-}
+        // Range: <for i in 0:10>
+        advance();
+        auto end_expr = parse_expression_no_gt();
+        expect(TokenType::GT, "Expected '>'");
 
-// Generate prop assignments for components inside loops (used in sync functions)
-// loop_var_name passed to capture loop iterator in callback lambdas
-static void generate_prop_update_code(std::stringstream &ss, ComponentInstantiation *comp,
-                                      const std::string &inst_ref,
-                                      const std::set<std::string> &method_names,
-                                      const std::string &loop_var_name = "")
-{
-    for (auto &prop : comp->props)
-    {
-        std::string val = prop.value->to_webcc();
-        std::string prefix = "            " + inst_ref + "." + prop.name + " = ";
+        auto viewFor = std::make_unique<ViewForRangeStatement>();
+        viewFor->line = start_line;
+        viewFor->var_name = var_name;
+        viewFor->start = std::move(first_expr);
+        viewFor->end = std::move(end_expr);
 
-        if (prop.is_callback && !prop.callback_param_types.empty())
+        // Parse children until </for>
+        while (current().type != TokenType::END_OF_FILE)
         {
-            // Callback with params: generate lambda that forwards args
-            std::string lambda_params = build_lambda_params_from_types(prop.callback_param_types);
-            std::string forward_args = build_forward_args(prop.callback_param_types.size());
-            ss << prefix << "[this](" << lambda_params << ") { this->" << val << "(" << forward_args << "); };\n";
-        }
-        else if (method_names.count(val) || prop.is_callback)
-        {
-            // No-param callback or method reference
-            ss << prefix << "[this]() { this->" << val << "(); };\n";
-        }
-        else if (prop.is_reference)
-        {
-            // Actual reference: pointer to variable
-            ss << prefix << "&(" << val << ");\n";
-            ss << "            " << inst_ref << "._update_" << prop.name << "();\n";
-        }
-        else
-        {
-            ss << prefix << val << ";\n";
-            ss << "            " << inst_ref << "._update_" << prop.name << "();\n";
-        }
-    }
-}
-
-// ViewIfStatement
-void ViewIfStatement::generate_code(std::stringstream &ss, const std::string &parent, int &counter,
-                                    std::vector<EventHandler> &event_handlers,
-                                    std::vector<Binding> &bindings,
-                                    std::map<std::string, int> &component_counters,
-                                    const std::set<std::string> &method_names,
-                                    const std::string &parent_component_name,
-                                    bool in_loop,
-                                    std::vector<LoopRegion> *loop_regions,
-                                    int *loop_counter,
-                                    std::vector<IfRegion> *if_regions,
-                                    int *if_counter,
-                                    const std::string &loop_var_name)
-{
-
-    // Simple static if for nested loops
-    if (in_loop || !if_regions || !if_counter)
-    {
-        int loop_id_before = loop_counter ? *loop_counter : 0;
-
-        ss << "        if (" << strip_outer_parens(condition->to_webcc()) << ") {\n";
-        for (auto &child : then_children)
-        {
-            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-        }
-        if (!else_children.empty())
-        {
-            ss << "        } else {\n";
-            for (auto &child : else_children)
+            if (current().type == TokenType::LT && peek().type == TokenType::SLASH && peek(2).type == TokenType::FOR)
             {
-                generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, in_loop, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
+                break;
             }
+            viewFor->children.push_back(parse_view_node());
         }
-        ss << "        }\n";
 
-        if (loop_counter && loop_regions)
-        {
-            int loop_id_after = *loop_counter;
-            for (int lid = loop_id_before; lid < loop_id_after; lid++)
-            {
-                ss << "        _loop_" << lid << "_parent = " << parent << ";\n";
-            }
-        }
-        return;
-    }
+        // </for>
+        expect(TokenType::LT, "Expected '<'");
+        expect(TokenType::SLASH, "Expected '/'");
+        expect(TokenType::FOR, "Expected 'for'");
+        expect(TokenType::GT, "Expected '>'");
 
-    // Reactive if/else
-    int my_if_id = (*if_counter)++;
-    if_id = my_if_id;
-
-    IfRegion region;
-    region.if_id = my_if_id;
-    region.condition_code = condition->to_webcc();
-    condition->collect_dependencies(region.dependencies);
-    condition->collect_member_dependencies(region.member_dependencies);
-
-    std::string if_parent = "_if_" + std::to_string(my_if_id) + "_parent";
-
-    int counter_before_then = counter;
-    int loop_id_before = loop_counter ? *loop_counter : 0;
-    int if_id_before = *if_counter;
-    std::map<std::string, int> comp_counters_before_then = component_counters;
-
-    std::stringstream then_ss;
-    std::vector<Binding> then_bindings;
-    for (auto &child : then_children)
-    {
-        generate_view_child(child.get(), then_ss, if_parent, counter, event_handlers, then_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-    }
-    int counter_after_then = counter;
-    int loop_id_after_then = loop_counter ? *loop_counter : 0;
-    int if_id_after_then = *if_counter;
-
-    for (int i = counter_before_then; i < counter_after_then; i++)
-    {
-        region.then_element_ids.push_back(i);
-    }
-    for (int i = loop_id_before; i < loop_id_after_then; i++)
-    {
-        region.then_loop_ids.push_back(i);
-    }
-    for (int i = if_id_before; i < if_id_after_then; i++)
-    {
-        region.then_if_ids.push_back(i);
-    }
-    for (auto &[comp_name, count] : component_counters)
-    {
-        int before = comp_counters_before_then.count(comp_name) ? comp_counters_before_then[comp_name] : 0;
-        for (int i = before; i < count; i++)
-        {
-            region.then_components.push_back({comp_name, i});
-        }
-    }
-    
-    // Collect member references in then branch
-    for (auto &child : then_children) {
-        collect_member_refs(child.get(), region.then_member_refs);
-    }
-
-    region.then_creation_code = then_ss.str();
-
-    int counter_before_else = counter;
-    int loop_id_before_else = loop_counter ? *loop_counter : 0;
-    int if_id_before_else = *if_counter;
-    std::map<std::string, int> comp_counters_before_else = component_counters;
-
-    std::stringstream else_ss;
-    std::vector<Binding> else_bindings;
-    if (!else_children.empty())
-    {
-        for (auto &child : else_children)
-        {
-            generate_view_child(child.get(), else_ss, if_parent, counter, event_handlers, else_bindings, component_counters, method_names, parent_component_name, false, loop_regions, loop_counter, if_regions, if_counter, loop_var_name);
-        }
-    }
-    int counter_after_else = counter;
-    int loop_id_after_else = loop_counter ? *loop_counter : 0;
-    int if_id_after_else = *if_counter;
-
-    for (int i = counter_before_else; i < counter_after_else; i++)
-    {
-        region.else_element_ids.push_back(i);
-    }
-    for (int i = loop_id_before_else; i < loop_id_after_else; i++)
-    {
-        region.else_loop_ids.push_back(i);
-    }
-    for (int i = if_id_before_else; i < if_id_after_else; i++)
-    {
-        region.else_if_ids.push_back(i);
-    }
-    for (auto &[comp_name, count] : component_counters)
-    {
-        int before = comp_counters_before_else.count(comp_name) ? comp_counters_before_else[comp_name] : 0;
-        for (int i = before; i < count; i++)
-        {
-            region.else_components.push_back({comp_name, i});
-        }
-    }
-    
-    // Collect member references in else branch
-    for (auto &child : else_children) {
-        collect_member_refs(child.get(), region.else_member_refs);
-    }
-
-    // Transform creation code to use insert_before with anchor for _sync operations
-    std::string if_anchor = "_if_" + std::to_string(my_if_id) + "_anchor";
-    region.then_creation_code = transform_to_insert_before(then_ss.str(), if_parent, if_anchor);
-    region.else_creation_code = transform_to_insert_before(else_ss.str(), if_parent, if_anchor);
-
-    for (auto &b : then_bindings)
-    {
-        b.if_region_id = my_if_id;
-        b.in_then_branch = true;
-        bindings.push_back(b);
-    }
-    for (auto &b : else_bindings)
-    {
-        b.if_region_id = my_if_id;
-        b.in_then_branch = false;
-        bindings.push_back(b);
-    }
-
-    // Create anchor comment and append to parent
-    ss << "        _if_" << my_if_id << "_parent = " << parent << ";\n";
-    // Use deferred creation for comment anchors
-    ss << "        _if_" << my_if_id << "_anchor = webcc::DOMElement(webcc::next_deferred_handle());\n";
-    ss << "        webcc::dom::create_comment_deferred(_if_" << my_if_id << "_anchor, \"coi-⚓\");\n";
-    ss << "        if (" << strip_outer_parens(region.condition_code) << ") {\n";
-    ss << "        _if_" << my_if_id << "_state = true;\n";
-    // Use original append_child for initial render (before anchor is in DOM)
-    ss << then_ss.str();
-    ss << "        } else {\n";
-    ss << "        _if_" << my_if_id << "_state = false;\n";
-    ss << else_ss.str();
-    ss << "        }\n";
-    // Append anchor after the conditional content
-    ss << "        webcc::dom::append_child(" << parent << ", _if_" << my_if_id << "_anchor);\n";
-
-    if (loop_counter && loop_regions)
-    {
-        for (int lid = loop_id_before; lid < loop_id_after_else; lid++)
-        {
-            ss << "        _loop_" << lid << "_parent = " << parent << ";\n";
-        }
-    }
-
-    if_regions->push_back(region);
-}
-
-void ViewIfStatement::collect_dependencies(std::set<std::string> &deps)
-{
-    condition->collect_dependencies(deps);
-    for (auto &child : then_children)
-        child->collect_dependencies(deps);
-    for (auto &child : else_children)
-        child->collect_dependencies(deps);
-}
-
-// ViewRawElement - <raw>{htmlString}</raw>
-void ViewRawElement::generate_code(std::stringstream &ss, const std::string &parent, int &counter,
-                                   std::vector<EventHandler> &event_handlers,
-                                   std::vector<Binding> &bindings,
-                                   std::map<std::string, int> &component_counters,
-                                   const std::set<std::string> &method_names,
-                                   const std::string &parent_component_name,
-                                   bool in_loop,
-                                   std::vector<LoopRegion> *loop_regions,
-                                   int *loop_counter,
-                                   std::vector<IfRegion> *if_regions,
-                                   int *if_counter,
-                                   const std::string &loop_var_name)
-{
-    int my_id = counter++;
-    std::string var;
-
-    bool has_scoped_css = g_components_with_scoped_css.count(parent_component_name) > 0;
-
-    if (in_loop)
-    {
-        var = "_el_" + std::to_string(my_id);
-        ss << "        webcc::handle " << var << " = webcc::handle(webcc::next_deferred_handle());\n";
-        if (has_scoped_css) {
-            ss << "        webcc::dom::create_element_deferred_scoped(" << var << ", \"span\", \"" << parent_component_name << "\");\n";
-        } else {
-            ss << "        webcc::dom::create_element_deferred(" << var << ", \"span\");\n";
-        }
+        return viewFor;
     }
     else
     {
-        var = "el[" + std::to_string(my_id) + "]";
-        ss << "        " << var << " = webcc::DOMElement(webcc::next_deferred_handle());\n";
-        if (has_scoped_css) {
-            ss << "        webcc::dom::create_element_deferred_scoped(" << var << ", \"span\", \"" << parent_component_name << "\");\n";
-        } else {
-            ss << "        webcc::dom::create_element_deferred(" << var << ", \"span\");\n";
-        }
-    }
+        // ForEach: <for item in items key={item.id}>
+        auto viewForEach = std::make_unique<ViewForEachStatement>();
+        viewForEach->line = start_line;
+        viewForEach->var_name = var_name;
+        viewForEach->iterable = std::move(first_expr);
 
-    // Append to parent
-    if (!parent.empty())
-    {
-        ss << "        webcc::dom::append_child(" << parent << ", " << var << ");\n";
-    }
-
-    // Build the HTML content from children and set via innerHTML
-    std::string code;
-    bool all_static = true;
-    bool generated_inline = false;
-
-    for (auto &child : children)
-    {
-        std::string c = child->to_webcc();
-        if (!(c.size() >= 2 && c.front() == '"' && c.back() == '"'))
+        // Require key attribute for foreach loops
+        if (current().type != TokenType::KEY)
         {
-            all_static = false;
-            break;
+            throw std::runtime_error("Expected 'key' for foreach loop at line " + std::to_string(start_line) + ". Use: <for " + var_name + " in array key={" + var_name + ".id}>");
         }
-    }
+        advance(); // consume 'key'
+        expect(TokenType::ASSIGN, "Expected '=' after 'key'");
+        expect(TokenType::LBRACE, "Expected '{' for key expression");
+        viewForEach->key_expr = parse_expression();
+        expect(TokenType::RBRACE, "Expected '}' after key expression");
 
-    if (children.size() == 1 && all_static)
-    {
-        code = children[0]->to_webcc();
-    }
-    else if (children.size() == 1 && !all_static)
-    {
-        generated_inline = true;
-        std::vector<std::string> parts = {children[0]->to_webcc()};
-        ss << "        " << generate_formatter_block(parts, "webcc::dom::set_inner_html(" + var + ", ") << "\n";
-    }
-    else if (children.size() > 1)
-    {
-        if (all_static)
+        expect(TokenType::GT, "Expected '>'");
+
+        // If iterating over a component array, temporarily add loop var to component_member_types
+        // so that <var_name/> syntax works inside the loop
+        std::string loop_var_comp_type;
+        if (auto *ident = dynamic_cast<Identifier *>(viewForEach->iterable.get()))
         {
-            std::string args;
-            bool first = true;
-            for (auto &child : children)
+            auto it = component_array_types.find(ident->name);
+            if (it != component_array_types.end())
             {
-                if (!first)
-                    args += ", ";
-                args += child->to_webcc();
-                first = false;
+                loop_var_comp_type = it->second;
+                component_member_types[var_name] = loop_var_comp_type;
             }
-            code = "webcc::string::concat(" + args + ")";
         }
-        else
+
+        // Parse children until </for>
+        while (current().type != TokenType::END_OF_FILE)
         {
-            generated_inline = true;
-            std::vector<std::string> parts;
-            for (auto &child : children)
+            if (current().type == TokenType::LT && peek().type == TokenType::SLASH && peek(2).type == TokenType::FOR)
             {
-                parts.push_back(child->to_webcc());
+                break;
             }
-            ss << "        " << generate_formatter_block(parts, "webcc::dom::set_inner_html(" + var + ", ") << "\n";
+            viewForEach->children.push_back(parse_view_node());
         }
-    }
 
-    if (!code.empty())
-    {
-        ss << "        webcc::dom::set_inner_html(" << var << ", " << code << ");\n";
-    }
-
-    // Create reactive binding for dynamic content
-    if (!all_static && !in_loop)
-    {
-        Binding b;
-        b.element_id = my_id;
-        b.type = "html";  // Use "html" type so update code uses set_inner_html
-        if (children.size() == 1)
+        // Remove the temporary loop variable from component_member_types
+        if (!loop_var_comp_type.empty())
         {
-            b.expr = dynamic_cast<Expression *>(children[0].get());
+            component_member_types.erase(var_name);
         }
-        std::string args;
-        bool first = true;
-        for (auto &child : children)
-        {
-            if (!first)
-                args += ", ";
-            args += child->to_webcc();
-            first = false;
-        }
-        b.value_code = (children.size() == 1) ? children[0]->to_webcc() : "webcc::string::concat(" + args + ")";
-        for (auto &child : children) {
-            child->collect_dependencies(b.dependencies);
-            child->collect_member_dependencies(b.member_dependencies);
-        }
-        bindings.push_back(b);
+
+        // </for>
+        expect(TokenType::LT, "Expected '<'");
+        expect(TokenType::SLASH, "Expected '/'");
+        expect(TokenType::FOR, "Expected 'for'");
+        expect(TokenType::GT, "Expected '>'");
+
+        return viewForEach;
     }
-}
-
-void ViewRawElement::collect_dependencies(std::set<std::string> &deps)
-{
-    for (auto &child : children)
-    {
-        child->collect_dependencies(deps);
-    }
-}
-
-// ViewForRangeStatement
-void ViewForRangeStatement::generate_code(std::stringstream &ss, const std::string &parent, int &counter,
-                                          std::vector<EventHandler> &event_handlers,
-                                          std::vector<Binding> &bindings,
-                                          std::map<std::string, int> &component_counters,
-                                          const std::set<std::string> &method_names,
-                                          const std::string &parent_component_name,
-                                          bool in_loop,
-                                          std::vector<LoopRegion> *loop_regions,
-                                          int *loop_counter,
-                                          std::vector<IfRegion> *if_regions,
-                                          int *if_counter,
-                                          const std::string &loop_var_name)
-{
-
-    if (in_loop || !loop_regions || !loop_counter)
-    {
-        ss << "        for (int " << var_name << " = " << start->to_webcc() << "; "
-           << var_name << " < " << end->to_webcc() << "; " << var_name << "++) {\n";
-        for (auto &child : children)
-        {
-            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr, var_name);
-        }
-        ss << "        }\n";
-        return;
-    }
-
-    int my_loop_id = (*loop_counter)++;
-    loop_id = my_loop_id;
-
-    LoopRegion region;
-    region.loop_id = my_loop_id;
-    region.parent_element = parent;
-    region.start_expr = start->to_webcc();
-    region.end_expr = end->to_webcc();
-    region.var_name = var_name;
-
-    start->collect_dependencies(region.dependencies);
-    end->collect_dependencies(region.dependencies);
-
-    ComponentInstantiation *loop_component = nullptr;
-    HTMLElement *loop_html_element = nullptr;
-    for (auto &child : children)
-    {
-        if (auto comp = dynamic_cast<ComponentInstantiation *>(child.get()))
-        {
-            region.component_type = comp->component_name;
-            loop_component = comp;
-            break;
-        }
-        if (auto el = dynamic_cast<HTMLElement *>(child.get()))
-        {
-            loop_html_element = el;
-            region.is_html_loop = true;
-            break;
-        }
-    }
-
-    std::string loop_parent_var = "_loop_" + std::to_string(my_loop_id) + "_parent";
-    std::stringstream item_ss;
-    int temp_counter = counter;
-    std::map<std::string, int> temp_comp_counters = component_counters;
-    int root_element_id = temp_counter;
-
-    for (auto &child : children)
-    {
-        generate_view_child(child.get(), item_ss, loop_parent_var, temp_counter, event_handlers, bindings, temp_comp_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr, var_name);
-    }
-    region.item_creation_code = item_ss.str();
-
-    if (region.is_html_loop && loop_html_element)
-    {
-        region.root_element_var = "_el_" + std::to_string(root_element_id);
-    }
-
-    // Generate item update code
-    if (loop_component && !region.component_type.empty())
-    {
-        std::stringstream update_ss;
-        std::string vec_name = "_loop_" + region.component_type + "s";
-        std::string inst_ref = vec_name + "[" + var_name + "]";
-        generate_prop_update_code(update_ss, loop_component, inst_ref, method_names, var_name);
-        region.item_update_code = update_ss.str();
-    }
-
-    loop_regions->push_back(region);
-
-    ss << "        _loop_" << my_loop_id << "_parent = " << parent << ";\n";
-    ss << "        _sync_loop_" << my_loop_id << "();\n";
-}
-
-void ViewForRangeStatement::collect_dependencies(std::set<std::string> &deps)
-{
-    start->collect_dependencies(deps);
-    end->collect_dependencies(deps);
-    for (auto &child : children)
-        child->collect_dependencies(deps);
-}
-
-// ViewForEachStatement
-void ViewForEachStatement::generate_code(std::stringstream &ss, const std::string &parent, int &counter,
-                                         std::vector<EventHandler> &event_handlers,
-                                         std::vector<Binding> &bindings,
-                                         std::map<std::string, int> &component_counters,
-                                         const std::set<std::string> &method_names,
-                                         const std::string &parent_component_name,
-                                         bool in_loop,
-                                         std::vector<LoopRegion> *loop_regions,
-                                         int *loop_counter,
-                                         std::vector<IfRegion> *if_regions,
-                                         int *if_counter,
-                                         const std::string &loop_var_name)
-{
-
-    if (in_loop || !key_expr || !loop_regions || !loop_counter)
-    {
-        ss << "        for (auto& " << var_name << " : " << iterable->to_webcc() << ") {\n";
-        for (auto &child : children)
-        {
-            generate_view_child(child.get(), ss, parent, counter, event_handlers, bindings, component_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr, var_name);
-        }
-        ss << "        }\n";
-        return;
-    }
-
-    int my_loop_id = (*loop_counter)++;
-    loop_id = my_loop_id;
-
-    LoopRegion region;
-    region.loop_id = my_loop_id;
-    region.parent_element = parent;
-    region.is_keyed = true;
-    region.is_only_child = is_only_child;
-    region.key_expr = key_expr->to_webcc();
-    region.var_name = var_name;
-    region.iterable_expr = iterable->to_webcc();
-
-    iterable->collect_dependencies(region.dependencies);
-
-    ComponentInstantiation *loop_component = nullptr;
-    HTMLElement *loop_html_element = nullptr;
-    for (auto &child : children)
-    {
-        if (auto comp = dynamic_cast<ComponentInstantiation *>(child.get()))
-        {
-            region.component_type = comp->component_name;
-            // Check if this is a member reference loop (e.g., <row/> where row is loop var)
-            if (comp->is_member_reference && comp->member_name == var_name)
-            {
-                region.is_member_ref_loop = true;
-            }
-            loop_component = comp;
-            break;
-        }
-        if (auto el = dynamic_cast<HTMLElement *>(child.get()))
-        {
-            loop_html_element = el;
-            region.is_html_loop = true;
-            break;
-        }
-    }
-
-    std::string loop_parent_var = "_loop_" + std::to_string(my_loop_id) + "_parent";
-    std::stringstream item_ss;
-    int temp_counter = counter;
-    std::map<std::string, int> temp_comp_counters = component_counters;
-    int root_element_id = temp_counter;
-
-    for (auto &child : children)
-    {
-        generate_view_child(child.get(), item_ss, loop_parent_var, temp_counter, event_handlers, bindings, temp_comp_counters, method_names, parent_component_name, true, nullptr, nullptr, nullptr, nullptr, var_name);
-    }
-    region.item_creation_code = item_ss.str();
-
-    if (region.is_html_loop && loop_html_element)
-    {
-        region.root_element_var = "_el_" + std::to_string(root_element_id);
-    }
-
-    // Generate item update code
-    if (loop_component && !region.component_type.empty())
-    {
-        std::stringstream update_ss;
-        generate_prop_update_code(update_ss, loop_component, var_name, method_names, var_name);
-        region.item_update_code = update_ss.str();
-    }
-
-    region.key_type = "int";
-
-    loop_regions->push_back(region);
-
-    ss << "        _loop_" << my_loop_id << "_parent = " << parent << ";\n";
-    ss << "        _sync_loop_" << my_loop_id << "();\n";
-}
-
-void ViewForEachStatement::collect_dependencies(std::set<std::string> &deps)
-{
-    iterable->collect_dependencies(deps);
-    if (key_expr)
-        key_expr->collect_dependencies(deps);
-    for (auto &child : children)
-        child->collect_dependencies(deps);
 }
