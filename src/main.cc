@@ -95,7 +95,16 @@ int main(int argc, char **argv)
 
     if (first_arg == "dev")
     {
-        return dev_project(keep_cc, cc_only);
+        bool hot_reloading = true;  // Hot reload is now the default
+        for (int i = 2; i < argc; ++i)
+        {
+            std::string arg = argv[i];
+            if (arg == "--no-watch")
+            {
+                hot_reloading = false;
+            }
+        }
+        return dev_project(keep_cc, cc_only, hot_reloading);
     }
 
     // From here on, we're doing actual compilation - load DefSchema
@@ -198,7 +207,7 @@ int main(int argc, char **argv)
                         return 1;
                     }
                 }
-                comp.source_file = current_file_path;  // Track which file this component is from
+                comp.source_file = current_file_path; // Track which file this component is from
                 all_components.push_back(std::move(comp));
             }
 

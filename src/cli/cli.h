@@ -31,7 +31,7 @@ int build_project(bool keep_cc = false, bool cc_only = false, bool silent_banner
 
 // Build and start dev server
 // Returns 0 on success, non-zero on error  
-int dev_project(bool keep_cc = false, bool cc_only = false);
+int dev_project(bool keep_cc = false, bool cc_only = false, bool hot_reloading = false);
 
 // Print help message
 void print_help(const char* program_name);
