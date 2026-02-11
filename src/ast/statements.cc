@@ -73,6 +73,9 @@ std::string VarDeclaration::to_webcc()
         {
             std::string elem_type = type.substr(0, type.length() - 2);
             
+            // Propagate element type to anonymous struct literals
+            arr_lit->propagate_element_type(elem_type);
+            
             // Optimization: If immutable and initialized with literal, use fixed-size array
             // No need for dynamic allocation if we know the size at compile time and can't modify
             if (!is_mutable)

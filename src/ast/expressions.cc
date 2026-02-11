@@ -773,6 +773,19 @@ bool ArrayLiteral::is_static() {
     return true;
 }
 
+void ArrayLiteral::propagate_element_type(const std::string& type) {
+    element_type = type;
+    for (auto& elem : elements) {
+        // If this is an anonymous struct literal (ComponentConstruction with empty name),
+        // fill in the type from the array's element type
+        if (auto comp = dynamic_cast<ComponentConstruction*>(elem.get())) {
+            if (comp->component_name.empty()) {
+                comp->component_name = type;
+            }
+        }
+    }
+}
+
 std::string ArrayRepeatLiteral::to_webcc() {
     // Generate initialization - webcc::array constructor will fill with the value
     // The actual array type and initialization is handled by VarDeclaration::to_webcc

@@ -154,6 +154,9 @@ struct ArrayLiteral : Expression {
     std::string to_webcc() override;
     void collect_dependencies(std::set<std::string>& deps) override;
     bool is_static() override;
+    
+    // Propagate element type to anonymous struct literals (ComponentConstruction with empty name)
+    void propagate_element_type(const std::string& type);
 };
 
 // Fixed-size array repeat initializer: [value; count] e.g., [0; 100] or [0; NUM_ITEMS]

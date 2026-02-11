@@ -255,6 +255,20 @@ std::unique_ptr<Expression> Parser::parse_primary()
         return std::make_unique<BoolLiteral>(false);
     }
 
+    // Anonymous struct literal: { field = value, ... }
+    // Type is inferred from context (e.g., array element type)
+    if (current().type == TokenType::LBRACE && allow_brace_init)
+    {
+        advance();
+        auto parsed_args = parse_call_args(TokenType::RBRACE);
+        expect(TokenType::RBRACE, "Expected '}'");
+
+        // Create ComponentConstruction with empty name - type will be inferred
+        auto data_expr = std::make_unique<ComponentConstruction>("");
+        data_expr->args = std::move(parsed_args);
+        return data_expr;
+    }
+
     // Identifer or function call (also allow 'key' and 'data' keywords as identifier)
     if (is_identifier_token())
     {
@@ -371,6 +385,9 @@ std::unique_ptr<Expression> Parser::parse_primary()
             advance();
             return std::make_unique<ArrayLiteral>();
         }
+
+        // Allow { field = value } syntax for anonymous struct literals in arrays
+        allow_brace_init = true;
 
         // Parse first expression
         auto first_expr = parse_expression();
