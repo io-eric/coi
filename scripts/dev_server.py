@@ -147,9 +147,7 @@ def get_mtimes(project_dir):
     return mtimes
 
 
-def watch_files(project_dir, coi_bin, dist_dir, keep_cc, cc_only):
-    entry = Path(project_dir) / 'src' / 'App.coi'
-    
+def watch_files(project_dir, coi_bin, keep_cc, cc_only):
     print(f'{DIM}  Watching for changes...{RESET}')
     last = get_mtimes(project_dir)
     
@@ -163,12 +161,13 @@ def watch_files(project_dir, coi_bin, dist_dir, keep_cc, cc_only):
         if changed:
             print(f'{YELLOW}↻{RESET} {DIM}{", ".join(changed)}{RESET}')
             
-            cmd = [coi_bin, str(entry), '--out', str(dist_dir)]
+            # Use 'coi build' to ensure assets and styles/ CSS are bundled
+            cmd = [coi_bin, 'build']
             if keep_cc: cmd.append('--keep-cc')
             if cc_only: cmd.append('--cc-only')
             
             try:
-                r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=project_dir)
                 if r.returncode == 0:
                     print(f'{GREEN}✓{RESET} Rebuilt')
                     notify_reload()
@@ -186,24 +185,23 @@ def watch_files(project_dir, coi_bin, dist_dir, keep_cc, cc_only):
 def main():
     global hot_reload_enabled
     
-    if len(sys.argv) < 4:
-        print('Usage: dev_server.py <project_dir> <coi_bin> <dist_dir> [--no-watch] [--keep-cc] [--cc-only]')
+    if len(sys.argv) < 3:
+        print('Usage: dev_server.py <project_dir> <coi_bin> [--no-watch] [--keep-cc] [--cc-only]')
         sys.exit(1)
     
     project_dir = sys.argv[1]
     coi_bin = sys.argv[2]
-    dist_dir = sys.argv[3]
     
     hot_reload_enabled = '--no-watch' not in sys.argv
     keep_cc = '--keep-cc' in sys.argv
     cc_only = '--cc-only' in sys.argv
     
-    os.chdir(dist_dir)
+    os.chdir(project_dir)
     
     if hot_reload_enabled:
         watcher = threading.Thread(
             target=watch_files,
-            args=(project_dir, coi_bin, dist_dir, keep_cc, cc_only),
+            args=(project_dir, coi_bin, keep_cc, cc_only),
             daemon=True
         )
         watcher.start()
