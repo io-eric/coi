@@ -366,6 +366,54 @@ static void generate_view_child(ASTNode *child, std::stringstream &ss, const std
         ss << "        webcc::dom::create_comment_deferred(_route_anchor, \"coi-route\");\n";
         ss << "        webcc::dom::append_child(" << parent << ", _route_anchor);\n";
     }
+    else if (auto textNode = dynamic_cast<TextNode *>(child))
+    {
+        // Handle text nodes mixed with elements - create a text node
+        int text_id = counter++;
+        std::string text_var = in_loop ? "_el_" + std::to_string(text_id) : "el[" + std::to_string(text_id) + "]";
+        if (in_loop) {
+            ss << "        webcc::handle " << text_var << " = webcc::handle(webcc::next_deferred_handle());\n";
+        } else {
+            ss << "        " << text_var << " = webcc::DOMElement(webcc::next_deferred_handle());\n";
+        }
+        ss << "        webcc::dom::create_text_node_deferred(" << text_var << ", " << textNode->to_webcc() << ");\n";
+        ss << "        webcc::dom::append_child(" << parent << ", " << text_var << ");\n";
+    }
+    else if (auto expr = dynamic_cast<Expression *>(child))
+    {
+        // Handle expression children (interpolations like {feature.text}) mixed with elements
+        int text_id = counter++;
+        std::string text_var = in_loop ? "_el_" + std::to_string(text_id) : "el[" + std::to_string(text_id) + "]";
+        if (in_loop) {
+            ss << "        webcc::handle " << text_var << " = webcc::handle(webcc::next_deferred_handle());\n";
+        } else {
+            ss << "        " << text_var << " = webcc::DOMElement(webcc::next_deferred_handle());\n";
+        }
+        
+        std::string code = expr->to_webcc();
+        bool is_static = expr->is_static();
+        
+        if (is_static) {
+            ss << "        webcc::dom::create_text_node_deferred(" << text_var << ", " << code << ");\n";
+        } else {
+            // Use formatter for dynamic content
+            std::vector<std::string> parts = {code};
+            ss << "        " << generate_formatter_block(parts, "webcc::dom::create_text_node_deferred(" + text_var + ", ") << "\n";
+            
+            // Add binding for reactivity (only outside loops)
+            if (!in_loop) {
+                Binding b;
+                b.element_id = text_id;
+                b.type = "textnode";  // Special type for standalone text nodes
+                b.value_code = code;
+                b.expr = expr;
+                expr->collect_dependencies(b.dependencies);
+                expr->collect_member_dependencies(b.member_dependencies);
+                bindings.push_back(b);
+            }
+        }
+        ss << "        webcc::dom::append_child(" << parent << ", " << text_var << ");\n";
+    }
 }
 
 void HTMLElement::generate_code(std::stringstream &ss, const std::string &parent, int &counter,
