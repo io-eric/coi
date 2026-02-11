@@ -561,6 +561,9 @@ std::string Component::to_webcc(CompilerSession &session)
             {
                 std::string elem_type = var->type.substr(0, var->type.length() - 2);
                 
+                // Propagate element type to anonymous struct literals
+                arr_lit->propagate_element_type(elem_type);
+                
                 // Component state arrays with T[] type: always use webcc::vector (even if not mut).
                 //
                 // WHY NOT USE FIXED ARRAYS HERE?
