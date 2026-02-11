@@ -95,7 +95,17 @@ int main(int argc, char **argv)
 
     if (first_arg == "dev")
     {
-        return dev_project(keep_cc, cc_only);
+        // TODO: If hot reloading is stable and fast, make it the default for `coi dev` and remove the separate -h flag.
+        bool hot_reloading = false;
+        for (int i = 2; i < argc; ++i)
+        {
+            std::string arg = argv[i];
+            if (arg == "-h" || arg == "--hot")
+            {
+                hot_reloading = true;
+            }
+        }
+        return dev_project(keep_cc, cc_only, hot_reloading);
     }
 
     // From here on, we're doing actual compilation - load DefSchema
@@ -198,7 +208,7 @@ int main(int argc, char **argv)
                         return 1;
                     }
                 }
-                comp.source_file = current_file_path;  // Track which file this component is from
+                comp.source_file = current_file_path; // Track which file this component is from
                 all_components.push_back(std::move(comp));
             }
 

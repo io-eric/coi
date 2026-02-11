@@ -325,7 +325,7 @@ int build_project(bool keep_cc, bool cc_only, bool silent_banner)
     return 0;
 }
 
-int dev_project(bool keep_cc, bool cc_only)
+int dev_project(bool keep_cc, bool cc_only, bool hot_reloading)
 {
     print_banner("dev");
 
@@ -336,39 +336,36 @@ int dev_project(bool keep_cc, bool cc_only)
         return ret;
     }
 
-    fs::path dist_dir = fs::current_path() / "dist";
+    fs::path project_dir = fs::current_path();
+    fs::path dist_dir = project_dir / "dist";
+    fs::path exe_dir = get_executable_dir();
+    fs::path coi_bin = exe_dir / "coi";
+    fs::path dev_script = exe_dir / "scripts" / "dev_server.py";
 
     std::cout << "  " << GREEN << "➜" << RESET << "  Local:   " << CYAN << BOLD << "http://localhost:8000" << RESET << std::endl;
+    if (hot_reloading)
+    {
+        std::cout << "  " << YELLOW << "↻" << RESET << " Hot reload: " << GREEN << "enabled" << RESET << std::endl;
+    }
     std::cout << "  " << DIM << "Press Ctrl+C to stop" << RESET << std::endl;
     std::cout << std::endl;
 
-    // Start SPA-aware server using Python with fallback to index.html for client-side routing
-    std::string python_script = R"(
-import http.server
-import os
+    if (!fs::exists(dev_script))
+    {
+        ErrorHandler::cli_error("Dev server script not found.",
+                                "Expected at: " + dev_script.string());
+        return 1;
+    }
 
-class SPAHandler(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self):
-        # Serve static files if they exist
-        path = self.translate_path(self.path)
-        if os.path.isfile(path):
-            return http.server.SimpleHTTPRequestHandler.do_GET(self)
-        # For SPA routing: return index.html for any path that doesn't exist
-        self.path = '/index.html'
-        return http.server.SimpleHTTPRequestHandler.do_GET(self)
-
-if __name__ == '__main__':
-    import socketserver
-    PORT = 8000
+    std::string cmd = "python3 " + dev_script.string() +
+                     " " + project_dir.string() +
+                     " " + coi_bin.string() +
+                     " " + dist_dir.string();
     
-    class ReusableTCPServer(socketserver.TCPServer):
-        allow_reuse_address = True
-    
-    with ReusableTCPServer(('', PORT), SPAHandler) as httpd:
-        httpd.serve_forever()
-)";
+    if (hot_reloading) cmd += " --hot";
+    if (keep_cc) cmd += " --keep-cc";
+    if (cc_only) cmd += " --cc-only";
 
-    std::string cmd = "cd " + dist_dir.string() + " && python3 -c \"" + python_script + "\" 2>&1 | grep -v 'Serving HTTP'";
     return system(cmd.c_str());
 }
 
@@ -397,14 +394,15 @@ void print_help(const char *program_name)
     std::cout << "  " << BOLD << "Usage:" << RESET << std::endl;
     std::cout << "    " << CYAN << program_name << " init" << RESET << " [name]              Create a new project" << std::endl;
     std::cout << "    " << CYAN << program_name << " build" << RESET << "                    Build the project" << std::endl;
-    std::cout << "    " << CYAN << program_name << " dev" << RESET << "                      Build and start dev server" << std::endl;
+    std::cout << "    " << CYAN << program_name << " dev" << RESET << " [-h]                 Build and start dev server" << std::endl;
     std::cout << "    " << CYAN << program_name << " version" << RESET << "                  Show version" << std::endl;
     std::cout << "    " << CYAN << program_name << RESET << " <file.coi> [options]    Compile a .coi file" << std::endl;
     std::cout << std::endl;
     std::cout << "  " << BOLD << "Options:" << RESET << std::endl;
-    std::cout << "    " << DIM << "--out, -o <dir>" << RESET << "    Output directory" << std::endl;
+    std::cout << "    " << DIM << "--out, -o <dir>" << RESET << "   Output directory" << std::endl;
     std::cout << "    " << DIM << "--cc-only" << RESET << "         Generate C++ only, skip WASM" << std::endl;
     std::cout << "    " << DIM << "--keep-cc" << RESET << "         Keep generated C++ files" << std::endl;
+    std::cout << "    " << DIM << "-h, --hot" << RESET << "         Enable hot reloading (dev only)" << std::endl;
     std::cout << std::endl;
     std::cout << "  " << BOLD << "Examples:" << RESET << std::endl;
     std::cout << "    " << DIM << "$" << RESET << " coi init my-app" << std::endl;
