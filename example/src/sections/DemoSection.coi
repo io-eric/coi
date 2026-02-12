@@ -176,7 +176,7 @@ component TodoList \{
     \}
 
     view \{
-        <div class=\"progress\" style=\"width:\{progress\}%\"></div>
+        <div class=\"progress\" style=\"width:$\{progress\}%\"></div>
         <div class=\"time\">
             <span>\{currentTime\}s</span>
             <span>\{duration\}s</span>
