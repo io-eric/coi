@@ -245,13 +245,25 @@ class CoiFormatter {
             // Logical operators
             .replace(/\s*&&\s*/g, ' && ')
             .replace(/\s*\|\|\s*/g, ' || ')
+            // Shift operators (before single < or >)
+            .replace(/\s*<<=/g, ' <<= ')
+            .replace(/\s*>>=/g, ' >>= ')
+            .replace(/\s*<</g, ' << ')
+            .replace(/\s*>>/g, ' >> ')
+            // Bitwise compound assignment
+            .replace(/\s*&=\s*/g, ' &= ')
+            .replace(/\s*\|=\s*/g, ' |= ')
+            .replace(/\s*\^=\s*/g, ' ^= ')
             // Assignment operators (but not :=)
             .replace(/\s*\+=\s*/g, ' += ')
             .replace(/\s*-=\s*/g, ' -= ')
             .replace(/\s*\*=\s*/g, ' *= ')
             .replace(/\s*\/=\s*/g, ' /= ')
-            // Simple assignment (but not == or != or :=)
-            .replace(/([^=!<>+\-*/:])\s*=\s*([^=])/g, '$1 = $2');
+            // Bitwise operators (with spaces around binary use)
+            .replace(/\s*\|\s*/g, ' | ')
+            .replace(/\s*\^\s*/g, ' ^ ')
+            // Simple assignment (but not == or != or := or &= etc.)
+            .replace(/([^=!<>+\-*/:&|^])\s*=\s*([^=])/g, '$1 = $2');
 
         // Restore protected sections
         protectedList.forEach((str, i) => {
