@@ -1,0 +1,30 @@
+// Test: basic match expression as variable initializer
+component BasicMatchTest {
+    enum Status {
+        Pending,
+        Success,
+        Error
+    }
+    
+    mut Status status = Status::Pending;
+    
+    // Match used as variable initializer
+    string message = match (status) {
+        Status::Pending => "Loading...";
+        Status::Success => "Done!";
+        Status::Error   => "Failed!";
+        else            => "Unknown";
+    };
+    
+    def setStatus(Status s) : void {
+        status = s;
+    }
+
+    view {
+        <div>Status: {message}</div>
+    }
+}
+
+app {
+    root = BasicMatchTest;
+}

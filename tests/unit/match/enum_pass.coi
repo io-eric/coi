@@ -1,0 +1,35 @@
+// Test: match expression with enum patterns
+component MatchEnumTest {
+    enum Role {
+        Admin,
+        User,
+        Guest
+    }
+    
+    mut Role role = Role::User;
+    
+    def getRoleColor(Role r) : string {
+        return match (r) {
+            Role::Admin => { "Red" };
+            Role::User  => { "Blue" };
+            else        => { "Gray" };
+        };
+    }
+    
+    def getStatus() : string {
+        return match (role) {
+            Role::Admin => "Administrator";
+            Role::User  => "Regular User";
+            Role::Guest => "Guest User";
+            else        => "Unknown";
+        };
+    }
+
+    view {
+        <div>Role: {getStatus()}</div>
+    }
+}
+
+app {
+    root = MatchEnumTest;
+}

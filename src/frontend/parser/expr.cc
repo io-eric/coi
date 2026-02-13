@@ -242,6 +242,12 @@ std::unique_ptr<Expression> Parser::parse_multiplicative()
 
 std::unique_ptr<Expression> Parser::parse_primary()
 {
+    // Match expression: match (subject) { pattern => result, ... }
+    if (current().type == TokenType::MATCH)
+    {
+        return parse_match();
+    }
+
     // Integer literal
     if (current().type == TokenType::INT_LITERAL)
     {
@@ -496,3 +502,130 @@ std::unique_ptr<Expression> Parser::parse_primary()
 
     ErrorHandler::compiler_error("Unexpected token in expression: " + current().value + " (Type: " + std::to_string((int)current().type) + ")", current().line);
 }
+
+// Parse match expression: match (subject) { pattern => { result }, ... }
+// Patterns:
+//   - Enum: EnumType::Value
+//   - Pod with value: PodType{field = value, ...}
+//   - Pod with binding: PodType{field, ...} (captures field into local)
+//   - else: default case
+std::unique_ptr<Expression> Parser::parse_match()
+{
+    int match_line = current().line;
+    advance(); // skip 'match'
+    
+    expect(TokenType::LPAREN, "Expected '(' after 'match'");
+    auto subject = parse_expression();
+    expect(TokenType::RPAREN, "Expected ')' after match subject");
+    
+    expect(TokenType::LBRACE, "Expected '{' to start match body");
+    
+    auto match_expr = std::make_unique<MatchExpr>();
+    match_expr->subject = std::move(subject);
+    match_expr->line = match_line;
+    
+    while (current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE)
+    {
+        MatchArm arm;
+        arm.line = current().line;
+        
+        // Check for 'else' pattern
+        if (current().type == TokenType::ELSE)
+        {
+            advance(); // skip 'else'
+            arm.pattern.kind = MatchPattern::Kind::Else;
+        }
+        // Check for literal patterns: numbers, strings, booleans
+        else if (current().type == TokenType::INT_LITERAL ||
+                 current().type == TokenType::FLOAT_LITERAL ||
+                 current().type == TokenType::STRING_LITERAL ||
+                 current().type == TokenType::TEMPLATE_STRING ||
+                 current().type == TokenType::TRUE ||
+                 current().type == TokenType::FALSE)
+        {
+            arm.pattern.kind = MatchPattern::Kind::Literal;
+            // Parse the literal as an expression
+            arm.pattern.literal_value = parse_primary();
+        }
+        // Check for enum pattern: TypeName::Value
+        else if (current().type == TokenType::IDENTIFIER && peek().type == TokenType::DOUBLE_COLON)
+        {
+            arm.pattern.kind = MatchPattern::Kind::Enum;
+            arm.pattern.type_name = current().value;
+            advance(); // skip enum name
+            advance(); // skip '::'
+            arm.pattern.enum_value = current().value;
+            expect(TokenType::IDENTIFIER, "Expected enum value after '::'");
+        }
+        // Check for pod pattern: TypeName{field = value, ...} or TypeName{field, ...}
+        else if (current().type == TokenType::IDENTIFIER && peek().type == TokenType::LBRACE)
+        {
+            arm.pattern.kind = MatchPattern::Kind::Pod;
+            arm.pattern.type_name = current().value;
+            advance(); // skip type name
+            advance(); // skip '{'
+            
+            while (current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE)
+            {
+                MatchPattern::FieldPattern field;
+                field.name = current().value;
+                expect(TokenType::IDENTIFIER, "Expected field name in pod pattern");
+                
+                // Check if this is a value match (field = value) or just a binding (field)
+                if (current().type == TokenType::ASSIGN)
+                {
+                    advance(); // skip '='
+                    field.value = parse_expression();
+                }
+                // Otherwise it's a binding pattern - field.value remains nullptr
+                
+                arm.pattern.fields.push_back(std::move(field));
+                
+                if (current().type == TokenType::COMMA)
+                {
+                    advance();
+                    if (current().type == TokenType::RBRACE)
+                        break; // trailing comma
+                }
+                else
+                {
+                    break;
+                }
+            }
+            expect(TokenType::RBRACE, "Expected '}' after pod pattern fields");
+        }
+        else
+        {
+            ErrorHandler::compiler_error("Expected pattern (literal, EnumType::Value, PodType{...}, or else) in match arm", current().line);
+        }
+        
+        // Expect '=>'
+        expect(TokenType::ARROW, "Expected '=>' after match pattern");
+        
+        // Parse the arm body - either a block { expr } or a simple expression
+        if (current().type == TokenType::LBRACE)
+        {
+            advance(); // skip '{'
+            arm.body = parse_expression();
+            expect(TokenType::RBRACE, "Expected '}' after match arm body");
+        }
+        else
+        {
+            // Allow simple expression without braces
+            arm.body = parse_expression();
+        }
+        
+        match_expr->arms.push_back(std::move(arm));
+        
+        // Optional semicolon or comma between arms
+        if (current().type == TokenType::SEMICOLON || current().type == TokenType::COMMA)
+        {
+            advance();
+        }
+    }
+    
+    expect(TokenType::RBRACE, "Expected '}' to close match expression");
+    
+    return match_expr;
+}
+

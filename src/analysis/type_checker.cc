@@ -432,6 +432,35 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
         return true_type;
     }
 
+    // Match expression type inference - all arms must have compatible types
+    if (auto match = dynamic_cast<MatchExpr *>(expr))
+    {
+        if (match->arms.empty())
+        {
+            return "unknown";
+        }
+        
+        std::string result_type = "unknown";
+        for (const auto& arm : match->arms)
+        {
+            std::string arm_type = infer_expression_type(arm.body.get(), scope);
+            if (arm_type == "unknown") continue;
+            
+            if (result_type == "unknown")
+            {
+                result_type = arm_type;
+            }
+            else if (!is_compatible_type(arm_type, result_type) && !is_compatible_type(result_type, arm_type))
+            {
+                ErrorHandler::type_error("Match arm has incompatible type '" + arm_type + 
+                    "' (expected '" + result_type + "')", arm.line);
+                exit(1);
+            }
+        }
+        
+        return result_type;
+    }
+
     if (auto func = dynamic_cast<FunctionCall *>(expr))
     {
         std::string full_name = func->name;
@@ -1073,6 +1102,15 @@ void validate_types(const std::vector<Component> &components,
                     check_moved_use(ternary->condition.get(), line);
                     check_moved_use(ternary->true_expr.get(), line);
                     check_moved_use(ternary->false_expr.get(), line);
+                }
+                else if (auto match = dynamic_cast<MatchExpr*>(expr)) {
+                    check_moved_use(match->subject.get(), line);
+                    for (const auto& arm : match->arms) {
+                        for (const auto& field : arm.pattern.fields) {
+                            if (field.value) check_moved_use(field.value.get(), line);
+                        }
+                        check_moved_use(arm.body.get(), line);
+                    }
                 }
                 else if (auto postfix = dynamic_cast<PostfixOp*>(expr)) {
                     check_moved_use(postfix->operand.get(), line);

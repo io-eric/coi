@@ -1,0 +1,24 @@
+// Test: match arms with incompatible types should fail
+component MatchTypeFail {
+    enum Mode {
+        On,
+        Off
+    }
+    
+    mut Mode mode = Mode::On;
+    
+    // Type mismatch between arms: string vs int
+    string result = match (mode) {
+        Mode::On  => "enabled";
+        Mode::Off => 42;
+        else      => "default";
+    };
+
+    view {
+        <div>Result: {result}</div>
+    }
+}
+
+app {
+    root = MatchTypeFail;
+}

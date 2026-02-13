@@ -1,0 +1,33 @@
+// Test: match expression with pod patterns (value matching)
+component MatchPodValueTest {
+    pod User {
+        string name;
+        int age;
+    }
+    
+    mut User user = User{name = "Alice", age = 25};
+    
+    def greet(User u) : string {
+        return match (u) {
+            User{name = "io-eric"}  => { "Hello, creator!" };
+            User{name = "Alice"}    => { "Hello, Alice!" };
+            else                    => { "Hello, stranger!" };
+        };
+    }
+    
+    def getAgeGroup(User u) : string {
+        return match (u) {
+            User{age = 0}   => "Newborn";
+            User{age = 18}  => "Adult threshold";
+            else            => "Other age";
+        };
+    }
+
+    view {
+        <div>Greeting: {greet(user)}</div>
+    }
+}
+
+app {
+    root = MatchPodValueTest;
+}

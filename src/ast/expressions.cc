@@ -832,3 +832,123 @@ std::string ComponentConstruction::to_webcc() {
 void ComponentConstruction::collect_dependencies(std::set<std::string>& deps) {
     for (auto& arg : args) arg.value->collect_dependencies(deps);
 }
+
+// Match expression code generation
+// Generates a lambda (IIFE) with if-else chain
+std::string MatchExpr::to_webcc() {
+    std::string code = "[&]() {\n";
+    code += "        const auto& _match_subject = " + subject->to_webcc() + ";\n";
+    
+    bool first = true;
+    bool has_else = false;
+    
+    for (const auto& arm : arms) {
+        if (arm.pattern.kind == MatchPattern::Kind::Else) {
+            has_else = true;
+            // else arm - will be handled at the end
+            continue;
+        }
+        
+        std::string condition;
+        std::string bindings;
+        
+        if (arm.pattern.kind == MatchPattern::Kind::Literal) {
+            // Literal pattern: compare directly with the value
+            condition = "_match_subject == " + arm.pattern.literal_value->to_webcc();
+        }
+        else if (arm.pattern.kind == MatchPattern::Kind::Enum) {
+            // Enum pattern: compare directly
+            std::string resolved_type = ComponentTypeContext::instance().resolve(arm.pattern.type_name);
+            condition = "_match_subject == " + resolved_type + "::" + arm.pattern.enum_value;
+        }
+        else if (arm.pattern.kind == MatchPattern::Kind::Pod) {
+            // Pod pattern: check each field
+            std::vector<std::string> conditions;
+            for (const auto& field : arm.pattern.fields) {
+                if (field.value) {
+                    // Value match: _match_subject.field == value
+                    conditions.push_back("_match_subject." + field.name + " == " + field.value->to_webcc());
+                } else {
+                    // Binding pattern: capture the field into a local variable
+                    bindings += "            const auto& " + field.name + " = _match_subject." + field.name + ";\n";
+                }
+            }
+            
+            if (conditions.empty()) {
+                condition = "true";  // Just binding, always matches
+            } else {
+                condition = conditions[0];
+                for (size_t i = 1; i < conditions.size(); ++i) {
+                    condition += " && " + conditions[i];
+                }
+            }
+        }
+        
+        if (first) {
+            code += "        if (" + condition + ") {\n";
+            first = false;
+        } else {
+            code += "        } else if (" + condition + ") {\n";
+        }
+        
+        code += bindings;
+        code += "            return " + arm.body->to_webcc() + ";\n";
+    }
+    
+    // Generate else branch
+    for (const auto& arm : arms) {
+        if (arm.pattern.kind == MatchPattern::Kind::Else) {
+            if (first) {
+                // Only else arm, no conditions
+                code += "        return " + arm.body->to_webcc() + ";\n";
+            } else {
+                code += "        } else {\n";
+                code += "            return " + arm.body->to_webcc() + ";\n";
+                code += "        }\n";
+            }
+            has_else = true;
+            break;
+        }
+    }
+    
+    if (!has_else && !first) {
+        // Close the last if without else
+        code += "        }\n";
+        // Add a default return (shouldn't reach here if patterns are exhaustive)
+        code += "        return {};\n";
+    }
+    
+    code += "    }()";
+    return code;
+}
+
+
+void MatchExpr::collect_dependencies(std::set<std::string>& deps) {
+    subject->collect_dependencies(deps);
+    for (const auto& arm : arms) {
+        // Collect dependencies from literal pattern value
+        if (arm.pattern.literal_value) {
+            arm.pattern.literal_value->collect_dependencies(deps);
+        }
+        // Collect dependencies from pod pattern values
+        for (const auto& field : arm.pattern.fields) {
+            if (field.value) {
+                field.value->collect_dependencies(deps);
+            }
+        }
+        arm.body->collect_dependencies(deps);
+    }
+}
+
+bool MatchExpr::is_static() {
+    if (!subject->is_static()) return false;
+    for (const auto& arm : arms) {
+        if (arm.pattern.literal_value && !arm.pattern.literal_value->is_static()) return false;
+        for (const auto& field : arm.pattern.fields) {
+            if (field.value && !field.value->is_static()) return false;
+        }
+        if (!arm.body->is_static()) return false;
+    }
+    return true;
+}
+
