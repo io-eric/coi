@@ -140,11 +140,15 @@
         },
         {
           "name": "keyword.operator.assignment.coi",
-          "match": "=|\\+=|-=|\\*=|/=|%="
+          "match": "<<=|>>=|&=|\\|=|\\^=|=|\\+=|-=|\\*=|/=|%="
         },
         {
           "name": "keyword.operator.comparison.coi",
           "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.bitwise.coi",
+          "match": "<<|>>|&|\\||\\^|~"
         },
         {
           "name": "keyword.operator.logical.coi",
@@ -454,12 +458,20 @@
           "match": "==|!=|<=|>=|<|>"
         },
         {
+          "name": "keyword.operator.bitwise.coi",
+          "match": "<<|>>|&|\\||\\^|~"
+        },
+        {
           "name": "keyword.operator.logical.coi",
           "match": "&&|\\|\\||!"
         },
         {
           "name": "constant.language.boolean.coi",
           "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.numeric.hex.coi",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b"
         },
         {
           "name": "constant.numeric.coi",
@@ -526,6 +538,10 @@
           "match": "==|!=|<=|>=|<|>"
         },
         {
+          "name": "keyword.operator.bitwise.coi",
+          "match": "<<|>>|&|\\||\\^|~"
+        },
+        {
           "name": "keyword.operator.logical.coi",
           "match": "&&|\\|\\||!"
         },
@@ -536,6 +552,10 @@
         {
           "name": "keyword.operator.ternary.coi",
           "match": "\\?|:"
+        },
+        {
+          "name": "constant.numeric.hex.coi",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b"
         },
         {
           "name": "constant.numeric.coi",
