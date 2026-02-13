@@ -5,8 +5,8 @@ import "pages/About.coi";
 
 component App {
     router {
-        "/" => Home,
-        "/about" => About
+        "/" => Home;
+        "/about" => About;
     }
 
     style {

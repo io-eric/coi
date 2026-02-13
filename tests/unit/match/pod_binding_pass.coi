@@ -1,0 +1,25 @@
+// Test: match expression with pod patterns (variable binding)
+component MatchPodBindingTest {
+    pod User {
+        string name;
+        int age;
+    }
+    
+    mut User user = User{name = "Bob", age = 30};
+    
+    def greet(User u) : string {
+        return match (u) {
+            User{name = "io-eric"}  => { "Hello, creator!" };
+            User{name}              => { "Hello, ${name}!" };
+            else                    => { "Hello, stranger!" };
+        };
+    }
+
+    view {
+        <div>Greeting: {greet(user)}</div>
+    }
+}
+
+app {
+    root = MatchPodBindingTest;
+}

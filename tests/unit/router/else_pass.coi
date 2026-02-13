@@ -1,0 +1,29 @@
+// Test: router with else (default/404) route
+component Home {
+    view {
+        <div>Home Page</div>
+    }
+}
+
+component NotFound {
+    view {
+        <div>404 - Page Not Found</div>
+    }
+}
+
+component App {
+    router {
+        "/" => Home;
+        else => NotFound;
+    }
+
+    view {
+        <div>
+            <route />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}

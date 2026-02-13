@@ -204,3 +204,55 @@ struct ComponentConstruction : Expression {
     std::string to_webcc() override;
     void collect_dependencies(std::set<std::string>& deps) override;
 };
+
+// Match pattern for pattern matching in match expressions
+// Supports: enum patterns (Role::Admin), pod patterns (User{name = "x"}), 
+// pod capture patterns (User{name}), literal patterns (42, "hello"), and else (default) pattern
+struct MatchPattern {
+    enum class Kind {
+        Literal,    // Direct value match: 42, "hello", true
+        Enum,       // EnumType::Value
+        Pod,        // PodType{field = value, ...} or PodType{field, ...} (capture/binding)
+        Else        // else (default case)
+    };
+    
+    Kind kind = Kind::Else;
+    std::string type_name;  // Enum or Pod type name (empty for Else/Literal)
+    std::string enum_value; // For Kind::Enum, the enum variant name
+    std::unique_ptr<Expression> literal_value;  // For Kind::Literal, the value to match
+    
+    // For Kind::Pod: field patterns - name is field name, value is the match expression 
+    // (nullptr means capture/bind the field to a local variable)
+    struct FieldPattern {
+        std::string name;
+        std::unique_ptr<Expression> value;  // nullptr for binding pattern like User{name}
+    };
+    std::vector<FieldPattern> fields;
+    
+    MatchPattern() = default;
+    MatchPattern(MatchPattern&&) = default;
+    MatchPattern& operator=(MatchPattern&&) = default;
+};
+
+// A single arm in a match expression
+struct MatchArm {
+    MatchPattern pattern;
+    std::unique_ptr<Expression> body;
+    int line = 0;
+    
+    MatchArm() = default;
+    MatchArm(MatchArm&&) = default;
+    MatchArm& operator=(MatchArm&&) = default;
+};
+
+// Match expression: match (subject) { pattern => result, ... }
+struct MatchExpr : Expression {
+    std::unique_ptr<Expression> subject;
+    std::vector<MatchArm> arms;
+    int line = 0;
+    
+    MatchExpr() = default;
+    std::string to_webcc() override;
+    void collect_dependencies(std::set<std::string>& deps) override;
+    bool is_static() override;
+};

@@ -1,0 +1,29 @@
+// Test: basic router with semicolon syntax
+component Home {
+    view {
+        <div>Home Page</div>
+    }
+}
+
+component About {
+    view {
+        <div>About Page</div>
+    }
+}
+
+component App {
+    router {
+        "/" => Home;
+        "/about" => About;
+    }
+
+    view {
+        <div>
+            <route />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}

@@ -1,0 +1,22 @@
+// Test: missing semicolon should fail
+component Home {
+    view {
+        <div>Home</div>
+    }
+}
+
+component App {
+    router {
+        "/" => Home
+    }
+
+    view {
+        <div>
+            <route />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}

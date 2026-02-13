@@ -652,6 +652,59 @@ string sign = n > 0 ? "positive" : n < 0 ? "negative" : "zero";
 string msg = count > 0 ? "has items" : "empty";
 ```
 
+### Match Expression
+
+The `match` expression provides pattern matching against values:
+
+```tsx
+enum Status { Pending, Success, Error }
+
+mut Status status = Status::Success;
+
+// Match on enum
+string message = match (status) {
+    Status::Pending => "Loading...";
+    Status::Success => "Done!";
+    Status::Error => "Failed";
+};
+```
+
+**Literal patterns:**
+
+```tsx
+int code = 404;
+
+string text = match (code) {
+    200 => "OK";
+    404 => "Not Found";
+    500 => "Server Error";
+    else => "Unknown";
+};
+```
+
+**Pod patterns with field binding:**
+
+```tsx
+pod Point { float x; float y; }
+
+Point p = Point{3.0, 4.0};
+
+string desc = match (p) {
+    Point{x = 0.0, y = 0.0} => "Origin";
+    Point{x, y} => "Point at (${x}, ${y})";
+};
+```
+
+**Default with `else`:**
+
+```tsx
+string result = match (value) {
+    1 => "one";
+    2 => "two";
+    else => "other";
+};
+```
+
 ### Loops
 
 Coi supports range-based loops and iterator-based foreach loops.

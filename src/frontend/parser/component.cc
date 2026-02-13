@@ -94,13 +94,23 @@ std::unique_ptr<RouterDef> Parser::parse_router()
         RouteEntry entry;
         entry.line = current().line;
 
-        // Parse route path (string literal)
-        if (current().type != TokenType::STRING_LITERAL)
+        // Check for 'else' (default route)
+        if (current().type == TokenType::ELSE)
         {
-            throw std::runtime_error("Expected route path string at line " + std::to_string(current().line));
+            advance();
+            entry.is_default = true;
+            entry.path = "";  // No path for default route
         }
-        entry.path = current().value;
-        advance();
+        else
+        {
+            // Parse route path (string literal)
+            if (current().type != TokenType::STRING_LITERAL)
+            {
+                throw std::runtime_error("Expected route path string or 'else' at line " + std::to_string(current().line));
+            }
+            entry.path = current().value;
+            advance();
+        }
 
         // Expect =>
         if (current().type != TokenType::ARROW)
@@ -128,11 +138,8 @@ std::unique_ptr<RouterDef> Parser::parse_router()
 
         router->routes.push_back(std::move(entry));
 
-        // Optional comma between entries
-        if (current().type == TokenType::COMMA)
-        {
-            advance();
-        }
+        // Require semicolon after each route entry
+        expect(TokenType::SEMICOLON, "Expected ';' after route entry");
     }
 
     expect(TokenType::RBRACE, "Expected '}'");

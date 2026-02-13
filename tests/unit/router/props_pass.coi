@@ -1,0 +1,38 @@
+// Test: router with callback props
+component Home {
+    view {
+        <div>Home</div>
+    }
+}
+
+component Dashboard(def onLogout : void) {
+    view {
+        <div>
+            <span>Dashboard</span>
+            <button onclick={onLogout}>Logout</button>
+        </div>
+    }
+}
+
+component App {
+    mut bool loggedIn = true;
+
+    def handleLogout() : void {
+        loggedIn = false;
+    }
+
+    router {
+        "/" => Home;
+        "/dashboard" => Dashboard(&handleLogout);
+    }
+
+    view {
+        <div>
+            <route />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}
