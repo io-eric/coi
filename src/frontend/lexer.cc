@@ -57,6 +57,20 @@ Token Lexer::read_number(){
         return Token{TokenType::INT_LITERAL, num, start_line, start_column};
     }
 
+    // Check for binary (0b prefix)
+    if(current() == '0' && (peek() == 'b' || peek() == 'B')){
+        num += current(); advance(); // '0'
+        num += current(); advance(); // 'b' or 'B'
+        
+        // Read binary digits
+        while(current() == '0' || current() == '1'){
+            num += current();
+            advance();
+        }
+        
+        return Token{TokenType::INT_LITERAL, num, start_line, start_column};
+    }
+
     // Regular decimal number
     while(std::isdigit(current()) || current() == '.'){
         if(current() == '.'){
