@@ -7,10 +7,11 @@
 
 // Route entry for router block
 struct RouteEntry {
-    std::string path;                              // e.g., "/", "/dashboard", "/pricing"
+    std::string path;                              // e.g., "/", "/dashboard", "/pricing" (empty for else route)
     std::string component_name;                    // e.g., "Landing", "Dashboard"
     std::string module_name;                       // Module of the target component (filled by type checker)
     std::vector<CallArg> args;                     // Optional component arguments (same as component construction)
+    bool is_default = false;                       // True for 'else' route (catch-all)
     int line = 0;
 };
 

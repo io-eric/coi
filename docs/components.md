@@ -352,12 +352,14 @@ Coi has built-in client-side routing for single-page applications. Define routes
 import "pages/Home.coi";
 import "pages/About.coi";
 import "pages/Dashboard.coi";
+import "pages/NotFound.coi";
 
 component App {
     router {
-        "/" => Home,
-        "/about" => About,
-        "/dashboard" => Dashboard
+        "/" => Home;
+        "/about" => About;
+        "/dashboard" => Dashboard;
+        else => NotFound;
     }
     
     view {
@@ -389,8 +391,8 @@ component App {
     }
     
     router {
-        "/" => Landing(&handleLogin),
-        "/dashboard" => Dashboard(&handleLogout)
+        "/" => Landing(&handleLogin);
+        "/dashboard" => Dashboard(&handleLogout);
     }
     
     view {
@@ -428,7 +430,8 @@ component NavBar {
 
 ### How It Works
 
-- Routes are defined in the `router {}` block with `"path" => Component` syntax
+- Routes are defined in the `router {}` block with `"path" => Component;` syntax
+- Use `else => Component;` as a catch-all for unmatched routes (404 page)
 - The `<route />` element renders the component matching the current URL
 - `System.navigate(path)` changes the URL and updates the view
 - The router reads the initial URL on page load, so direct links work (e.g., `/dashboard`)
@@ -438,10 +441,11 @@ component NavBar {
 
 | Feature | Syntax | Description |
 |---------|--------|-------------|
-| Define routes | `router { "/" => Home }` | Map paths to components |
+| Define routes | `router { "/" => Home; }` | Map paths to components |
+| Default route | `else => NotFound;` | Catch-all for unmatched paths |
 | Render route | `<route />` | Placeholder for current route's component |
 | Navigate | `System.navigate("/path")` | Programmatically change route |
-| With props | `"/" => Page(callback)` | Pass props to route component |
+| With props | `"/" => Page(&callback);` | Pass props to route component |
 
 ## Next Steps
 

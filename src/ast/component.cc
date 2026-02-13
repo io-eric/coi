@@ -1614,6 +1614,17 @@ std::string Component::to_webcc(CompilerSession &session)
     // Router methods (if router block defined)
     if (router)
     {
+        // Find default route index (if any)
+        int default_route_idx = -1;
+        std::string fallback_path = "/";
+        for (size_t i = 0; i < router->routes.size(); ++i) {
+            if (router->routes[i].is_default) {
+                default_route_idx = static_cast<int>(i);
+            } else if (fallback_path == "/" || i == 0) {
+                fallback_path = router->routes[i].path;
+            }
+        }
+
         // navigate() method - changes route and updates browser URL
         ss << "    void navigate(const webcc::string& route) {\n";
         ss << "        if (_current_route == route) return;\n";
@@ -1627,12 +1638,7 @@ std::string Component::to_webcc(CompilerSession &session)
         ss << "    void _handle_popstate(const webcc::string& path) {\n";
         ss << "        if (_current_route == path) return;\n";
         ss << "        _current_route = path;\n";
-        // Validate route and fall back to default if invalid
-        ss << "        bool _route_matched = false;\n";
-        for (const auto& route : router->routes) {
-            ss << "        if (_current_route == \"" << route.path << "\") _route_matched = true;\n";
-        }
-        ss << "        if (!_route_matched) _current_route = \"" << (router->routes.empty() ? "/" : router->routes[0].path) << "\";\n";
+        // For popstate, we don't need to validate - _sync_route will handle fallback via else
         ss << "        _sync_route();\n";
         ss << "    }\n";
 
@@ -1643,12 +1649,9 @@ std::string Component::to_webcc(CompilerSession &session)
         {
             ss << "        if (_route_" << i << ") { _route_" << i << "->_destroy(); delete _route_" << i << "; _route_" << i << " = nullptr; }\n";
         }
-        // Create the component for matching route and insert before anchor
-        bool first = true;
-        for (size_t i = 0; i < router->routes.size(); ++i)
-        {
-            const auto& route = router->routes[i];
-            ss << "        " << (first ? "if" : "else if") << " (_current_route == \"" << route.path << "\") {\n";
+
+        // Helper lambda to generate component creation code
+        auto emit_route_creation = [&](size_t i, const RouteEntry& route) {
             ss << "            _route_" << i << " = new " << qualified_name(route.module_name, route.component_name) << "{";
             // Pass arguments - same handling as component construction
             // Reference args (&) that are identifiers are callbacks and need lambda wrapping
@@ -1687,9 +1690,34 @@ std::string Component::to_webcc(CompilerSession &session)
             // Move the routed component's root element before the anchor
             ss << "            webcc::dom::insert_before(_route_parent, _route_" << i << "->_get_root_element(), _route_anchor);\n";
             ss << "            webcc::flush();\n";
+        };
+
+        // Create the component for matching route and insert before anchor
+        bool first = true;
+        for (size_t i = 0; i < router->routes.size(); ++i)
+        {
+            const auto& route = router->routes[i];
+            if (route.is_default) continue;  // Handle default route at the end
+            
+            ss << "        " << (first ? "if" : "else if") << " (_current_route == \"" << route.path << "\") {\n";
+            emit_route_creation(i, route);
             ss << "        }\n";
             first = false;
         }
+
+        // Generate else route (default) if present
+        if (default_route_idx >= 0) {
+            const auto& route = router->routes[default_route_idx];
+            if (first) {
+                // Only have default route
+                ss << "        {\n";
+            } else {
+                ss << "        else {\n";
+            }
+            emit_route_creation(default_route_idx, route);
+            ss << "        }\n";
+        }
+
         ss << "    }\n";
     }
 
