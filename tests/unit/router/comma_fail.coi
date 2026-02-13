@@ -1,0 +1,29 @@
+// Test: comma syntax should fail (semicolons required)
+component Home {
+    view {
+        <div>Home</div>
+    }
+}
+
+component About {
+    view {
+        <div>About</div>
+    }
+}
+
+component App {
+    router {
+        "/" => Home,
+        "/about" => About
+    }
+
+    view {
+        <div>
+            <route />
+        </div>
+    }
+}
+
+app {
+    root = App;
+}
