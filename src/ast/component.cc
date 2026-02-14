@@ -478,27 +478,29 @@ std::string Component::to_webcc(CompilerSession &session)
 
     std::string qname = qualified_name(module_name, name);
     std::stringstream ss_render;
+    ViewCodegenContext view_ctx{ss_render, "parent", element_count, event_handlers, bindings,
+        component_counters, method_names, qname, false, &loop_regions, &loop_counter, &if_regions, &if_counter, ""};
     for (auto &root : render_roots)
     {
         if (auto el = dynamic_cast<HTMLElement *>(root.get()))
         {
-            el->generate_code(ss_render, "parent", element_count, event_handlers, bindings, component_counters, method_names, qname, false, &loop_regions, &loop_counter, &if_regions, &if_counter);
+            el->generate_code(view_ctx);
         }
         else if (auto comp = dynamic_cast<ComponentInstantiation *>(root.get()))
         {
-            comp->generate_code(ss_render, "parent", element_count, event_handlers, bindings, component_counters, method_names, qname, false, &loop_regions, &loop_counter, &if_regions, &if_counter);
+            comp->generate_code(view_ctx);
         }
         else if (auto viewIf = dynamic_cast<ViewIfStatement *>(root.get()))
         {
-            viewIf->generate_code(ss_render, "parent", element_count, event_handlers, bindings, component_counters, method_names, qname, false, &loop_regions, &loop_counter, &if_regions, &if_counter);
+            viewIf->generate_code(view_ctx);
         }
         else if (auto viewFor = dynamic_cast<ViewForRangeStatement *>(root.get()))
         {
-            viewFor->generate_code(ss_render, "parent", element_count, event_handlers, bindings, component_counters, method_names, qname, false, &loop_regions, &loop_counter, &if_regions, &if_counter);
+            viewFor->generate_code(view_ctx);
         }
         else if (auto viewForEach = dynamic_cast<ViewForEachStatement *>(root.get()))
         {
-            viewForEach->generate_code(ss_render, "parent", element_count, event_handlers, bindings, component_counters, method_names, qname, false, &loop_regions, &loop_counter, &if_regions, &if_counter);
+            viewForEach->generate_code(view_ctx);
         }
         else if (auto routePlaceholder = dynamic_cast<RoutePlaceholder *>(root.get()))
         {
