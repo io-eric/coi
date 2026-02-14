@@ -295,6 +295,12 @@ Component Parser::parse_component()
                             param_type += "[]";
                         }
 
+                        // Skip optional parameter name (for documentation purposes)
+                        if (current().type == TokenType::IDENTIFIER)
+                        {
+                            advance();
+                        }
+
                         callback_params.push_back(param_type);
                         param->callback_param_types.push_back(param_type);
 
