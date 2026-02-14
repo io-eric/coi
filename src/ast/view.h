@@ -149,7 +149,6 @@ struct ViewIfStatement : ASTNode {
     std::vector<std::unique_ptr<ASTNode>> else_children;
     int if_id = -1;
 
-    std::string to_webcc() override { return ""; }
     void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
@@ -162,7 +161,6 @@ struct ViewForRangeStatement : ASTNode {
     std::vector<std::unique_ptr<ASTNode>> children;
     int loop_id = -1;
 
-    std::string to_webcc() override { return ""; }
     void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
@@ -176,7 +174,6 @@ struct ViewForEachStatement : ASTNode {
     int loop_id = -1;
     bool is_only_child = false;  // Set by parent HTMLElement if this loop is its only child
 
-    std::string to_webcc() override { return ""; }
     void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
@@ -186,7 +183,6 @@ struct ViewRawElement : ASTNode {
     std::vector<std::unique_ptr<ASTNode>> children;
     int raw_id = -1;
 
-    std::string to_webcc() override { return ""; }
     void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
@@ -194,6 +190,4 @@ struct ViewRawElement : ASTNode {
 // Route placeholder for router block - <route /> in view
 struct RoutePlaceholder : ASTNode {
     int line = 0;
-    std::string to_webcc() override { return ""; }
-    void collect_dependencies(std::set<std::string>& deps) override {}
 };

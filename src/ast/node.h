@@ -37,7 +37,7 @@ struct MemberDependency {
 // Base AST node
 struct ASTNode {
     virtual ~ASTNode() = default;
-    virtual std::string to_webcc() = 0;
+    virtual std::string to_webcc() { return ""; }
     virtual void collect_dependencies(std::set<std::string>& deps) {}
     virtual void collect_member_dependencies(std::set<MemberDependency>& member_deps) {}
     int line = 0;

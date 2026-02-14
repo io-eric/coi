@@ -102,7 +102,6 @@ struct PostfixOp : Expression {
     PostfixOp(std::unique_ptr<Expression> expr, const std::string& o);
     std::string to_webcc() override;
     void collect_dependencies(std::set<std::string>& deps) override { operand->collect_dependencies(deps); }
-    bool is_static() override { return false; }
 };
 
 struct UnaryOp : Expression {
@@ -122,7 +121,6 @@ struct ReferenceExpression : Expression {
     ReferenceExpression(std::unique_ptr<Expression> expr) : operand(std::move(expr)) {}
     std::string to_webcc() override;
     void collect_dependencies(std::set<std::string>& deps) override { operand->collect_dependencies(deps); }
-    bool is_static() override { return false; }
 };
 
 // Move expression: :expr - explicitly transfers ownership
@@ -132,7 +130,6 @@ struct MoveExpression : Expression {
     MoveExpression(std::unique_ptr<Expression> expr) : operand(std::move(expr)) {}
     std::string to_webcc() override;
     void collect_dependencies(std::set<std::string>& deps) override { operand->collect_dependencies(deps); }
-    bool is_static() override { return false; }
 };
 
 struct TernaryOp : Expression {
