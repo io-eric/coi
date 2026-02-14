@@ -415,6 +415,23 @@ std::string Component::to_webcc(CompilerSession &session)
     int loop_counter = 0;
     int if_counter = 0;
 
+    auto resolve_component_type = [&](const std::string &type_name) -> std::string {
+        if (session.component_info.find(type_name) != session.component_info.end())
+        {
+            return type_name;
+        }
+        if (type_name.find("::") != std::string::npos)
+        {
+            return type_name;
+        }
+        std::string same_module = qualified_name(module_name, type_name);
+        if (session.component_info.find(same_module) != session.component_info.end())
+        {
+            return same_module;
+        }
+        return type_name;
+    };
+
     // Set up component-local type context for convert_type() to use
     std::set<std::string> local_data_names;
     std::set<std::string> local_enum_names;
@@ -537,7 +554,7 @@ std::string Component::to_webcc(CompilerSession &session)
     // Component parameters (data members only - callbacks emitted later for proper aggregate init order)
     for (auto &param : params)
     {
-        ss << "    " << convert_type(param->type);
+        ss << "    " << convert_type(resolve_component_type(param->type));
         if (param->is_reference)
         {
             ss << "* " << param->name << " = nullptr";
@@ -575,7 +592,7 @@ std::string Component::to_webcc(CompilerSession &session)
                 // webcc::vector<string> because the child doesn't know what size array it will
                 // receive. Using webcc::array<T, N> here would cause a type mismatch.
           
-                std::string vec_type = "webcc::vector<" + convert_type(elem_type) + ">";
+                std::string vec_type = "webcc::vector<" + convert_type(resolve_component_type(elem_type)) + ">";
                 ss << "    " << (var->is_mutable ? "" : "const ") << vec_type;
                 if (var->is_reference)
                     ss << "&";
@@ -584,7 +601,7 @@ std::string Component::to_webcc(CompilerSession &session)
             }
         }
 
-        ss << "    " << (var->is_mutable ? "" : "const ") << convert_type(var->type);
+        ss << "    " << (var->is_mutable ? "" : "const ") << convert_type(resolve_component_type(var->type));
         if (var->is_reference)
             ss << "&";
         ss << " " << var->name;
@@ -1545,7 +1562,7 @@ std::string Component::to_webcc(CompilerSession &session)
     for (const auto &param : params)
     {
         // Check if this param is a component type with pub_mut_members
-        auto it = session.component_info.find(param->type);
+        auto it = session.component_info.find(resolve_component_type(param->type));
         if (it != session.component_info.end() && !it->second.pub_mut_members.empty())
         {
             // Wire each pub_mut_member's onChange to our _update_{member}() method
@@ -1600,7 +1617,7 @@ std::string Component::to_webcc(CompilerSession &session)
     // Re-wire nested component reactivity after reallocation
     for (const auto &param : params)
     {
-        auto it = session.component_info.find(param->type);
+        auto it = session.component_info.find(resolve_component_type(param->type));
         if (it != session.component_info.end() && !it->second.pub_mut_members.empty())
         {
             for (const auto &member : it->second.pub_mut_members)
