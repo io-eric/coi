@@ -646,7 +646,26 @@ std::string FunctionCall::to_webcc() {
         return code;
     }
 
-    std::string result = name + "(";
+    std::string call_name = name;
+    if (name.find('.') == std::string::npos &&
+        name.find("::") == std::string::npos &&
+        !name.empty() &&
+        std::isupper(name[0])) {
+        std::string resolved_local = ComponentTypeContext::instance().resolve(name);
+        if (resolved_local != name) {
+            call_name = resolved_local;
+        } else {
+            const std::string &current_component = ComponentTypeContext::instance().component_name;
+            size_t module_sep = current_component.find('_');
+            if (module_sep != std::string::npos) {
+                std::string module_name = current_component.substr(0, module_sep);
+                std::string qualified_ctor = module_name + "::" + name;
+                call_name = convert_type(qualified_ctor);
+            }
+        }
+    }
+
+    std::string result = call_name + "(";
     for(size_t i = 0; i < args.size(); i++){
         if(i > 0) result += ", ";
         result += args[i].value->to_webcc();
@@ -804,6 +823,18 @@ std::string EnumAccess::to_webcc() {
 std::string ComponentConstruction::to_webcc() {
     // Resolve component-local data types (e.g., Body -> App_Body)
     std::string resolved_name = ComponentTypeContext::instance().resolve(component_name);
+    if (resolved_name == component_name &&
+        component_name.find("::") == std::string::npos &&
+        !component_name.empty() &&
+        std::isupper(component_name[0])) {
+        const std::string &current_component = ComponentTypeContext::instance().component_name;
+        size_t module_sep = current_component.find('_');
+        if (module_sep != std::string::npos) {
+            std::string module_name = current_component.substr(0, module_sep);
+            std::string qualified_ctor = module_name + "::" + component_name;
+            resolved_name = convert_type(qualified_ctor);
+        }
+    }
     std::string result = resolved_name + "(";
     for (size_t i = 0; i < args.size(); i++) {
         if (i > 0) result += ", ";
