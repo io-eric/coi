@@ -146,6 +146,11 @@ void Parser::parse_file()
             ErrorHandler::compiler_error("Expected module name after 'module'", current().line);
         }
         module_name = current().value;
+        // Module names must start with uppercase
+        if (!module_name.empty() && !std::isupper(module_name[0]))
+        {
+            ErrorHandler::compiler_error("Module name must start with uppercase letter: '" + module_name + "'", current().line);
+        }
         advance();
         expect(TokenType::SEMICOLON, "Expected ';' after module declaration");
     }
