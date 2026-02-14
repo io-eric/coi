@@ -87,6 +87,38 @@ struct IfRegion {
     std::vector<std::string> else_member_refs;  // Member component references in else branch
 };
 
+// Context for view code generation - bundles common parameters
+struct ViewCodegenContext {
+    std::stringstream& ss;
+    std::string parent;
+    int& counter;
+    std::vector<EventHandler>& event_handlers;
+    std::vector<Binding>& bindings;
+    std::map<std::string, int>& component_counters;
+    const std::set<std::string>& method_names;
+    std::string parent_component_name;
+    bool in_loop = false;
+    std::vector<LoopRegion>* loop_regions = nullptr;
+    int* loop_counter = nullptr;
+    std::vector<IfRegion>* if_regions = nullptr;
+    int* if_counter = nullptr;
+    std::string loop_var_name;
+
+    // Create a child context with a new parent element
+    ViewCodegenContext with_parent(const std::string& new_parent) const {
+        return ViewCodegenContext{ss, new_parent, counter, event_handlers, bindings,
+            component_counters, method_names, parent_component_name, in_loop,
+            loop_regions, loop_counter, if_regions, if_counter, loop_var_name};
+    }
+
+    // Create a context for loop iteration (in_loop = true, clear region pointers)
+    ViewCodegenContext for_loop(const std::string& new_parent, const std::string& var_name) const {
+        return ViewCodegenContext{ss, new_parent, counter, event_handlers, bindings,
+            component_counters, method_names, parent_component_name, true,
+            nullptr, nullptr, nullptr, nullptr, var_name};
+    }
+};
+
 struct ComponentInstantiation : ASTNode {
     std::string component_name;
     std::string module_prefix;        // Module prefix for cross-module access (e.g., "TurboUI" in TurboUI::Button)
@@ -95,21 +127,7 @@ struct ComponentInstantiation : ASTNode {
     std::string member_name;           // Name of the member variable if is_member_reference is true
     
     std::string to_webcc() override;
-
-    // loop_var_name: iterator name for efficient lambda captures (e.g. "row" in for-each)
-    void generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
-                      std::vector<EventHandler>& event_handlers,
-                      std::vector<Binding>& bindings,
-                      std::map<std::string, int>& component_counters,
-                      const std::set<std::string>& method_names,
-                      const std::string& parent_component_name,
-                      bool in_loop = false,
-                      std::vector<LoopRegion>* loop_regions = nullptr,
-                      int* loop_counter = nullptr,
-                      std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr,
-                      const std::string& loop_var_name = "");
-    
+    void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -120,19 +138,7 @@ struct HTMLElement : ASTNode {
     std::string ref_binding;
 
     std::string to_webcc() override;
-
-    void generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
-                      std::vector<EventHandler>& event_handlers,
-                      std::vector<Binding>& bindings,
-                      std::map<std::string, int>& component_counters,
-                      const std::set<std::string>& method_names,
-                      const std::string& parent_component_name,
-                      bool in_loop = false,
-                      std::vector<LoopRegion>* loop_regions = nullptr,
-                      int* loop_counter = nullptr,
-                      std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr,
-                      const std::string& loop_var_name = "");
+    void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -144,18 +150,7 @@ struct ViewIfStatement : ASTNode {
     int if_id = -1;
 
     std::string to_webcc() override { return ""; }
-    void generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
-                      std::vector<EventHandler>& event_handlers,
-                      std::vector<Binding>& bindings,
-                      std::map<std::string, int>& component_counters,
-                      const std::set<std::string>& method_names,
-                      const std::string& parent_component_name,
-                      bool in_loop = false,
-                      std::vector<LoopRegion>* loop_regions = nullptr,
-                      int* loop_counter = nullptr,
-                      std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr,
-                      const std::string& loop_var_name = "");
+    void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -168,18 +163,7 @@ struct ViewForRangeStatement : ASTNode {
     int loop_id = -1;
 
     std::string to_webcc() override { return ""; }
-    void generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
-                      std::vector<EventHandler>& event_handlers,
-                      std::vector<Binding>& bindings,
-                      std::map<std::string, int>& component_counters,
-                      const std::set<std::string>& method_names,
-                      const std::string& parent_component_name,
-                      bool in_loop = false,
-                      std::vector<LoopRegion>* loop_regions = nullptr,
-                      int* loop_counter = nullptr,
-                      std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr,
-                      const std::string& loop_var_name = "");
+    void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -193,18 +177,7 @@ struct ViewForEachStatement : ASTNode {
     bool is_only_child = false;  // Set by parent HTMLElement if this loop is its only child
 
     std::string to_webcc() override { return ""; }
-    void generate_code(std::stringstream& ss, const std::string& parent, int& counter, 
-                      std::vector<EventHandler>& event_handlers,
-                      std::vector<Binding>& bindings,
-                      std::map<std::string, int>& component_counters,
-                      const std::set<std::string>& method_names,
-                      const std::string& parent_component_name,
-                      bool in_loop = false,
-                      std::vector<LoopRegion>* loop_regions = nullptr,
-                      int* loop_counter = nullptr,
-                      std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr,
-                      const std::string& loop_var_name = "");
+    void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -214,18 +187,7 @@ struct ViewRawElement : ASTNode {
     int raw_id = -1;
 
     std::string to_webcc() override { return ""; }
-    void generate_code(std::stringstream& ss, const std::string& parent, int& counter,
-                      std::vector<EventHandler>& event_handlers,
-                      std::vector<Binding>& bindings,
-                      std::map<std::string, int>& component_counters,
-                      const std::set<std::string>& method_names,
-                      const std::string& parent_component_name,
-                      bool in_loop = false,
-                      std::vector<LoopRegion>* loop_regions = nullptr,
-                      int* loop_counter = nullptr,
-                      std::vector<IfRegion>* if_regions = nullptr,
-                      int* if_counter = nullptr,
-                      const std::string& loop_var_name = "");
+    void generate_code(ViewCodegenContext& ctx);
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
