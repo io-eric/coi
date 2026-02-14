@@ -11,6 +11,7 @@ Coi enforces naming conventions to distinguish between different constructs:
 | Components | `UpperCase` | `component Counter` | ✓ Yes |
 | Pod types | `UpperCase` | `pod User` | ✓ Yes |
 | Enums | `UpperCase` | `enum Mode` | ✓ Yes |
+| Modules | `UpperCase` | `module MyLib` | ✓ Yes |
 | Methods | `lowerCase` | `def handleClick()` | ✓ Yes |
 | Variables | `lowerCase` | `mut int count` | Recommended |
 
@@ -24,7 +25,8 @@ def handleClick() : void { }
 
 // ✗ Compile errors
 pod user { }       // Error: Pod type name must start with uppercase
-enum status { }    // Error: Enum type name must start with uppercase  
+enum status { }    // Error: Enum type name must start with uppercase
+module myLib;      // Error: Module name must start with uppercase
 def HandleClick()  // Error: Method name must start with lowercase
 ```
 
@@ -36,7 +38,7 @@ Coi uses a comprehensive module system to organize code and control visibility.
 
 ### Module Declaration
 
-Each file defines which module it belongs to using the `module` keyword at the top of the file.
+Each file defines which module it belongs to using the `module` keyword at the top of the file. Module names must start with an uppercase letter.
 
 ```tsx
 // Button.coi

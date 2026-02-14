@@ -296,7 +296,7 @@ import "layout/Header.coi";
 
 ### Modules
 
-You can organize files into named modules using the `module` keyword at the top of the file:
+You can organize files into named modules using the `module` keyword at the top of the file. Module names must start with an uppercase letter:
 
 ```tsx
 // src/ui/Button.coi
