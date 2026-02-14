@@ -38,6 +38,14 @@ class Parser{
         bool is_type_token();                    // INT, STRING, FLOAT, FLOAT32, BOOL, IDENTIFIER, VOID
         bool is_identifier_token();              // IDENTIFIER, KEY, DATA (keywords usable as names)
         std::vector<CallArg> parse_call_args(TokenType end_token);  // Parse (args) or {args}
+        
+        // Parse callback signature: def name(types...) : returnType
+        // Returns pair of (formatted_type_string, callback_name)
+        // Assumes DEF token already consumed
+        std::pair<std::string, std::string> parse_callback_signature();
+        
+        // Parse method parameters until RPAREN. Handles both regular params and def callbacks.
+        std::vector<FunctionDef::Param> parse_method_params();
 
         std::unique_ptr<Expression> parse_expression();
         std::unique_ptr<Expression> parse_expression_no_gt();  // Parse expression without > as comparison

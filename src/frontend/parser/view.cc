@@ -543,23 +543,87 @@ std::unique_ptr<ViewIfStatement> Parser::parse_view_if()
     viewIf->condition = parse_expression_no_gt();
     expect(TokenType::GT, "Expected '>'");
 
+    // Helper lambdas for termination checks
+    auto is_if_terminator = [this](bool check_else) {
+        if (current().type != TokenType::LT) return false;
+        // </if>
+        if (peek().type == TokenType::SLASH && peek(2).type == TokenType::IF) return true;
+        // <else>
+        if (check_else && peek().type == TokenType::ELSE) return true;
+        return false;
+    };
+    
+    auto is_else_terminator = [this]() {
+        return current().type == TokenType::LT && 
+               peek().type == TokenType::SLASH && 
+               peek(2).type == TokenType::ELSE;
+    };
+
     // Parse then children until we hit </if> or <else>
-    while (current().type != TokenType::END_OF_FILE)
+    // Support text nodes, expressions {}, and elements <>
+    Token last_non_text_token = tokens[pos - 1];  // The '>' we just consumed
+    while (current().type != TokenType::END_OF_FILE && !is_if_terminator(true))
     {
         if (current().type == TokenType::LT)
         {
-            if (peek().type == TokenType::SLASH && peek(2).type == TokenType::IF)
-            {
-                // </if> - end of if block
-                break;
-            }
-            if (peek().type == TokenType::ELSE)
-            {
-                // <else> block
-                break;
-            }
+            // Element: <if>, <for>, or regular HTML
+            viewIf->then_children.push_back(parse_view_node());
+            last_non_text_token = tokens[pos - 1];
         }
-        viewIf->then_children.push_back(parse_view_node());
+        else if (current().type == TokenType::LBRACE)
+        {
+            // Expression: {expr}
+            advance();
+            viewIf->then_children.push_back(parse_expression());
+            expect(TokenType::RBRACE, "Expected '}'");
+            last_non_text_token = tokens[pos - 1];
+        }
+        else
+        {
+            // Text content - collect tokens until <, {, or EOF
+            std::string text;
+            bool first = true;
+            Token prev_token = current();
+            
+            // Check for leading whitespace
+            int last_len = last_non_text_token.value.length();
+            if (last_non_text_token.type == TokenType::STRING_LITERAL) last_len += 2;
+            if (last_non_text_token.line != current().line || 
+                last_non_text_token.column + last_len != current().column) {
+                text += " ";
+            }
+            
+            while (current().type != TokenType::LT && current().type != TokenType::LBRACE &&
+                   current().type != TokenType::END_OF_FILE)
+            {
+                if (!first) {
+                    int prev_len = prev_token.value.length();
+                    if (prev_token.type == TokenType::STRING_LITERAL) prev_len += 2;
+                    if (prev_token.line != current().line || 
+                        prev_token.column + prev_len != current().column) {
+                        text += " ";
+                    }
+                }
+                text += current().value;
+                prev_token = current();
+                advance();
+                first = false;
+            }
+            
+            if (!text.empty()) {
+                // Check for trailing whitespace
+                if (current().type != TokenType::END_OF_FILE) {
+                    int prev_len = prev_token.value.length();
+                    if (prev_token.type == TokenType::STRING_LITERAL) prev_len += 2;
+                    if (prev_token.line != current().line || 
+                        prev_token.column + prev_len != current().column) {
+                        text += " ";
+                    }
+                }
+                viewIf->then_children.push_back(std::make_unique<TextNode>(text));
+            }
+            last_non_text_token = prev_token;
+        }
     }
 
     // Check for <else>
@@ -570,13 +634,68 @@ std::unique_ptr<ViewIfStatement> Parser::parse_view_if()
         expect(TokenType::GT, "Expected '>'");
 
         // Parse else children until </else>
-        while (current().type != TokenType::END_OF_FILE)
+        // Support text nodes, expressions {}, and elements <>
+        last_non_text_token = tokens[pos - 1];  // The '>' we just consumed
+        while (current().type != TokenType::END_OF_FILE && !is_else_terminator())
         {
-            if (current().type == TokenType::LT && peek().type == TokenType::SLASH && peek(2).type == TokenType::ELSE)
+            if (current().type == TokenType::LT)
             {
-                break;
+                // Element: <if>, <for>, or regular HTML
+                viewIf->else_children.push_back(parse_view_node());
+                last_non_text_token = tokens[pos - 1];
             }
-            viewIf->else_children.push_back(parse_view_node());
+            else if (current().type == TokenType::LBRACE)
+            {
+                // Expression: {expr}
+                advance();
+                viewIf->else_children.push_back(parse_expression());
+                expect(TokenType::RBRACE, "Expected '}'");
+                last_non_text_token = tokens[pos - 1];
+            }
+            else
+            {
+                // Text content
+                std::string text;
+                bool first = true;
+                Token prev_token = current();
+                
+                int last_len = last_non_text_token.value.length();
+                if (last_non_text_token.type == TokenType::STRING_LITERAL) last_len += 2;
+                if (last_non_text_token.line != current().line || 
+                    last_non_text_token.column + last_len != current().column) {
+                    text += " ";
+                }
+                
+                while (current().type != TokenType::LT && current().type != TokenType::LBRACE &&
+                       current().type != TokenType::END_OF_FILE)
+                {
+                    if (!first) {
+                        int prev_len = prev_token.value.length();
+                        if (prev_token.type == TokenType::STRING_LITERAL) prev_len += 2;
+                        if (prev_token.line != current().line || 
+                            prev_token.column + prev_len != current().column) {
+                            text += " ";
+                        }
+                    }
+                    text += current().value;
+                    prev_token = current();
+                    advance();
+                    first = false;
+                }
+                
+                if (!text.empty()) {
+                    if (current().type != TokenType::END_OF_FILE) {
+                        int prev_len = prev_token.value.length();
+                        if (prev_token.type == TokenType::STRING_LITERAL) prev_len += 2;
+                        if (prev_token.line != current().line || 
+                            prev_token.column + prev_len != current().column) {
+                            text += " ";
+                        }
+                    }
+                    viewIf->else_children.push_back(std::make_unique<TextNode>(text));
+                }
+                last_non_text_token = prev_token;
+            }
         }
 
         // </else>
