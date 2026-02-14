@@ -3,9 +3,9 @@
 // Import this file to access all exported components:
 //
 //   import "__PROJECT_NAME__/mod.coi";
-//   <__PROJECT_NAME__::Button label="Click" />
+//   <__MODULE_NAME__::Button label="Click" />
 
-module __PROJECT_NAME__;
+module __MODULE_NAME__;
 
 // Re-export UI components
 pub import "src/ui/Button.coi";

@@ -1,4 +1,4 @@
-module __PROJECT_NAME__;
+module __MODULE_NAME__;
 
 // API client for making HTTP requests
 // Customize this for your backend integration

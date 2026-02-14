@@ -1,4 +1,4 @@
-module __PROJECT_NAME__;
+module __MODULE_NAME__;
 
 // A reusable button component
 pub component Button(string label, string variant = "primary") {
