@@ -766,6 +766,19 @@ void validate_types(const std::vector<Component> &components,
     std::set<std::string> component_names;
     std::map<std::string, const Component*> component_map;
     for (const auto &c : components) {
+        if (DefSchema::instance().is_handle(c.name))
+        {
+            std::cerr << "Error: Component name '" << c.name
+                      << "' conflicts with built-in handle type from defs. "
+                      << "Rename the component to avoid collisions with standard library types.";
+            if (c.line > 0)
+            {
+                std::cerr << " (line " << c.line << ")";
+            }
+            std::cerr << std::endl;
+            exit(1);
+        }
+
         component_names.insert(c.name);
         component_map[c.name] = &c;
     }

@@ -57,6 +57,8 @@ struct ComponentTypeContext {
     std::set<std::string> local_data_types;    // Data types defined in this component
     std::set<std::string> local_enum_types;    // Enum types defined in this component
     std::map<std::string, int> method_param_counts;  // Method name -> param count
+    std::map<std::string, std::string> component_symbol_types; // Component params/state name -> type
+    std::map<std::string, std::string> method_symbol_types;    // Current method params/locals name -> type
     
     static ComponentTypeContext& instance() {
         static ComponentTypeContext ctx;
@@ -70,6 +72,8 @@ struct ComponentTypeContext {
         local_data_types = data_types;
         local_enum_types = enum_types;
         method_param_counts.clear();
+        component_symbol_types.clear();
+        method_symbol_types.clear();
     }
     
     void clear() {
@@ -77,6 +81,36 @@ struct ComponentTypeContext {
         local_data_types.clear();
         local_enum_types.clear();
         method_param_counts.clear();
+        component_symbol_types.clear();
+        method_symbol_types.clear();
+    }
+
+    void set_component_symbol_type(const std::string& name, const std::string& type) {
+        component_symbol_types[name] = type;
+    }
+
+    void begin_method_scope() {
+        method_symbol_types.clear();
+    }
+
+    void end_method_scope() {
+        method_symbol_types.clear();
+    }
+
+    void set_method_symbol_type(const std::string& name, const std::string& type) {
+        method_symbol_types[name] = type;
+    }
+
+    std::string get_symbol_type(const std::string& name) const {
+        auto method_it = method_symbol_types.find(name);
+        if (method_it != method_symbol_types.end()) {
+            return method_it->second;
+        }
+        auto component_it = component_symbol_types.find(name);
+        if (component_it != component_symbol_types.end()) {
+            return component_it->second;
+        }
+        return "";
     }
     
     // Register a method's param count

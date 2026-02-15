@@ -548,21 +548,33 @@ std::string FunctionCall::to_webcc() {
             // Static call: Type.method() - look up directly
             map_method = DefSchema::instance().lookup_method(obj, method_name);
         } else {
-            // Instance call: obj.method() - need to find type
-            // Try common handle types that have instance methods
-            for (const auto& [type_name, type_def] : DefSchema::instance().types()) {
-                if (!type_def.is_builtin && !type_def.methods.empty()) {
-                    for (const auto& m : type_def.methods) {
-                        if (m.name == method_name && !m.is_shared) {
-                            if (m.mapping_type == MappingType::Map) {
-                                map_method = &m;
-                                pass_obj = true;
-                                obj_arg = obj;
-                                break;
-                            }
-                        }
+            // Instance call: obj.method() - resolve using known symbol type only.
+            // This avoids false-positive remapping based solely on method name
+            // (e.g., auth.configure() incorrectly mapping to wgpu::configure).
+            std::string obj_type = ComponentTypeContext::instance().get_symbol_type(obj);
+            if (!obj_type.empty()) {
+                // Array and fixed-size array variables do not have @map instance methods.
+                if (obj_type.ends_with("[]")) {
+                    obj_type.clear();
+                } else {
+                    size_t bracket_pos = obj_type.rfind('[');
+                    if (bracket_pos != std::string::npos && obj_type.back() == ']') {
+                        obj_type = obj_type.substr(0, bracket_pos);
                     }
-                    if (map_method) break;
+                }
+
+                if (!obj_type.empty()) {
+                    // Resolve aliases/local component types before lookup.
+                    obj_type = ComponentTypeContext::instance().resolve(obj_type);
+                    obj_type = DefSchema::instance().resolve_alias(obj_type);
+
+                    map_method = DefSchema::instance().lookup_method(obj_type, method_name, args.size());
+                    if (map_method && !map_method->is_shared && map_method->mapping_type == MappingType::Map) {
+                        pass_obj = true;
+                        obj_arg = obj;
+                    } else {
+                        map_method = nullptr;
+                    }
                 }
             }
         }

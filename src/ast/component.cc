@@ -459,6 +459,12 @@ std::string Component::to_webcc(CompilerSession &session)
         {
             g_ref_props.insert(param->name);
         }
+        ComponentTypeContext::instance().set_component_symbol_type(param->name, param->type);
+    }
+
+    for (auto &var : state)
+    {
+        ComponentTypeContext::instance().set_component_symbol_type(var->name, var->type);
     }
 
     // Collect child components
