@@ -1198,12 +1198,38 @@ std::string Component::to_webcc(CompilerSession &session)
         std::set<int> input_els = get_elements_for_event(event_handlers, "input");
         std::set<int> change_els = get_elements_for_event(event_handlers, "change");
         std::set<int> keydown_els = get_elements_for_event(event_handlers, "keydown");
-        std::set<int> else_removed_ids(region.else_element_ids.begin(), region.else_element_ids.end());
-        std::set<int> then_removed_ids(region.then_element_ids.begin(), region.then_element_ids.end());
+
+        // Build sets of element IDs owned by nested ifs (to exclude from unconditional removal)
+        std::set<int> else_nested_if_els;
+        for (int nested_if_id : region.else_if_ids)
+        {
+            for (const auto &nested_region : if_regions)
+            {
+                if (nested_region.if_id == nested_if_id)
+                {
+                    else_nested_if_els.insert(nested_region.then_element_ids.begin(), nested_region.then_element_ids.end());
+                    else_nested_if_els.insert(nested_region.else_element_ids.begin(), nested_region.else_element_ids.end());
+                }
+            }
+        }
+        std::set<int> then_nested_if_els;
+        for (int nested_if_id : region.then_if_ids)
+        {
+            for (const auto &nested_region : if_regions)
+            {
+                if (nested_region.if_id == nested_if_id)
+                {
+                    then_nested_if_els.insert(nested_region.then_element_ids.begin(), nested_region.then_element_ids.end());
+                    then_nested_if_els.insert(nested_region.else_element_ids.begin(), nested_region.else_element_ids.end());
+                }
+            }
+        }
 
         ss << "        if (new_state) {\n";
         for (int el_id : region.else_element_ids)
         {
+            if (else_nested_if_els.count(el_id))
+                continue; // Handled by nested-if conditional removal below
             if (click_els.count(el_id))
                 ss << "            g_dispatcher.remove(el[" << el_id << "]);\n";
             if (input_els.count(el_id))
@@ -1215,6 +1241,8 @@ std::string Component::to_webcc(CompilerSession &session)
         }
         for (int el_id : region.else_element_ids)
         {
+            if (else_nested_if_els.count(el_id))
+                continue; // Handled by nested-if conditional removal below
             ss << "            webcc::dom::remove_element(el[" << el_id << "]);\n";
         }
         for (const auto &[comp_name, inst_id] : region.else_components)
@@ -1262,8 +1290,6 @@ std::string Component::to_webcc(CompilerSession &session)
                 {
                     for (int el_id : nested_region.then_element_ids)
                     {
-                        if (else_removed_ids.count(el_id))
-                            continue;
                         if (click_els.count(el_id))
                             ss << "            if (_if_" << nested_if_id << "_state) g_dispatcher.remove(el[" << el_id << "]);\n";
                         if (input_els.count(el_id))
@@ -1276,8 +1302,6 @@ std::string Component::to_webcc(CompilerSession &session)
                     }
                     for (int el_id : nested_region.else_element_ids)
                     {
-                        if (else_removed_ids.count(el_id))
-                            continue;
                         if (click_els.count(el_id))
                             ss << "            if (!_if_" << nested_if_id << "_state) g_dispatcher.remove(el[" << el_id << "]);\n";
                         if (input_els.count(el_id))
@@ -1296,6 +1320,8 @@ std::string Component::to_webcc(CompilerSession &session)
         ss << "        } else {\n";
         for (int el_id : region.then_element_ids)
         {
+            if (then_nested_if_els.count(el_id))
+                continue; // Handled by nested-if conditional removal below
             if (click_els.count(el_id))
                 ss << "            g_dispatcher.remove(el[" << el_id << "]);\n";
             if (input_els.count(el_id))
@@ -1307,6 +1333,8 @@ std::string Component::to_webcc(CompilerSession &session)
         }
         for (int el_id : region.then_element_ids)
         {
+            if (then_nested_if_els.count(el_id))
+                continue; // Handled by nested-if conditional removal below
             ss << "            webcc::dom::remove_element(el[" << el_id << "]);\n";
         }
         for (const auto &[comp_name, inst_id] : region.then_components)
@@ -1354,8 +1382,6 @@ std::string Component::to_webcc(CompilerSession &session)
                 {
                     for (int el_id : nested_region.then_element_ids)
                     {
-                        if (then_removed_ids.count(el_id))
-                            continue;
                         if (click_els.count(el_id))
                             ss << "            if (_if_" << nested_if_id << "_state) g_dispatcher.remove(el[" << el_id << "]);\n";
                         if (input_els.count(el_id))
@@ -1368,8 +1394,6 @@ std::string Component::to_webcc(CompilerSession &session)
                     }
                     for (int el_id : nested_region.else_element_ids)
                     {
-                        if (then_removed_ids.count(el_id))
-                            continue;
                         if (click_els.count(el_id))
                             ss << "            if (!_if_" << nested_if_id << "_state) g_dispatcher.remove(el[" << el_id << "]);\n";
                         if (input_els.count(el_id))
