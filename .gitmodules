@@ -1,3 +1,4 @@
 [submodule "deps/webcc"]
 	path = deps/webcc
 	url = https://github.com/io-eric/webcc
+	branch = main
