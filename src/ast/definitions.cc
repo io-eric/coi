@@ -2,6 +2,8 @@
 #include "node.h"
 
 std::string FunctionDef::to_webcc(const std::string& injected_code) {
+    ComponentTypeContext::instance().begin_method_scope();
+
     std::string result = convert_type(return_type) + " " + name + "(";
     
     for(size_t i = 0; i < params.size(); i++){
@@ -9,6 +11,8 @@ std::string FunctionDef::to_webcc(const std::string& injected_code) {
         result += (params[i].is_mutable ? "" : "const ") + convert_type(params[i].type);
         if(params[i].is_reference) result += "&";
         result += " " + params[i].name;
+
+        ComponentTypeContext::instance().set_method_symbol_type(params[i].name, params[i].type);
     }
     
     result += ") {\n";
@@ -19,6 +23,8 @@ std::string FunctionDef::to_webcc(const std::string& injected_code) {
         result += injected_code;
     }
     result += "}\n";
+
+    ComponentTypeContext::instance().end_method_scope();
     return result;
 }
 

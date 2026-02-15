@@ -23,6 +23,8 @@ extern std::map<std::string, ComponentArrayLoopInfo> g_component_array_loops;
 
 std::string VarDeclaration::to_webcc()
 {
+    ComponentTypeContext::instance().set_method_symbol_type(name, type);
+
     // Special handling for ArrayRepeatLiteral
     if (auto repeat = dynamic_cast<ArrayRepeatLiteral *>(initializer.get()))
     {
