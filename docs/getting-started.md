@@ -84,19 +84,19 @@ my-app/
 └── README.md
 ```
 
-#### Creating a Library
+#### Creating a Package
 
-To create a reusable component library instead of an app:
+To create a reusable component package instead of an app:
 
 ```bash
-coi init my-lib --lib
+coi init my-pkg --pkg
 ```
 
-This creates a library structure with `pub import` for re-exporting components:
+This creates a package structure with `pub import` for re-exporting components:
 
 ```
-my-lib/
-├── Lib.coi              # Library entry point (pub imports)
+my-pkg/
+├── Mod.coi              # Package entry point (pub imports)
 ├── registry-entry.json  # Registry metadata file for publishing
 ├── src/
 │   ├── ui/
@@ -106,23 +106,24 @@ my-lib/
 └── README.md
 ```
 
-Consumers import your library's `Lib.coi` to access all exported components:
+Consumers import your package's `Mod.coi` to access all exported components:
 
 ```tsx
-import "my-lib/Lib.coi";
+import "my-pkg/Mod.coi";
 
 component App {
     view {
-        <MyLib::Button label="Click" />
+        <MyPkg::Button label="Click" />
     }
 }
+```
 ```
 
 See [Re-exporting with pub import](language-guide.md#re-exporting-with-pub-import) for details.
 
 #### Registry File (`registry-entry.json`)
 
-Libraries created with `coi init my-lib --lib` include a `registry-entry.json` file.
+Packages created with `coi init my-pkg --pkg` include a `registry-entry.json` file.
 
 Use this file when publishing your library to the community library index:
 

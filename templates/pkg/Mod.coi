@@ -2,7 +2,7 @@
 //
 // Import this file to access all exported components:
 //
-//   import "__PROJECT_NAME__/Lib.coi";
+//   import "__PROJECT_NAME__/Mod.coi";
 //   <__MODULE_NAME__::Button label="Click" />
 
 module __MODULE_NAME__;

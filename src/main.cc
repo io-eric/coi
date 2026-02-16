@@ -49,13 +49,13 @@ int main(int argc, char **argv)
         std::string project_name;
         TemplateType template_type = TemplateType::App;
         
-        // Parse init arguments (name and --lib can be in any order)
+        // Parse init arguments (name and --pkg can be in any order)
         for (int i = 2; i < argc; ++i)
         {
             std::string arg = argv[i];
-            if (arg == "--lib")
+            if (arg == "--pkg")
             {
-                template_type = TemplateType::Lib;
+                template_type = TemplateType::Pkg;
             }
             else if (arg[0] != '-' && project_name.empty())
             {

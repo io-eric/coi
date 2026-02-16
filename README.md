@@ -162,7 +162,7 @@ Open `http://localhost:8000` in your browser.
 | Command | Description |
 |---------|-------------|
 | `coi init [name]` | Create a new app project |
-| `coi init [name] --lib` | Create a new library project |
+| `coi init [name] --pkg` | Create a new package |
 | `coi build` | Build the project |
 | `coi dev` | Build and start dev server (with hot reload) |
 | `coi dev --no-watch` | Dev server without hot reload |

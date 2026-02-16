@@ -10,7 +10,7 @@ Copy this package folder into your project and import it.
 
 ```tsx
 // Import the package (re-exports all public components)
-import "__PROJECT_NAME__/Lib.coi";
+import "__PROJECT_NAME__/Mod.coi";
 
 component App {
     view {
@@ -23,7 +23,7 @@ component App {
 
 ```
 __PROJECT_NAME__/
-├── Lib.coi           # Package entry point (pub imports)
+├── Mod.coi           # Package entry point (pub imports)
 ├── registry-entry.json # Ready-to-submit registry metadata template
 ├── src/
 │   ├── ui/           # UI components
