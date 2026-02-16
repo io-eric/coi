@@ -109,14 +109,13 @@ my-pkg/
 Consumers import your package's `Mod.coi` to access all exported components:
 
 ```tsx
-import "my-pkg/Mod.coi";
+import "@my-pkg";
 
 component App {
     view {
         <MyPkg::Button label="Click" />
     }
 }
-```
 ```
 
 See [Re-exporting with pub import](language-guide.md#re-exporting-with-pub-import) for details.
@@ -212,6 +211,45 @@ coi App.coi --out ./dist --keep-cc
 ```
 
 This also generates `dist/App.cc` so you can inspect the generated C++ code.
+
+### Package Management
+
+Coi has a built-in package manager for adding community packages from the [registry](https://github.com/coi-lang/registry).
+
+#### Adding a Package
+
+```bash
+coi add supabase
+```
+
+This:
+1. Fetches the package info from the registry
+2. Downloads it to `.coi/pkgs/supabase/`
+3. Creates/updates `coi.lock` to track the version
+
+Then import it in your code:
+
+```tsx
+import "@supabase";
+```
+
+#### Installing from Lock File
+
+When cloning a project or after pulling updates, install all packages from `coi.lock`:
+
+```bash
+coi install
+```
+
+#### Other Commands
+
+| Command | Description |
+|---------|-------------|
+| `coi remove <package>` | Remove a package |
+| `coi update [package]` | Update one or all packages |
+| `coi list` | List installed packages |
+
+The `coi.lock` file should be committed to version control so collaborators get the same package versions.
 
 ## Your First Component
 

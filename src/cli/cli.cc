@@ -459,7 +459,12 @@ void print_help(const char *program_name)
     std::cout << "  " << BOLD << "Usage:" << RESET << std::endl;
     std::cout << "    " << CYAN << program_name << " init" << RESET << " [name] [--pkg]      Create a new project" << std::endl;
     std::cout << "    " << CYAN << program_name << " build" << RESET << "                    Build the project" << std::endl;
-    std::cout << "    " << CYAN << program_name << " dev" << RESET << " [-h]                 Build and start dev server" << std::endl;
+    std::cout << "    " << CYAN << program_name << " dev" << RESET << " [--no-watch]         Build and start dev server" << std::endl;
+    std::cout << "    " << CYAN << program_name << " add" << RESET << " <package>            Add a package from registry" << std::endl;
+    std::cout << "    " << CYAN << program_name << " install" << RESET << "                  Install packages from coi.lock" << std::endl;
+    std::cout << "    " << CYAN << program_name << " remove" << RESET << " <package>         Remove a package" << std::endl;
+    std::cout << "    " << CYAN << program_name << " update" << RESET << " [package]         Update package(s)" << std::endl;
+    std::cout << "    " << CYAN << program_name << " list" << RESET << "                     List installed packages" << std::endl;
     std::cout << "    " << CYAN << program_name << " version" << RESET << "                  Show version" << std::endl;
     std::cout << "    " << CYAN << program_name << RESET << " <file.coi> [options]    Compile a .coi file" << std::endl;
     std::cout << std::endl;
@@ -473,5 +478,6 @@ void print_help(const char *program_name)
     std::cout << "  " << BOLD << "Examples:" << RESET << std::endl;
     std::cout << "    " << DIM << "$" << RESET << " coi init my-app" << std::endl;
     std::cout << "    " << DIM << "$" << RESET << " cd my-app && coi dev" << std::endl;
+    std::cout << "    " << DIM << "$" << RESET << " coi add supabase" << std::endl;
     std::cout << std::endl;
 }

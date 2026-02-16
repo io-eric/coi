@@ -5,6 +5,7 @@
 #include "analysis/type_checker.h"
 #include "cli/cli.h"
 #include "cli/error.h"
+#include "cli/package_manager.h"
 #include "analysis/include_detector.h"
 #include "analysis/feature_detector.h"
 #include "analysis/dependency_resolver.h"
@@ -116,6 +117,48 @@ int main(int argc, char **argv)
             }
         }
         return dev_project(keep_cc, cc_only, hot_reloading);
+    }
+
+    // Package management commands
+    if (first_arg == "add")
+    {
+        if (argc < 3)
+        {
+            std::cerr << colors::RED << "Error:" << colors::RESET << " Package name required" << std::endl;
+            std::cerr << "  Usage: coi add <package-name>" << std::endl;
+            return 1;
+        }
+        return add_package(argv[2]);
+    }
+
+    if (first_arg == "install")
+    {
+        return install_packages();
+    }
+
+    if (first_arg == "remove")
+    {
+        if (argc < 3)
+        {
+            std::cerr << colors::RED << "Error:" << colors::RESET << " Package name required" << std::endl;
+            std::cerr << "  Usage: coi remove <package-name>" << std::endl;
+            return 1;
+        }
+        return remove_package(argv[2]);
+    }
+
+    if (first_arg == "list")
+    {
+        return list_packages();
+    }
+
+    if (first_arg == "update")
+    {
+        if (argc >= 3)
+        {
+            return update_package(argv[2]);
+        }
+        return update_all_packages();
     }
 
     // From here on, we're doing actual compilation - load DefSchema
