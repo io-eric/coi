@@ -210,6 +210,45 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
         code += "        }()";
         return code;
     }
+
+    // FetchRequest.patch with callback arguments
+    if (intrinsic_name == "fetch_patch") {
+        if (args.size() < 2) return "";
+
+        std::string url = args[0].value->to_webcc();
+        std::string body = args[1].value->to_webcc();
+        std::string code = "[&]() {\n";
+        code += "            auto _req = webcc::fetch::patch(" + url + ", " + body + ");\n";
+
+        for (size_t i = 2; i < args.size(); i++) {
+            const auto& arg = args[i];
+            // Enforce & prefix for callback arguments
+            if (!arg.is_reference) {
+                ErrorHandler::compiler_error("Callback argument must use '&' prefix (e.g., &" + arg.value->to_webcc() + ")");
+            }
+            std::string callback = arg.value->to_webcc();
+            std::string event_name = !arg.name.empty() ? arg.name : (i == 2 ? "onSuccess" : "onError");
+            int param_count = ComponentTypeContext::instance().get_method_param_count(callback);
+
+            if (event_name == "onSuccess") {
+                if (param_count >= 1) {
+                    code += "            g_fetch_success_dispatcher.set(_req, [this](const webcc::string& data) { this->" + callback + "(data); });\n";
+                } else {
+                    code += "            g_fetch_success_dispatcher.set(_req, [this](const webcc::string&) { this->" + callback + "(); });\n";
+                }
+            } else if (event_name == "onError") {
+                if (param_count >= 1) {
+                    code += "            g_fetch_error_dispatcher.set(_req, [this](const webcc::string& error) { this->" + callback + "(error); });\n";
+                } else {
+                    code += "            g_fetch_error_dispatcher.set(_req, [this](const webcc::string&) { this->" + callback + "(); });\n";
+                }
+            }
+        }
+
+        code += "            return _req;\n";
+        code += "        }()";
+        return code;
+    }
     
     // Json.parse - supports both positional and named callback arguments
     if (intrinsic_name == "json_parse") {
