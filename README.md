@@ -157,6 +157,9 @@ coi dev
 
 Open `http://localhost:8000` in your browser.
 
+> [!NOTE]
+> Coi has a built-in package manager for installing community packages from the [Coi Registry](https://github.com/coi-lang/registry). See [Package Manager](docs/package-manager.md).
+
 ### CLI Commands
 
 | Command | Description |
@@ -208,6 +211,7 @@ my-app/
 - [View Syntax](docs/view-syntax.md): JSX-like templates, `<if>`, `<for>`, events
 - [Styling](docs/styling.md): Scoped and global CSS
 - [Platform APIs](docs/api-reference.md): Canvas, Storage, Audio, Fetch, and more
+- [Package Manager](docs/package-manager.md): Registry packages, lockfile workflow, add/install/update/remove
 - [Editor Support](docs/tooling.md): VS Code, Sublime Text, and Zed extensions
 
 ## Community

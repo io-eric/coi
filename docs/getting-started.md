@@ -216,6 +216,9 @@ This also generates `dist/App.cc` so you can inspect the generated C++ code.
 
 Coi has a built-in package manager for adding community packages from the [registry](https://github.com/coi-lang/registry).
 
+> [!NOTE]
+> For the full package workflow (lockfile, imports, updates, and publishing), see [Package Manager](package-manager.md).
+
 #### Adding a Package
 
 ```bash
