@@ -13,7 +13,7 @@ Coi includes a built-in package manager for installing community packages from t
 
 | Command | Description |
 |---------|-------------|
-| `coi add <package>` | Add a package from the registry |
+| `coi add <package> [version]` | Add latest compatible release or a specific version |
 | `coi install` | Install all packages listed in `coi.lock` |
 | `coi remove <package>` | Remove a package |
 | `coi update [package]` | Update one package or all packages |
@@ -23,10 +23,12 @@ Coi includes a built-in package manager for installing community packages from t
 
 ```bash
 coi add supabase
+# or pin a specific release
+coi add supabase 0.1.0
 ```
 
 This command:
-1. Fetches package metadata from the registry
+1. Resolves a release from the registry (latest release with compatible `compiler-drop.min`, unless a specific version is provided)
 2. Downloads the package into `.coi/pkgs/<package>/`
 3. Creates or updates `coi.lock`
 

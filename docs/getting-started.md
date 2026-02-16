@@ -223,10 +223,12 @@ Coi has a built-in package manager for adding community packages from the [regis
 
 ```bash
 coi add supabase
+# or pin a specific release
+coi add supabase 0.1.0
 ```
 
 This:
-1. Fetches the package info from the registry
+1. Resolves a release from the registry (latest release with `compiler-drop.min` compatible with your current compiler drop, unless a specific version is provided)
 2. Downloads it to `.coi/pkgs/supabase/`
 3. Creates/updates `coi.lock` to track the version
 

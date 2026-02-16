@@ -169,7 +169,7 @@ Open `http://localhost:8000` in your browser.
 | `coi build` | Build the project |
 | `coi dev` | Build and start dev server (with hot reload) |
 | `coi dev --no-watch` | Dev server without hot reload |
-| `coi add <package>` | Add a package from registry |
+| `coi add <package> [version]` | Add latest compatible release or a specific version |
 | `coi install` | Install packages from coi.lock |
 | `coi remove <package>` | Remove a package |
 | `coi update [package]` | Update package(s) to latest |
