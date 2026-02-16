@@ -97,6 +97,7 @@ This creates a library structure with `pub import` for re-exporting components:
 ```
 my-lib/
 ├── Lib.coi              # Library entry point (pub imports)
+├── registry-entry.json  # Registry metadata file for publishing
 ├── src/
 │   ├── ui/
 │   │   └── Button.coi   # UI components
@@ -118,6 +119,21 @@ component App {
 ```
 
 See [Re-exporting with pub import](language-guide.md#re-exporting-with-pub-import) for details.
+
+#### Registry File (`registry-entry.json`)
+
+Libraries created with `coi init my-lib --lib` include a `registry-entry.json` file.
+
+Use this file when publishing your library to the community library index:
+
+1. Fill in repository/description/keywords
+2. Set `compiler-drop.min` (optimistic compatibility)
+3. Set `compiler-drop.tested-on` (latest compiler drop you verified)
+4. Copy it into the registry repo under `libraries/{your-lib-name}.json`
+
+Registry docs and validation rules:
+
+- [Coi Library Registry README](https://github.com/coi-lang/registry/blob/main/README.md)
 
 If no name is provided, you'll be prompted to enter one:
 

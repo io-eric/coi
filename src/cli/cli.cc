@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <unistd.h>
 #include <limits.h>
+#include <chrono>
+#include <iomanip>
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -245,9 +247,20 @@ int init_project(const std::string &project_name_arg, TemplateType template_type
 
     // Placeholder variables
     std::string module_name = to_pascal_case(project_name);
+    
+    // Get today's date as YYYY-MM-DD
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now = *std::localtime(&time_t_now);
+    std::ostringstream date_stream;
+    date_stream << std::put_time(&tm_now, "%Y-%m-%d");
+    std::string today_date = date_stream.str();
+    
     std::map<std::string, std::string> vars = {
         {"PROJECT_NAME", project_name},
-        {"MODULE_NAME", module_name}};
+        {"MODULE_NAME", module_name},
+        {"COI_DROP", GIT_COMMIT_COUNT},
+        {"TODAY_DATE", today_date}};
 
     // Copy entire template directory recursively
     for (const auto &entry : fs::recursive_directory_iterator(tpl_dir))
@@ -266,7 +279,7 @@ int init_project(const std::string &project_name_arg, TemplateType template_type
 
             // Check if file needs placeholder replacement
             std::string ext = entry.path().extension().string();
-            if (ext == ".coi" || ext == ".md" || ext == ".sh")
+            if (ext == ".coi" || ext == ".md" || ext == ".sh" || ext == ".json")
             {
                 if (!copy_template_file(entry.path(), dest_path, vars))
                 {

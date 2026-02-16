@@ -24,6 +24,7 @@ component App {
 ```
 __PROJECT_NAME__/
 ├── Lib.coi           # Library entry point (pub imports)
+├── registry-entry.json # Ready-to-submit registry metadata template
 ├── src/
 │   ├── ui/           # UI components
 │   │   └── Button.coi
@@ -50,6 +51,25 @@ cd test-app
 # Copy your library into the project and import it
 coi dev
 ```
+
+## Publish to Registry
+
+This template includes `registry-entry.json` — your library's registry file.
+
+Before submitting:
+
+1. Replace `YOUR_GITHUB_USERNAME` with your GitHub username or org in `repository`
+2. Fill in `description` and `keywords`
+3. Set `compiler-drop.min` (optimistic) and `compiler-drop.tested-on` (verified)
+4. Keep your GitHub repo license as MIT (registry CI enforces this)
+
+To submit:
+
+1. Copy `registry-entry.json` to the registry repo as `libraries/__PROJECT_NAME__.json`
+2. (Optional) place it in a shard directory, e.g. `libraries/ab/__PROJECT_NAME__.json`
+3. Open a PR
+
+When releasing new versions, add entries to the `releases` array in your library file.
 
 ## Learn More
 
