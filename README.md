@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/images/logo.png" alt="Coi Logo" width="200"/>
+  <img src="docs/images/logo.svg" alt="Coi Logo" width="200"/>
 
 # Coi
 
