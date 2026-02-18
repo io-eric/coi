@@ -68,13 +68,13 @@ import "ui/Button.coi";
 import "utils/Math.coi";
 
 // Package imports (from .coi/pkgs/)
-import "@supabase";           // resolves to .coi/pkgs/supabase/Mod.coi
-import "@ui-kit/Button";      // resolves to .coi/pkgs/ui-kit/Button.coi
+import "@coi/supabase";       // resolves to .coi/pkgs/coi-lang/supabase/Mod.coi
+import "@acme/utils/Button.coi";       // resolves to .coi/pkgs/acme/utils/Button.coi
 ```
 
 **Key Rules:**
 1. **Explicit Imports:** You must import every file you use directly.
-2. **Package Imports:** Paths starting with `@` resolve to `.coi/pkgs/`. Just `@pkg` imports `Mod.coi` by default.
+2. **Package Imports:** Paths starting with `@` resolve to `.coi/pkgs/`. Just `@<scope>/<package-name>/` imports `Mod.coi` by default.
 3. **Accessing Components:**
    - **Same Module:** Access components directly by name (e.g., `<Button />`).
    - **Different Module:** Access via module prefix (e.g., `<TurboUI::Button />`).
@@ -96,7 +96,7 @@ Now consumers can import just the package to access all components:
 
 ```tsx
 // App.coi
-import "@my-pkg";  // imports Mod.coi by default
+import "@your-org/my-pkg";  // imports Mod.coi by default
 
 component App {
     view {

@@ -10,7 +10,7 @@ Copy this package folder into your project's `.coi/pkgs/` directory.
 
 ```tsx
 // Import the package (re-exports all public components)
-import "@__PROJECT_NAME__";
+import "@scope/__PROJECT_NAME__";
 
 component App {
     view {
@@ -49,7 +49,7 @@ To test components, create a test app that imports this package:
 coi init test-app
 cd test-app
 mkdir -p .coi/pkgs
-# Copy your package into .coi/pkgs/ and import with @package-name
+# Copy your package into .coi/pkgs/ and import with @scope/package-name
 coi dev
 ```
 

@@ -2,7 +2,7 @@
 //
 // Import this package to access all exported components:
 //
-//   import "@__PROJECT_NAME__";
+//   import "@your-org/__PROJECT_NAME__";
 //   <__MODULE_NAME__::Button label="Click" />
 
 module __MODULE_NAME__;

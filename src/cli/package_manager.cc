@@ -14,6 +14,51 @@ using namespace colors;
 // Registry URL for fetching package info
 static const std::string REGISTRY_BASE_URL = "https://raw.githubusercontent.com/coi-lang/registry/main/packages/";
 
+static bool normalize_package_name(const std::string& raw_input, std::string& normalized, std::string& error) {
+    if (raw_input.empty()) {
+        error = "Package name is required";
+        return false;
+    }
+
+    std::string name = raw_input;
+    if (!name.empty() && name[0] == '@') {
+        name = name.substr(1);
+    }
+
+    if (name.empty()) {
+        error = "Package name is required";
+        return false;
+    }
+
+    if (name.front() == '/' || name.back() == '/') {
+        error = "Package names cannot start or end with '/'";
+        return false;
+    }
+
+    size_t slash_pos = name.find('/');
+    if (slash_pos == std::string::npos) {
+        error = "Package names must include a scope: @scope/name (e.g. @coi/supabase)";
+        return false;
+    }
+
+    if (name.find('/', slash_pos + 1) != std::string::npos) {
+        error = "Package names must use exactly one '/': @scope/name";
+        return false;
+    }
+
+    std::string scope = name.substr(0, slash_pos);
+    std::string pkg = name.substr(slash_pos + 1);
+    std::regex segment_regex("^[a-z0-9][a-z0-9._-]{0,62}$");
+
+    if (!std::regex_match(scope, segment_regex) || !std::regex_match(pkg, segment_regex)) {
+        error = "scope and name must be lowercase and contain only letters, numbers, dots, hyphens, and underscores";
+        return false;
+    }
+
+    normalized = scope + "/" + pkg;
+    return true;
+}
+
 // Simple JSON value extraction (avoids external dependency)
 static std::string extract_json_string(const std::string& json, const std::string& key) {
     std::string search = "\"" + key + "\"";
@@ -356,6 +401,12 @@ bool fetch_package_info(const std::string& package_name, PackageInfo& package_in
         return false;
     }
 
+    if (package_info.name != package_name) {
+        std::cerr << RED << "Error:" << RESET << " Registry entry mismatch: requested '" << package_name
+                  << "' but received '" << package_info.name << "'" << std::endl;
+        return false;
+    }
+
     std::vector<std::string> release_objects = extract_release_objects(json);
     if (release_objects.empty()) {
         std::cerr << RED << "Error:" << RESET << " Package '" << package_name << "' has no releases in registry" << std::endl;
@@ -504,12 +555,13 @@ bool download_package(const PackageInfo& info, const fs::path& dest) {
 int add_package(const std::string& package_name, const std::string& version) {
     print_pkg_banner("add");
     std::cout << std::endl;
-    
-    // Validate package name
-    std::regex name_regex("^[a-z0-9][a-z0-9._-]*$");
-    if (!std::regex_match(package_name, name_regex)) {
+
+    std::string normalized_name;
+    std::string normalize_error;
+    if (!normalize_package_name(package_name, normalized_name, normalize_error)) {
         std::cerr << RED << "Error:" << RESET << " Invalid package name '" << package_name << "'" << std::endl;
-        std::cerr << "  Package names must be lowercase and contain only letters, numbers, dots, hyphens, and underscores." << std::endl;
+        std::cerr << "  " << normalize_error << std::endl;
+        std::cerr << "  Example: @coi/supabase or @acme/utils" << std::endl;
         return 1;
     }
     
@@ -517,8 +569,8 @@ int add_package(const std::string& package_name, const std::string& version) {
     
     // Fetch package info from registry
     PackageInfo info;
-    if (!fetch_package_info(package_name, info, version)) {
-        std::cerr << RED << "Error:" << RESET << " Could not resolve installable release for package '" << package_name << "'" << std::endl;
+    if (!fetch_package_info(normalized_name, info, version)) {
+        std::cerr << RED << "Error:" << RESET << " Could not resolve installable release for package '" << normalized_name << "'" << std::endl;
         return 1;
     }
     
@@ -527,11 +579,12 @@ int add_package(const std::string& package_name, const std::string& version) {
     // Determine paths
     fs::path project_root = fs::current_path();
     fs::path pkgs_dir = project_root / ".coi" / "pkgs";
-    fs::path pkg_dest = pkgs_dir / package_name;
+    fs::path pkg_dest = pkgs_dir / normalized_name;
     fs::path lock_path = project_root / "coi.lock";
     
     // Create .coi/pkgs directory if needed
     fs::create_directories(pkgs_dir);
+    fs::create_directories(pkg_dest.parent_path());
     
     // Download the package
     std::cout << "  " << DIM << "Downloading..." << RESET << std::endl;
@@ -548,17 +601,17 @@ int add_package(const std::string& package_name, const std::string& version) {
     entry.min_drop = info.min_drop;
     entry.commit = info.commit;
     entry.sha256 = info.sha256;
-    packages[package_name] = entry;
+    packages[normalized_name] = entry;
     
     if (!write_lock_file(lock_path, packages)) {
         return 1;
     }
     
     std::cout << std::endl;
-    std::cout << "  " << GREEN << "✓" << RESET << " Added " << BOLD << package_name << "@" << info.version << RESET << std::endl;
+    std::cout << "  " << GREEN << "✓" << RESET << " Added " << BOLD << normalized_name << "@" << info.version << RESET << std::endl;
     std::cout << std::endl;
     std::cout << "  " << DIM << "Import with:" << RESET << std::endl;
-    std::cout << "    " << CYAN << "import \"@" << package_name << "\";" << RESET << std::endl;
+    std::cout << "    " << CYAN << "import \"@" << normalized_name << "\";" << RESET << std::endl;
     std::cout << std::endl;
     
     return 0;
@@ -597,6 +650,7 @@ int install_packages() {
     
     for (const auto& [name, entry] : packages) {
         fs::path pkg_dest = pkgs_dir / name;
+        fs::create_directories(pkg_dest.parent_path());
         
         // Check if already installed
         if (fs::exists(pkg_dest / "Mod.coi")) {
@@ -664,37 +718,49 @@ int install_packages() {
 int remove_package(const std::string& package_name) {
     print_pkg_banner("remove");
     std::cout << std::endl;
+
+    std::string normalized_name;
+    std::string normalize_error;
+    if (!normalize_package_name(package_name, normalized_name, normalize_error)) {
+        std::cerr << RED << "Error:" << RESET << " Invalid package name '" << package_name << "'" << std::endl;
+        std::cerr << "  " << normalize_error << std::endl;
+        std::cerr << "  Example: @coi/supabase or @acme/utils" << std::endl;
+        return 1;
+    }
     
     fs::path project_root = fs::current_path();
     fs::path lock_path = project_root / "coi.lock";
-    fs::path pkg_dir = project_root / ".coi" / "pkgs" / package_name;
+    fs::path pkgs_root = project_root / ".coi" / "pkgs";
     
     // Read lock file
     auto packages = read_lock_file(lock_path);
+    std::string resolved_name = normalized_name;
+
+    fs::path pkg_dir = pkgs_root / resolved_name;
     
-    bool in_lock = packages.find(package_name) != packages.end();
+    bool in_lock = packages.find(resolved_name) != packages.end();
     bool on_disk = fs::exists(pkg_dir);
     
     if (!in_lock && !on_disk) {
-        std::cerr << RED << "Error:" << RESET << " Package '" << package_name << "' is not installed" << std::endl;
+        std::cerr << RED << "Error:" << RESET << " Package '" << resolved_name << "' is not installed" << std::endl;
         return 1;
     }
     
     // Remove from disk
     if (on_disk) {
         fs::remove_all(pkg_dir);
-        std::cout << "  " << DIM << "Removed .coi/pkgs/" << package_name << "/" << RESET << std::endl;
+        std::cout << "  " << DIM << "Removed .coi/pkgs/" << resolved_name << "/" << RESET << std::endl;
     }
     
     // Remove from lock file
     if (in_lock) {
-        packages.erase(package_name);
+        packages.erase(resolved_name);
         write_lock_file(lock_path, packages);
         std::cout << "  " << DIM << "Updated coi.lock" << RESET << std::endl;
     }
     
     std::cout << std::endl;
-    std::cout << "  " << GREEN << "✓" << RESET << " Removed " << BOLD << package_name << RESET << std::endl;
+    std::cout << "  " << GREEN << "✓" << RESET << " Removed " << BOLD << resolved_name << RESET << std::endl;
     std::cout << std::endl;
     
     return 0;
@@ -734,14 +800,24 @@ int list_packages() {
 int update_package(const std::string& package_name) {
     print_pkg_banner("upgrade");
     std::cout << std::endl;
+
+    std::string normalized_name;
+    std::string normalize_error;
+    if (!normalize_package_name(package_name, normalized_name, normalize_error)) {
+        std::cerr << RED << "Error:" << RESET << " Invalid package name '" << package_name << "'" << std::endl;
+        std::cerr << "  " << normalize_error << std::endl;
+        std::cerr << "  Example: @coi/supabase or @acme/utils" << std::endl;
+        return 1;
+    }
     
     fs::path project_root = fs::current_path();
     fs::path lock_path = project_root / "coi.lock";
     
     auto packages = read_lock_file(lock_path);
+    std::string resolved_name = normalized_name;
     
-    if (packages.find(package_name) == packages.end()) {
-        std::cerr << RED << "Error:" << RESET << " Package '" << package_name << "' is not installed" << std::endl;
+    if (packages.find(resolved_name) == packages.end()) {
+        std::cerr << RED << "Error:" << RESET << " Package '" << resolved_name << "' is not installed" << std::endl;
         return 1;
     }
     
@@ -749,25 +825,26 @@ int update_package(const std::string& package_name) {
     
     // Fetch latest info from registry
     PackageInfo info;
-    if (!fetch_package_info(package_name, info)) {
-        std::cerr << RED << "Error:" << RESET << " Could not fetch package info for '" << package_name << "'" << std::endl;
+    if (!fetch_package_info(resolved_name, info)) {
+        std::cerr << RED << "Error:" << RESET << " Could not fetch package info for '" << resolved_name << "'" << std::endl;
         return 1;
     }
     
-    LockEntry& current = packages[package_name];
+    LockEntry& current = packages[resolved_name];
     
     if (current.version == info.version) {
         std::cout << std::endl;
-        std::cout << "  " << GREEN << "✓" << RESET << " " << package_name << "@" << current.version << " is already up to date" << std::endl;
+        std::cout << "  " << GREEN << "✓" << RESET << " " << resolved_name << "@" << current.version << " is already up to date" << std::endl;
         std::cout << std::endl;
         return 0;
     }
     
-    std::cout << "  " << DIM << "Updating " << package_name << " " << current.version << " → " << info.version << RESET << std::endl;
+    std::cout << "  " << DIM << "Updating " << resolved_name << " " << current.version << " → " << info.version << RESET << std::endl;
     
     // Download new version
     fs::path pkgs_dir = project_root / ".coi" / "pkgs";
-    fs::path pkg_dest = pkgs_dir / package_name;
+    fs::path pkg_dest = pkgs_dir / resolved_name;
+    fs::create_directories(pkg_dest.parent_path());
     
     if (!download_package(info, pkg_dest)) {
         return 1;
@@ -783,7 +860,7 @@ int update_package(const std::string& package_name) {
     write_lock_file(lock_path, packages);
     
     std::cout << std::endl;
-    std::cout << "  " << GREEN << "✓" << RESET << " Updated " << BOLD << package_name << RESET << " to " << info.version << std::endl;
+    std::cout << "  " << GREEN << "✓" << RESET << " Updated " << BOLD << resolved_name << RESET << " to " << info.version << std::endl;
     std::cout << std::endl;
     
     return 0;
@@ -827,6 +904,7 @@ int update_all_packages() {
         
         fs::path pkgs_dir = project_root / ".coi" / "pkgs";
         fs::path pkg_dest = pkgs_dir / name;
+        fs::create_directories(pkg_dest.parent_path());
         
         if (download_package(info, pkg_dest)) {
             entry.version = info.version;

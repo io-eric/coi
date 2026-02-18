@@ -130,7 +130,7 @@ int main(int argc, char **argv)
         if (argc < 3)
         {
             std::cerr << colors::RED << "Error:" << colors::RESET << " Package name required" << std::endl;
-            std::cerr << "  Usage: coi add <package-name> [version]" << std::endl;
+            std::cerr << "  Usage: coi add <scope/name> [version]" << std::endl;
             return 1;
         }
         std::string requested_version = (argc >= 4) ? argv[3] : "";
@@ -147,7 +147,7 @@ int main(int argc, char **argv)
         if (argc < 3)
         {
             std::cerr << colors::RED << "Error:" << colors::RESET << " Package name required" << std::endl;
-            std::cerr << "  Usage: coi remove <package-name>" << std::endl;
+            std::cerr << "  Usage: coi remove <scope/name>" << std::endl;
             return 1;
         }
         return remove_package(argv[2]);
@@ -326,16 +326,24 @@ int main(int argc, char **argv)
                 
                 if (!import_str.empty() && import_str[0] == '@')
                 {
-                    // Package import: @pkg-name -> .coi/pkgs/pkg-name/Mod.coi
-                    //                 @pkg-name/path -> .coi/pkgs/pkg-name/path.coi
+                    // Package import:
+                    //   @scope/pkg-name -> .coi/pkgs/scope/pkg-name/Mod.coi
+                    //   @scope/pkg-name/path -> .coi/pkgs/scope/pkg-name/path.coi
                     std::string pkg_path = import_str.substr(1);
+
+                    size_t slash_count = static_cast<size_t>(std::count(pkg_path.begin(), pkg_path.end(), '/'));
+                    if (slash_count == 0)
+                    {
+                        std::cerr << colors::RED << "Error:" << colors::RESET
+                                  << " package import must use scoped format @scope/name: " << import_str << std::endl;
+                        return 1;
+                    }
                     
-                    // If no slash, it's just a package name - default to Mod.coi
-                    if (pkg_path.find('/') == std::string::npos)
+                    // @scope/pkg-name -> @scope/pkg-name/Mod.coi
+                    if (slash_count == 1 && (pkg_path.size() < 4 || pkg_path.substr(pkg_path.size() - 4) != ".coi"))
                     {
                         pkg_path += "/Mod.coi";
                     }
-                    // Append .coi extension if not present
                     else if (pkg_path.size() < 4 || pkg_path.substr(pkg_path.size() - 4) != ".coi")
                     {
                         pkg_path += ".coi";

@@ -13,7 +13,7 @@ Coi includes a built-in package manager for installing community packages from t
 
 | Command | Description |
 |---------|-------------|
-| `coi add <package> [version]` | Add latest compatible release or a specific version |
+| `coi add <package> [version]` | Add latest compatible release or a specific version (`coi/` scope auto-applied) |
 | `coi install` | Install all packages listed in `coi.lock` |
 | `coi remove <package>` | Remove a package |
 | `coi upgrade [package]` | Upgrade one package or all packages |
@@ -22,9 +22,9 @@ Coi includes a built-in package manager for installing community packages from t
 ## Add a Package
 
 ```bash
-coi add supabase
+coi add @coi/supabase
 # or pin a specific release
-coi add supabase 0.1.0
+coi add @coi/supabase 0.1.0
 ```
 
 This command:
@@ -37,7 +37,7 @@ See [Versioning](versioning.md) for the Pond & Drop compatibility model.
 Then import it in your Coi code:
 
 ```tsx
-import "@supabase";
+import "@coi/supabase";
 ```
 
 ## Install from `coi.lock`
@@ -55,7 +55,7 @@ This reads `coi.lock` and installs exact versions into `.coi/pkgs/`.
 Upgrade one package:
 
 ```bash
-coi upgrade supabase
+coi upgrade coi/supabase
 ```
 
 Upgrade all packages:
@@ -67,7 +67,7 @@ coi upgrade
 Remove a package:
 
 ```bash
-coi remove supabase
+coi remove coi/supabase
 ```
 
 ## Import Resolution
@@ -75,8 +75,9 @@ coi remove supabase
 Package imports use the `@` prefix:
 
 ```tsx
-import "@supabase";      // .coi/pkgs/supabase/Mod.coi
-import "@ui-kit/Button"; // .coi/pkgs/ui-kit/Button.coi
+import "@coi/supabase";       // .coi/pkgs/coi/supabase/Mod.coi
+import "@acme/utils";              // .coi/pkgs/acme/utils/Mod.coi
+import "@acme/utils/Button";       // .coi/pkgs/acme/utils/Button.coi
 ```
 
 ## Creating a Package
@@ -114,7 +115,7 @@ pub import "src/api/Client";
 Consumers then import your package:
 
 ```tsx
-import "@my-pkg";
+import "@your-org/my-pkg";
 
 component App {
     view {
@@ -137,7 +138,7 @@ cp -r ../my-pkg .coi/pkgs/
 coi dev
 ```
 
-Then import with `@my-pkg` in your test app.
+Then import with `@your-org/my-pkg` in your test app.
 
 ## Publishing to the Registry
 
@@ -149,7 +150,7 @@ Fill in these fields:
 
 | Field | Description |
 |-------|-------------|
-| `name` | Package ID (must match filename when submitted) |
+| `name` | Package ID in `scope/name` format (must match `packages/<scope>/<name>.json` when submitted) |
 | `repository` | GitHub URL (e.g., `https://github.com/you/my-pkg`) |
 | `description` | Short description of your package |
 | `keywords` | Search keywords (e.g., `["coi", "ui", "components"]`) |
@@ -171,7 +172,7 @@ For each release in the `releases` array:
 ### Submit to Registry
 
 1. Fork the [registry repo](https://github.com/coi-lang/registry)
-2. Copy your `package.json` to `packages/<your-package>.json`
+2. Copy your `package.json` to `packages/<scope>/<name>.json`
 3. Validate locally:
    ```bash
    python3 scripts/validate_registry.py --offline
