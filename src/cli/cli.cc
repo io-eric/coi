@@ -648,7 +648,7 @@ void print_help(const char *program_name)
     std::cout << "    " << CYAN << program_name << " init" << RESET << " [name] [--pkg]      Create a new project" << std::endl;
     std::cout << "    " << CYAN << program_name << " build" << RESET << "                    Build the project" << std::endl;
     std::cout << "    " << CYAN << program_name << " dev" << RESET << " [--no-watch]         Build and start dev server" << std::endl;
-    std::cout << "    " << CYAN << program_name << " add" << RESET << " <package>            Add a package from registry" << std::endl;
+    std::cout << "    " << CYAN << program_name << " add" << RESET << " <package>            Add a package from registry (scope/name)" << std::endl;
     std::cout << "    " << CYAN << program_name << " install" << RESET << "                  Install packages from coi.lock" << std::endl;
     std::cout << "    " << CYAN << program_name << " remove" << RESET << " <package>         Remove a package" << std::endl;
     std::cout << "    " << CYAN << program_name << " upgrade" << RESET << " [package]        Upgrade package(s)" << std::endl;
@@ -668,6 +668,7 @@ void print_help(const char *program_name)
     std::cout << "    " << DIM << "$" << RESET << " coi init my-app" << std::endl;
     std::cout << "    " << DIM << "$" << RESET << " cd my-app && coi dev" << std::endl;
     std::cout << "    " << DIM << "$" << RESET << " coi add supabase" << std::endl;
+    std::cout << "    " << DIM << "$" << RESET << " coi add @google/package" << std::endl;
     std::cout << "    " << DIM << "$" << RESET << " coi self-upgrade" << std::endl;
     std::cout << std::endl;
 }

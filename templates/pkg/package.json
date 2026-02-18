@@ -1,8 +1,8 @@
 {
-  "$schema": "https://coi-lang.dev/schemas/package.schema.json",
+  "$schema": "https://raw.githubusercontent.com/coi-lang/registry/main/schema/package.schema.json",
   "name": "__PROJECT_NAME__",
   "schema-version": 1,
-  "repository": "https://github.com/YOUR_GITHUB_USERNAME/__PROJECT_NAME__",
+  "repository": "https://github.com/YOUR_USERNAME/__PROJECT_NAME__",
   "description": "A Coi package.",
   "keywords": ["coi", "package"],
   "releases": [

@@ -178,14 +178,14 @@ This also generates `dist/App.cc` so you can inspect the generated C++ code.
 Coi has a built-in package manager for adding community packages:
 
 ```bash
-coi add supabase        # Add a package
-coi install             # Install from coi.lock
+coi add @coi/supabase  # Add a package
+coi install                # Install from coi.lock
 ```
 
 Then import it:
 
 ```tsx
-import "@supabase";
+import "@coi/supabase";
 ```
 
 See [Package Manager](package-manager.md) for the full workflow.
@@ -283,14 +283,14 @@ import "components/Button.coi";
 import "layout/Header.coi";
 
 // Package imports (from .coi/pkgs/)
-import "@supabase";            // resolves to .coi/pkgs/supabase/Mod.coi
-import "@ui-kit/Button";       // resolves to .coi/pkgs/ui-kit/Button.coi
+import "@coi/supabase";       // resolves to .coi/pkgs/coi-lang/supabase/Mod.coi
+import "@acme/utils/Button.coi";       // resolves to .coi/pkgs/acme/utils/Button.coi
 ```
 
 ### Import Rules
 
 1. **Relative Paths**: Local imports are relative to the current file.
-2. **Package Imports**: Paths starting with `@` resolve to `.coi/pkgs/`. Just `@pkg` imports `Mod.coi` by default.
+2. **Package Imports**: Paths starting with `@` resolve to `.coi/pkgs/`. Use scoped names like `@scope/name`.
 3. **Explicit Only**: There are no "transitive imports". If `A` imports `B`, and `B` imports `C`, `A` cannot use `C` unless it imports `C` directly.
 4. **Visibility**: You can only use components that are marked with `pub` if they are in a different module.
 
