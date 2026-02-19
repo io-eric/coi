@@ -1,0 +1,18 @@
+// Test: basic tuple return and destructuring
+component TupleBasic {
+    def getNameAndAge(): (string name, int age) {
+        return ("Alice", 30);
+    }
+    
+    def test(): void {
+        (string name, int age) = getNameAndAge();
+    }
+
+    view {
+        <div>test</div>
+    }
+}
+
+app {
+    root = TupleBasic;
+}
