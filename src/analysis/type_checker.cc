@@ -1026,7 +1026,13 @@ void validate_types(const std::vector<Component> &components,
             }
 
             // Get expected return type for this method
-            std::string expected_return = method.return_type.empty() ? "void" : normalize_type(method.return_type);
+            std::string expected_return;
+            bool expects_tuple = method.returns_tuple();
+            if (expects_tuple) {
+                expected_return = method.get_return_type_string();
+            } else {
+                expected_return = method.return_type.empty() ? "void" : normalize_type(method.return_type);
+            }
 
             // Track variables that have been moved from (can no longer be used)
             std::set<std::string> moved_vars;
@@ -1423,6 +1429,38 @@ void validate_types(const std::vector<Component> &components,
                 {
                     // Check expression for use of moved variables
                     check_moved_use(expr_stmt->expression.get(), expr_stmt->line);
+
+                    // Enforce mutability for increment/decrement on local variables
+                    if (auto postfix = dynamic_cast<PostfixOp *>(expr_stmt->expression.get()))
+                    {
+                        if ((postfix->op == "++" || postfix->op == "--") &&
+                            dynamic_cast<Identifier *>(postfix->operand.get()))
+                        {
+                            auto *id = dynamic_cast<Identifier *>(postfix->operand.get());
+                            if (id && !mutable_vars.count(id->name))
+                            {
+                                ErrorHandler::type_error(
+                                    "Cannot modify immutable variable '" + id->name + "'. Declare it as 'mut' to use " + postfix->op,
+                                    expr_stmt->line);
+                                exit(1);
+                            }
+                        }
+                    }
+                    else if (auto unary = dynamic_cast<UnaryOp *>(expr_stmt->expression.get()))
+                    {
+                        if ((unary->op == "++" || unary->op == "--") &&
+                            dynamic_cast<Identifier *>(unary->operand.get()))
+                        {
+                            auto *id = dynamic_cast<Identifier *>(unary->operand.get());
+                            if (id && !mutable_vars.count(id->name))
+                            {
+                                ErrorHandler::type_error(
+                                    "Cannot modify immutable variable '" + id->name + "'. Declare it as 'mut' to use " + unary->op,
+                                    expr_stmt->line);
+                                exit(1);
+                            }
+                        }
+                    }
                     
                     // Check for calling mutating methods on const component variables
                     if (auto call = dynamic_cast<FunctionCall *>(expr_stmt->expression.get()))
@@ -1475,12 +1513,55 @@ void validate_types(const std::vector<Component> &components,
                 else if (auto ret_stmt = dynamic_cast<ReturnStatement *>(stmt.get()))
                 {
                     // Validate return type matches method's declared return type
-                    if (ret_stmt->value)
+                    if (ret_stmt->returns_tuple())
+                    {
+                        // Tuple return: return (a, b);
+                        if (!expects_tuple)
+                        {
+                            ErrorHandler::type_error(
+                                "Function '" + method.name + "' does not return a tuple but got tuple return",
+                                ret_stmt->line);
+                            exit(1);
+                        }
+                        
+                        if (ret_stmt->tuple_values.size() != method.tuple_returns.size())
+                        {
+                            ErrorHandler::type_error(
+                                "Function '" + method.name + "' expects " + std::to_string(method.tuple_returns.size()) +
+                                " return values but got " + std::to_string(ret_stmt->tuple_values.size()),
+                                ret_stmt->line);
+                            exit(1);
+                        }
+                        
+                        // Check each tuple element type
+                        for (size_t i = 0; i < ret_stmt->tuple_values.size(); i++)
+                        {
+                            check_moved_use(ret_stmt->tuple_values[i].get(), ret_stmt->line);
+                            std::string actual_type = infer_expression_type(ret_stmt->tuple_values[i].get(), current_scope);
+                            std::string expected_type = normalize_type(method.tuple_returns[i].type);
+                            if (actual_type != "unknown" && !is_compatible_type(actual_type, expected_type))
+                            {
+                                ErrorHandler::type_error(
+                                    "Function '" + method.name + "' return element " + std::to_string(i + 1) +
+                                    " expects type '" + expected_type + "' but got '" + actual_type + "'",
+                                    ret_stmt->line);
+                                exit(1);
+                            }
+                        }
+                    }
+                    else if (ret_stmt->value)
                     {
                         // Check return value for use of moved variables
                         check_moved_use(ret_stmt->value.get(), ret_stmt->line);
                         
                         // Has a return value
+                        if (expects_tuple)
+                        {
+                            ErrorHandler::type_error(
+                                "Function '" + method.name + "' returns a tuple but got single value",
+                                ret_stmt->line);
+                            exit(1);
+                        }
                         if (expected_return == "void")
                         {
                             ErrorHandler::type_error(
@@ -1501,12 +1582,83 @@ void validate_types(const std::vector<Component> &components,
                     else
                     {
                         // No return value (bare 'return;')
-                        if (expected_return != "void")
+                        if (expected_return != "void" || expects_tuple)
                         {
                             ErrorHandler::type_error(
                                 "Function '" + method.name + "' must return a value of type '" + expected_return + "'",
                                 ret_stmt->line);
                             exit(1);
+                        }
+                    }
+                }
+                // Handle tuple destructuring
+                else if (auto tuple_dest = dynamic_cast<TupleDestructuring *>(stmt.get()))
+                {
+                    // Check that the source expression is valid
+                    check_moved_use(tuple_dest->value.get(), tuple_dest->line);
+
+                    // Validate tuple destructuring shape and types when source is a local method call
+                    if (auto call_expr = dynamic_cast<FunctionCall *>(tuple_dest->value.get()))
+                    {
+                        const FunctionDef *target_method = nullptr;
+                        for (const auto &candidate : comp.methods)
+                        {
+                            if (candidate.name == call_expr->name)
+                            {
+                                target_method = &candidate;
+                                break;
+                            }
+                        }
+
+                        if (target_method)
+                        {
+                            if (!target_method->returns_tuple())
+                            {
+                                ErrorHandler::type_error(
+                                    "Cannot destructure result of '" + call_expr->name +
+                                        "' because it does not return multiple values",
+                                    tuple_dest->line);
+                                exit(1);
+                            }
+
+                            if (tuple_dest->elements.size() != target_method->tuple_returns.size())
+                            {
+                                ErrorHandler::type_error(
+                                    "Tuple destructuring expects " + std::to_string(tuple_dest->elements.size()) +
+                                        " value(s), but function '" + call_expr->name + "' returns " +
+                                        std::to_string(target_method->tuple_returns.size()) +
+                                        ". Use matching element count.",
+                                    tuple_dest->line);
+                                exit(1);
+                            }
+
+                            for (size_t i = 0; i < tuple_dest->elements.size(); ++i)
+                            {
+                                std::string lhs_type = normalize_type(tuple_dest->elements[i].type);
+                                std::string rhs_type = normalize_type(target_method->tuple_returns[i].type);
+                                if (!is_compatible_type(rhs_type, lhs_type))
+                                {
+                                    ErrorHandler::type_error(
+                                        "Tuple element " + std::to_string(i + 1) + " type mismatch: expected '" +
+                                            lhs_type + "' but function '" + call_expr->name + "' returns '" + rhs_type + "'",
+                                        tuple_dest->line);
+                                    exit(1);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Add destructured variables to scope
+                    for (const auto& elem : tuple_dest->elements)
+                    {
+                        if (elem.name.rfind("__coi_ignore_tuple_", 0) == 0)
+                        {
+                            continue;
+                        }
+                        current_scope[elem.name] = normalize_type(elem.type);
+                        if (elem.is_mutable)
+                        {
+                            mutable_vars.insert(elem.name);
                         }
                     }
                 }

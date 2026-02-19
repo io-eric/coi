@@ -84,10 +84,204 @@ std::unique_ptr<Statement> Parser::parse_statement()
         auto ret = std::make_unique<ReturnStatement>();
         if (current().type != TokenType::SEMICOLON)
         {
-            ret->value = parse_expression();
+            // Check for tuple return: return (a, b);
+            if (current().type == TokenType::LPAREN)
+            {
+                // Look ahead to detect if this is a tuple (has comma at top level)
+                size_t saved_pos = pos;
+                advance(); // skip '('
+                
+                // Parse first expression
+                int paren_depth = 0;
+                bool has_comma = false;
+                while (current().type != TokenType::END_OF_FILE)
+                {
+                    if (current().type == TokenType::LPAREN || current().type == TokenType::LBRACKET || current().type == TokenType::LBRACE)
+                        paren_depth++;
+                    else if (current().type == TokenType::RPAREN || current().type == TokenType::RBRACKET || current().type == TokenType::RBRACE)
+                    {
+                        if (paren_depth == 0)
+                            break;
+                        paren_depth--;
+                    }
+                    else if (current().type == TokenType::COMMA && paren_depth == 0)
+                    {
+                        has_comma = true;
+                        break;
+                    }
+                    advance();
+                }
+                
+                // Restore position
+                pos = saved_pos;
+                
+                if (has_comma)
+                {
+                    // It's a tuple return
+                    advance(); // skip '('
+                    while (current().type != TokenType::RPAREN)
+                    {
+                        ret->tuple_values.push_back(parse_expression());
+                        if (current().type == TokenType::COMMA)
+                        {
+                            advance();
+                        }
+                    }
+                    expect(TokenType::RPAREN, "Expected ')' after tuple return");
+                }
+                else
+                {
+                    // It's a parenthesized expression
+                    ret->value = parse_expression();
+                }
+            }
+            else
+            {
+                ret->value = parse_expression();
+            }
         }
         expect(TokenType::SEMICOLON, "Expected ';'");
         return ret;
+    }
+
+    // Tuple destructuring: (Type name, Type name, ...) = expr;
+    // Detect by checking if we have (Type name, ...) = pattern
+    if (current().type == TokenType::LPAREN)
+    {
+        // Look ahead to detect tuple destructuring pattern
+        size_t saved_pos = pos;
+        advance(); // skip '('
+        
+        bool is_tuple_destruct = false;
+        
+        // Check for first element: should be Type [Name] pattern, possibly with 'mut'
+        bool first_is_mut = (current().type == TokenType::MUT);
+        if (first_is_mut) advance();
+        
+        bool first_is_type = (current().type == TokenType::INT || 
+                              current().type == TokenType::STRING ||
+                              current().type == TokenType::FLOAT || 
+                              current().type == TokenType::FLOAT32 ||
+                              current().type == TokenType::BOOL ||
+                              current().type == TokenType::IDENTIFIER);
+        
+        if (first_is_type)
+        {
+            advance(); // skip type
+            // Handle array type
+            if (current().type == TokenType::LBRACKET)
+            {
+                advance();
+                if (current().type == TokenType::RBRACKET)
+                    advance();
+            }
+            
+            // Optional first name; unnamed elements are allowed and treated as ignored.
+            if (is_identifier_token())
+            {
+                advance(); // skip name
+            }
+
+            // Should be followed by comma or )
+            if (current().type == TokenType::COMMA || current().type == TokenType::RPAREN)
+            {
+                // Skip to find the closing paren
+                int paren_depth = 0;
+                while (current().type != TokenType::END_OF_FILE)
+                {
+                    if (current().type == TokenType::LPAREN) paren_depth++;
+                    else if (current().type == TokenType::RPAREN)
+                    {
+                        if (paren_depth == 0)
+                        {
+                            advance(); // skip ')'
+                            // Check for = after )
+                            if (current().type == TokenType::ASSIGN)
+                            {
+                                is_tuple_destruct = true;
+                            }
+                            break;
+                        }
+                        paren_depth--;
+                    }
+                    advance();
+                }
+            }
+        }
+        
+        // Restore position
+        pos = saved_pos;
+        
+        if (is_tuple_destruct)
+        {
+            auto destruct = std::make_unique<TupleDestructuring>();
+            advance(); // skip '('
+            size_t ignored_index = 0;
+            
+            while (current().type != TokenType::RPAREN)
+            {
+                TupleDestructuring::Element elem;
+                
+                // Check for mut
+                if (current().type == TokenType::MUT)
+                {
+                    elem.is_mutable = true;
+                    advance();
+                }
+                
+                // Parse type
+                elem.type = current().value;
+                if (current().type == TokenType::INT || current().type == TokenType::STRING ||
+                    current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
+                    current().type == TokenType::BOOL || current().type == TokenType::IDENTIFIER)
+                {
+                    advance();
+                    // Handle array type
+                    if (current().type == TokenType::LBRACKET)
+                    {
+                        advance();
+                        expect(TokenType::RBRACKET, "Expected ']' for array type");
+                        elem.type += "[]";
+                    }
+                }
+                else
+                {
+                    throw std::runtime_error("Expected type in tuple destructuring at line " + std::to_string(current().line));
+                }
+                
+                // Parse optional name. If omitted, bind to an internal ignored variable.
+                if (is_identifier_token())
+                {
+                    elem.name = current().value;
+                    advance();
+                }
+                else if (current().type == TokenType::COMMA || current().type == TokenType::RPAREN)
+                {
+                    if (elem.is_mutable)
+                    {
+                        throw std::runtime_error("Unnamed tuple destructuring element cannot be mutable at line " + std::to_string(current().line));
+                    }
+                    elem.name = "__coi_ignore_tuple_" + std::to_string(ignored_index++);
+                }
+                else
+                {
+                    throw std::runtime_error("Expected name in tuple destructuring at line " + std::to_string(current().line));
+                }
+                
+                destruct->elements.push_back(elem);
+                
+                if (current().type == TokenType::COMMA)
+                {
+                    advance();
+                }
+            }
+            
+            expect(TokenType::RPAREN, "Expected ')' after tuple elements");
+            expect(TokenType::ASSIGN, "Expected '=' after tuple pattern");
+            destruct->value = parse_expression();
+            expect(TokenType::SEMICOLON, "Expected ';'");
+            return destruct;
+        }
     }
 
     // Variable declaration

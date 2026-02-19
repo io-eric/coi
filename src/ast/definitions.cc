@@ -1,10 +1,45 @@
 #include "definitions.h"
 #include "node.h"
 
+std::string FunctionDef::get_return_type_string() const {
+    if (tuple_returns.empty()) {
+        return return_type;
+    }
+    std::string result = "(";
+    for (size_t i = 0; i < tuple_returns.size(); i++) {
+        if (i > 0) result += ", ";
+        result += tuple_returns[i].type + " " + tuple_returns[i].name;
+    }
+    result += ")";
+    return result;
+}
+
+std::string FunctionDef::get_tuple_struct_name() const {
+    if (tuple_returns.empty()) return "";
+    
+    std::string name = "_Tup";
+    for (const auto& elem : tuple_returns) {
+        std::string t = convert_type(elem.type);
+        // Sanitize type name for struct identifier (replace ::, <, >, etc.)
+        for (char& c : t) {
+            if (c == ':' || c == '<' || c == '>' || c == ' ' || c == ',') c = '_';
+        }
+        name += "_" + t + "_" + elem.name;
+    }
+    return name;
+}
+
 std::string FunctionDef::to_webcc(const std::string& injected_code) {
     ComponentTypeContext::instance().begin_method_scope();
 
-    std::string result = convert_type(return_type) + " " + name + "(";
+    std::string result;
+    
+    // Handle tuple return type - use generated struct name
+    if (returns_tuple()) {
+        result = get_tuple_struct_name() + " " + name + "(";
+    } else {
+        result = convert_type(return_type) + " " + name + "(";
+    }
     
     for(size_t i = 0; i < params.size(); i++){
         if(i > 0) result += ", ";

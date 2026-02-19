@@ -311,6 +311,16 @@ void MemberAssignment::collect_dependencies(std::set<std::string> &deps)
 
 std::string ReturnStatement::to_webcc()
 {
+    if (returns_tuple()) {
+        // Return tuple using aggregate initialization: return {a, b};
+        std::string result = "return {";
+        for (size_t i = 0; i < tuple_values.size(); i++) {
+            if (i > 0) result += ", ";
+            result += tuple_values[i]->to_webcc();
+        }
+        result += "};";
+        return result;
+    }
     if (value)
         return "return " + value->to_webcc() + ";";
     return "return;";
@@ -320,6 +330,41 @@ void ReturnStatement::collect_dependencies(std::set<std::string> &deps)
 {
     if (value)
         value->collect_dependencies(deps);
+    for (const auto& val : tuple_values)
+        val->collect_dependencies(deps);
+}
+
+std::string TupleDestructuring::to_webcc()
+{
+    // Generate internal structured binding, then user variables with per-element mutability.
+    // This avoids making all bindings mutable by default.
+    static size_t tuple_bind_counter = 0;
+    size_t bind_id = tuple_bind_counter++;
+
+    std::string result;
+    result += "auto [";
+    for (size_t i = 0; i < elements.size(); i++) {
+        if (i > 0) result += ", ";
+        result += "__coi_tuple_bind_" + std::to_string(bind_id) + "_" + std::to_string(i);
+    }
+    result += "] = " + value->to_webcc() + "; ";
+
+    for (size_t i = 0; i < elements.size(); i++) {
+        const auto& elem = elements[i];
+        // Ignore internal placeholder bindings generated for unnamed tuple elements.
+        if (elem.name.rfind("__coi_ignore_tuple_", 0) == 0) {
+            continue;
+        }
+        result += (elem.is_mutable ? "auto " : "const auto ");
+        result += elem.name + " = __coi_tuple_bind_" + std::to_string(bind_id) + "_" + std::to_string(i) + "; ";
+    }
+
+    return result;
+}
+
+void TupleDestructuring::collect_dependencies(std::set<std::string> &deps)
+{
+    value->collect_dependencies(deps);
 }
 
 std::string ExpressionStatement::to_webcc()

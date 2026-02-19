@@ -1,0 +1,20 @@
+// Test: tuple destructuring with mutable elements
+component TupleMut {
+    def getValues(): (int x, int y) {
+        return (10, 20);
+    }
+    
+    def test(): int {
+        (mut int a, int b) = getValues();
+        a = a + 1;  // OK: a is mutable
+        return a + b;
+    }
+
+    view {
+        <div>{test()}</div>
+    }
+}
+
+app {
+    root = TupleMut;
+}

@@ -1,0 +1,14 @@
+// Test: returning single value from tuple function should fail
+component TupleSingleReturn {
+    def getTwo(): (string a, int b) {
+        return "hello";  // Error: expected tuple, got single value
+    }
+
+    view {
+        <div>test</div>
+    }
+}
+
+app {
+    root = TupleSingleReturn;
+}

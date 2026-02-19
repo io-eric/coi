@@ -63,6 +63,24 @@ struct MemberAssignment : Statement {
 
 struct ReturnStatement : Statement {
     std::unique_ptr<Expression> value;
+    std::vector<std::unique_ptr<Expression>> tuple_values;  // For tuple returns: return (a, b)
+    
+    bool returns_tuple() const { return !tuple_values.empty(); }
+    
+    std::string to_webcc() override;
+    void collect_dependencies(std::set<std::string>& deps) override;
+};
+
+// Tuple destructuring assignment: (string a, int b) = func()
+struct TupleDestructuring : Statement {
+    struct Element {
+        std::string type;
+        std::string name;
+        bool is_mutable = false;
+    };
+    std::vector<Element> elements;
+    std::unique_ptr<Expression> value;  // The expression returning the tuple
+    
     std::string to_webcc() override;
     void collect_dependencies(std::set<std::string>& deps) override;
 };

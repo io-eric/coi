@@ -1,0 +1,14 @@
+// Test: wrong number of tuple elements should fail
+component TupleWrongCount {
+    def getTwo(): (string a, int b) {
+        return ("hello", 42, true);  // Error: 3 values but signature has 2
+    }
+
+    view {
+        <div>test</div>
+    }
+}
+
+app {
+    root = TupleWrongCount;
+}

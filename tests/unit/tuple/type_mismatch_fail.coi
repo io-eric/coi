@@ -1,0 +1,14 @@
+// Test: tuple return with wrong types should fail
+component TupleTypeMismatch {
+    def getData(): (string name, int count) {
+        return (42, "hello");  // Error: types are swapped
+    }
+
+    view {
+        <div>test</div>
+    }
+}
+
+app {
+    root = TupleTypeMismatch;
+}
