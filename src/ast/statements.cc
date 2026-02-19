@@ -311,6 +311,16 @@ void MemberAssignment::collect_dependencies(std::set<std::string> &deps)
 
 std::string ReturnStatement::to_webcc()
 {
+    if (returns_tuple()) {
+        // Return tuple using aggregate initialization: return {a, b};
+        std::string result = "return {";
+        for (size_t i = 0; i < tuple_values.size(); i++) {
+            if (i > 0) result += ", ";
+            result += tuple_values[i]->to_webcc();
+        }
+        result += "};";
+        return result;
+    }
     if (value)
         return "return " + value->to_webcc() + ";";
     return "return;";
@@ -320,6 +330,25 @@ void ReturnStatement::collect_dependencies(std::set<std::string> &deps)
 {
     if (value)
         value->collect_dependencies(deps);
+    for (const auto& val : tuple_values)
+        val->collect_dependencies(deps);
+}
+
+std::string TupleDestructuring::to_webcc()
+{
+    // Generate C++17 structured binding: auto [a, b] = func();
+    std::string result = "auto [";
+    for (size_t i = 0; i < elements.size(); i++) {
+        if (i > 0) result += ", ";
+        result += elements[i].name;
+    }
+    result += "] = " + value->to_webcc() + ";";
+    return result;
+}
+
+void TupleDestructuring::collect_dependencies(std::set<std::string> &deps)
+{
+    value->collect_dependencies(deps);
 }
 
 std::string ExpressionStatement::to_webcc()

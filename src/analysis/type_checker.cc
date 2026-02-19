@@ -1026,7 +1026,13 @@ void validate_types(const std::vector<Component> &components,
             }
 
             // Get expected return type for this method
-            std::string expected_return = method.return_type.empty() ? "void" : normalize_type(method.return_type);
+            std::string expected_return;
+            bool expects_tuple = method.returns_tuple();
+            if (expects_tuple) {
+                expected_return = method.get_return_type_string();
+            } else {
+                expected_return = method.return_type.empty() ? "void" : normalize_type(method.return_type);
+            }
 
             // Track variables that have been moved from (can no longer be used)
             std::set<std::string> moved_vars;
@@ -1475,12 +1481,55 @@ void validate_types(const std::vector<Component> &components,
                 else if (auto ret_stmt = dynamic_cast<ReturnStatement *>(stmt.get()))
                 {
                     // Validate return type matches method's declared return type
-                    if (ret_stmt->value)
+                    if (ret_stmt->returns_tuple())
+                    {
+                        // Tuple return: return (a, b);
+                        if (!expects_tuple)
+                        {
+                            ErrorHandler::type_error(
+                                "Function '" + method.name + "' does not return a tuple but got tuple return",
+                                ret_stmt->line);
+                            exit(1);
+                        }
+                        
+                        if (ret_stmt->tuple_values.size() != method.tuple_returns.size())
+                        {
+                            ErrorHandler::type_error(
+                                "Function '" + method.name + "' expects " + std::to_string(method.tuple_returns.size()) +
+                                " return values but got " + std::to_string(ret_stmt->tuple_values.size()),
+                                ret_stmt->line);
+                            exit(1);
+                        }
+                        
+                        // Check each tuple element type
+                        for (size_t i = 0; i < ret_stmt->tuple_values.size(); i++)
+                        {
+                            check_moved_use(ret_stmt->tuple_values[i].get(), ret_stmt->line);
+                            std::string actual_type = infer_expression_type(ret_stmt->tuple_values[i].get(), current_scope);
+                            std::string expected_type = normalize_type(method.tuple_returns[i].type);
+                            if (actual_type != "unknown" && !is_compatible_type(actual_type, expected_type))
+                            {
+                                ErrorHandler::type_error(
+                                    "Function '" + method.name + "' return element " + std::to_string(i + 1) +
+                                    " expects type '" + expected_type + "' but got '" + actual_type + "'",
+                                    ret_stmt->line);
+                                exit(1);
+                            }
+                        }
+                    }
+                    else if (ret_stmt->value)
                     {
                         // Check return value for use of moved variables
                         check_moved_use(ret_stmt->value.get(), ret_stmt->line);
                         
                         // Has a return value
+                        if (expects_tuple)
+                        {
+                            ErrorHandler::type_error(
+                                "Function '" + method.name + "' returns a tuple but got single value",
+                                ret_stmt->line);
+                            exit(1);
+                        }
                         if (expected_return == "void")
                         {
                             ErrorHandler::type_error(
@@ -1501,12 +1550,28 @@ void validate_types(const std::vector<Component> &components,
                     else
                     {
                         // No return value (bare 'return;')
-                        if (expected_return != "void")
+                        if (expected_return != "void" || expects_tuple)
                         {
                             ErrorHandler::type_error(
                                 "Function '" + method.name + "' must return a value of type '" + expected_return + "'",
                                 ret_stmt->line);
                             exit(1);
+                        }
+                    }
+                }
+                // Handle tuple destructuring
+                else if (auto tuple_dest = dynamic_cast<TupleDestructuring *>(stmt.get()))
+                {
+                    // Check that the source expression is valid
+                    check_moved_use(tuple_dest->value.get(), tuple_dest->line);
+                    
+                    // Add destructured variables to scope
+                    for (const auto& elem : tuple_dest->elements)
+                    {
+                        current_scope[elem.name] = normalize_type(elem.type);
+                        if (elem.is_mutable)
+                        {
+                            mutable_vars.insert(elem.name);
                         }
                     }
                 }
