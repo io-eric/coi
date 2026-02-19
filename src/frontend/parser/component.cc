@@ -623,6 +623,7 @@ Component Parser::parse_component()
             if (current().type == TokenType::LPAREN)
             {
                 advance(); // skip '('
+                size_t tuple_index = 0;
                 while (current().type != TokenType::RPAREN)
                 {
                     TupleElement elem;
@@ -645,18 +646,21 @@ Component Parser::parse_component()
                     {
                         throw std::runtime_error("Expected type in tuple return at line " + std::to_string(current().line));
                     }
-                    
-                    elem.name = current().value;
+
+                    // Tuple element name is optional in signatures:
+                    // (int, string) and (int a, string b) are both valid.
                     if (is_identifier_token())
                     {
+                        elem.name = current().value;
                         advance();
                     }
                     else
                     {
-                        throw std::runtime_error("Expected name in tuple return at line " + std::to_string(current().line));
+                        elem.name = "_" + std::to_string(tuple_index);
                     }
                     
                     func.tuple_returns.push_back(elem);
+                    tuple_index++;
                     
                     if (current().type == TokenType::COMMA)
                     {

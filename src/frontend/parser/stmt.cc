@@ -154,7 +154,7 @@ std::unique_ptr<Statement> Parser::parse_statement()
         
         bool is_tuple_destruct = false;
         
-        // Check for first element: should be Type Name pattern, possibly with 'mut'
+        // Check for first element: should be Type [Name] pattern, possibly with 'mut'
         bool first_is_mut = (current().type == TokenType::MUT);
         if (first_is_mut) advance();
         
@@ -176,34 +176,35 @@ std::unique_ptr<Statement> Parser::parse_statement()
                     advance();
             }
             
-            // Should be followed by identifier (name)
+            // Optional first name; unnamed elements are allowed and treated as ignored.
             if (is_identifier_token())
             {
                 advance(); // skip name
-                // Should be followed by comma or )
-                if (current().type == TokenType::COMMA || current().type == TokenType::RPAREN)
+            }
+
+            // Should be followed by comma or )
+            if (current().type == TokenType::COMMA || current().type == TokenType::RPAREN)
+            {
+                // Skip to find the closing paren
+                int paren_depth = 0;
+                while (current().type != TokenType::END_OF_FILE)
                 {
-                    // Skip to find the closing paren
-                    int paren_depth = 0;
-                    while (current().type != TokenType::END_OF_FILE)
+                    if (current().type == TokenType::LPAREN) paren_depth++;
+                    else if (current().type == TokenType::RPAREN)
                     {
-                        if (current().type == TokenType::LPAREN) paren_depth++;
-                        else if (current().type == TokenType::RPAREN)
+                        if (paren_depth == 0)
                         {
-                            if (paren_depth == 0)
+                            advance(); // skip ')'
+                            // Check for = after )
+                            if (current().type == TokenType::ASSIGN)
                             {
-                                advance(); // skip ')'
-                                // Check for = after )
-                                if (current().type == TokenType::ASSIGN)
-                                {
-                                    is_tuple_destruct = true;
-                                }
-                                break;
+                                is_tuple_destruct = true;
                             }
-                            paren_depth--;
+                            break;
                         }
-                        advance();
+                        paren_depth--;
                     }
+                    advance();
                 }
             }
         }
@@ -215,6 +216,7 @@ std::unique_ptr<Statement> Parser::parse_statement()
         {
             auto destruct = std::make_unique<TupleDestructuring>();
             advance(); // skip '('
+            size_t ignored_index = 0;
             
             while (current().type != TokenType::RPAREN)
             {
@@ -247,11 +249,19 @@ std::unique_ptr<Statement> Parser::parse_statement()
                     throw std::runtime_error("Expected type in tuple destructuring at line " + std::to_string(current().line));
                 }
                 
-                // Parse name
-                elem.name = current().value;
+                // Parse optional name. If omitted, bind to an internal ignored variable.
                 if (is_identifier_token())
                 {
+                    elem.name = current().value;
                     advance();
+                }
+                else if (current().type == TokenType::COMMA || current().type == TokenType::RPAREN)
+                {
+                    if (elem.is_mutable)
+                    {
+                        throw std::runtime_error("Unnamed tuple destructuring element cannot be mutable at line " + std::to_string(current().line));
+                    }
+                    elem.name = "__coi_ignore_tuple_" + std::to_string(ignored_index++);
                 }
                 else
                 {

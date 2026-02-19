@@ -1564,10 +1564,65 @@ void validate_types(const std::vector<Component> &components,
                 {
                     // Check that the source expression is valid
                     check_moved_use(tuple_dest->value.get(), tuple_dest->line);
+
+                    // Validate tuple destructuring shape and types when source is a local method call
+                    if (auto call_expr = dynamic_cast<FunctionCall *>(tuple_dest->value.get()))
+                    {
+                        const FunctionDef *target_method = nullptr;
+                        for (const auto &candidate : comp.methods)
+                        {
+                            if (candidate.name == call_expr->name)
+                            {
+                                target_method = &candidate;
+                                break;
+                            }
+                        }
+
+                        if (target_method)
+                        {
+                            if (!target_method->returns_tuple())
+                            {
+                                ErrorHandler::type_error(
+                                    "Cannot destructure result of '" + call_expr->name +
+                                        "' because it does not return multiple values",
+                                    tuple_dest->line);
+                                exit(1);
+                            }
+
+                            if (tuple_dest->elements.size() != target_method->tuple_returns.size())
+                            {
+                                ErrorHandler::type_error(
+                                    "Tuple destructuring expects " + std::to_string(tuple_dest->elements.size()) +
+                                        " value(s), but function '" + call_expr->name + "' returns " +
+                                        std::to_string(target_method->tuple_returns.size()) +
+                                        ". Use matching element count.",
+                                    tuple_dest->line);
+                                exit(1);
+                            }
+
+                            for (size_t i = 0; i < tuple_dest->elements.size(); ++i)
+                            {
+                                std::string lhs_type = normalize_type(tuple_dest->elements[i].type);
+                                std::string rhs_type = normalize_type(target_method->tuple_returns[i].type);
+                                if (!is_compatible_type(rhs_type, lhs_type))
+                                {
+                                    ErrorHandler::type_error(
+                                        "Tuple element " + std::to_string(i + 1) + " type mismatch: expected '" +
+                                            lhs_type + "' but function '" + call_expr->name + "' returns '" + rhs_type + "'",
+                                        tuple_dest->line);
+                                    exit(1);
+                                }
+                            }
+                        }
+                    }
                     
                     // Add destructured variables to scope
                     for (const auto& elem : tuple_dest->elements)
                     {
+                        if (elem.name.rfind("__coi_ignore_tuple_", 0) == 0)
+                        {
+                            continue;
+                        }
                         current_scope[elem.name] = normalize_type(elem.type);
                         if (elem.is_mutable)
                         {
