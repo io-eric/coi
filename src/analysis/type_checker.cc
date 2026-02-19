@@ -15,6 +15,46 @@ std::string normalize_type(const std::string &type);
 bool is_compatible_type(const std::string &source, const std::string &target);
 std::string infer_expression_type(Expression *expr, const std::map<std::string, std::string> &scope);
 
+static std::string extract_base_type(const std::string &type)
+{
+    std::string base = type;
+
+    if (base.ends_with("[]"))
+    {
+        base = base.substr(0, base.length() - 2);
+    }
+    else if (auto pos = base.rfind('['); pos != std::string::npos && base.back() == ']')
+    {
+        base = base.substr(0, pos);
+    }
+
+    if (auto pos = base.find("::"); pos != std::string::npos)
+    {
+        base = base.substr(pos + 2);
+    }
+
+    return base;
+}
+
+static void validate_data_fields_no_copy(const std::vector<std::unique_ptr<DataDef>> &data_defs)
+{
+    for (const auto &data_def : data_defs)
+    {
+        for (const auto &field : data_def->fields)
+        {
+            std::string base_type = extract_base_type(normalize_type(field.type));
+            if (DefSchema::instance().is_nocopy(base_type))
+            {
+                ErrorHandler::type_error(
+                    "Data type '" + data_def->name + "' cannot contain no-copy field '" + field.name +
+                    "' of type '" + field.type + "'. Data types are value types (copyable) and cannot contain "
+                    "no-copy types like Canvas, Audio, WebSocket, etc.");
+                exit(1);
+            }
+        }
+    }
+}
+
 // Validate positional arguments against component parameters (used by router and could be used for constructor calls)
 // Returns error message if validation fails, empty string on success
 static std::string validate_component_args(
@@ -811,78 +851,14 @@ void validate_types(const std::vector<Component> &components,
     }
 
     // Validate global data type fields - they cannot contain no-copy types
-    for (const auto &data_def : global_data)
-    {
-        for (const auto &field : data_def->fields)
-        {
-            std::string field_type = normalize_type(field.type);
-            
-            // Extract base type from arrays (e.g., "Canvas[]" -> "Canvas")
-            std::string base_type = field_type;
-            if (field_type.ends_with("[]"))
-            {
-                base_type = field_type.substr(0, field_type.length() - 2);
-            }
-            else
-            {
-                // Check for fixed-size array T[N]
-                size_t bracket_pos = field_type.rfind('[');
-                if (bracket_pos != std::string::npos && field_type.back() == ']')
-                {
-                    base_type = field_type.substr(0, bracket_pos);
-                }
-            }
-            
-            // Check if the field type is a no-copy type
-            if (DefSchema::instance().is_nocopy(base_type))
-            {
-                ErrorHandler::type_error(
-                    "Data type '" + data_def->name + "' cannot contain no-copy field '" + field.name +
-                    "' of type '" + field.type + "'. Data types are value types (copyable) and cannot contain "
-                    "no-copy types like Canvas, Audio, WebSocket, etc.");
-                exit(1);
-            }
-        }
-    }
+    validate_data_fields_no_copy(global_data);
 
     for (const auto &comp : components)
     {
         std::map<std::string, std::string> scope;
 
         // Validate data type fields - they cannot contain no-copy types
-        for (const auto &data_def : comp.data)
-        {
-            for (const auto &field : data_def->fields)
-            {
-                std::string field_type = normalize_type(field.type);
-                
-                // Extract base type from arrays (e.g., "Canvas[]" -> "Canvas")
-                std::string base_type = field_type;
-                if (field_type.ends_with("[]"))
-                {
-                    base_type = field_type.substr(0, field_type.length() - 2);
-                }
-                else
-                {
-                    // Check for fixed-size array T[N]
-                    size_t bracket_pos = field_type.rfind('[');
-                    if (bracket_pos != std::string::npos && field_type.back() == ']')
-                    {
-                        base_type = field_type.substr(0, bracket_pos);
-                    }
-                }
-                
-                // Check if the field type is a no-copy type
-                if (DefSchema::instance().is_nocopy(base_type))
-                {
-                    ErrorHandler::type_error(
-                        "Data type '" + data_def->name + "' cannot contain no-copy field '" + field.name +
-                        "' of type '" + field.type + "'. Data types are value types (copyable) and cannot contain "
-                        "no-copy types like Canvas, Audio, WebSocket, etc.");
-                    exit(1);
-                }
-            }
-        }
+        validate_data_fields_no_copy(comp.data);
 
         // Check component parameter types and their default values
         for (const auto &param : comp.params)
@@ -2286,23 +2262,6 @@ void validate_type_imports(const std::vector<Component> &components,
         if (it != file_imports.end() && it->second.count(type_source_file) > 0) return true;
         
         return false;
-    };
-    
-    // Helper to extract base type name from type string (removes [], Module::, etc.)
-    auto extract_base_type = [](const std::string& type) -> std::string {
-        std::string base = type;
-        
-        // Remove array suffix
-        if (base.ends_with("[]"))
-            base = base.substr(0, base.length() - 2);
-        else if (auto pos = base.rfind('['); pos != std::string::npos && base.back() == ']')
-            base = base.substr(0, pos);
-        
-        // Handle Module::Type syntax
-        if (auto pos = base.find("::"); pos != std::string::npos)
-            base = base.substr(pos + 2);
-            
-        return base;
     };
     
     // Check types used in each component
