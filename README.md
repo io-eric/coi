@@ -60,65 +60,67 @@ Coi gives you composable components, fine-grained reactivity, type safety, and t
 ## Example
 
 ```tsx
-component Counter(string label, mut int& value) {
-    def add(int i) : void {
-        value += i;
-    }
-
-    style {
-        .counter {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-        button {
-            padding: 8px 16px;
-            cursor: pointer;
-        }
-    }
-
-    view {
-        <div class="counter">
-            <span>{label}: {value}</span>
-            <button onclick={add(1)}>+</button>
-            <button onclick={add(-1)}>-</button>
-        </div>
-    }
+// Define a data structure
+pod Task {
+    int id;
+    string text;
+    Status status;
 }
 
+// Type-safe enum
+enum Status { Todo, Done }
+
 component App {
-    mut int score = 0;
+    mut Task[] tasks;
+    mut int nextId = 0;
+
+    init {
+        tasks.push(Task{nextId++, "Learn Coi", Status::Done});
+        tasks.push(Task{nextId++, "Build something cool", Status::Todo});
+    }
+
+    def add(string text) : void {
+        tasks.push(Task{nextId++, text, Status::Todo});
+    }
+    
+    def toggle(int id) : void {
+        for task in tasks {
+            if (task.id == id) {
+                task.status = match (task.status) {
+                    Status::Todo => Status::Done;
+                    Status::Done => Status::Todo;
+                };
+            }
+        }
+    }
 
     style {
-        .app {
-            padding: 24px;
-            font-family: system-ui;
-        }
-        h1 {
-            color: #1a73e8;
-        }
-        .win {
-            color: #34a853;
-            font-weight: bold;
-        }
+        .app { padding: 24px; font-family: system-ui; }
+        .done { text-decoration: line-through; color: #999; }
     }
 
     view {
         <div class="app">
-            <h1>Score: {score}</h1>
-            <Counter label="Player" &value={score} />
-            <if score >= 10>
-                <p class="win">You win!</p>
-            </if>
+            <h1>Tasks ({tasks.size()})</h1>
+            <for task in tasks key={task.id}>
+                <div onclick={toggle(task.id)}>
+                    <if task.status == Status::Done>
+                        <span class="done">{task.text}</span>
+                    <else>
+                        <span>{task.text}</span>
+                    </else>
+                    </if>
+                </div>
+            </for>
+            <button onclick={add("New task")}>Add Task</button>
         </div>
     }
 }
 
 app {
     root = App;
-    title = "My Counter App";
-    description = "A simple counter built with Coi";
-    lang = "en";
+    title = "Task List";
+    description = "A task management app built with Coi";
 }
 ```
 

@@ -21,6 +21,27 @@ struct ComponentArrayLoopInfo
 };
 extern std::map<std::string, ComponentArrayLoopInfo> g_component_array_loops;
 
+// Info for inlining DOM operations on keyed HTML loops over non-component arrays
+struct ArrayLoopInfo
+{
+    int loop_id;
+    std::string parent_var;
+    std::string anchor_var;
+    std::string elements_vec_name;
+    std::string var_name;
+    std::string item_creation_code;
+    std::string root_element_var;
+    bool is_only_child;
+};
+extern std::map<std::string, ArrayLoopInfo> g_array_loops;
+
+struct HtmlLoopVarInfo
+{
+    int loop_id;
+    std::string iterable_expr;
+};
+extern std::map<std::string, HtmlLoopVarInfo> g_html_loop_var_infos;
+
 std::string VarDeclaration::to_webcc()
 {
     ComponentTypeContext::instance().set_method_symbol_type(name, type);
@@ -292,15 +313,42 @@ std::string MemberAssignment::to_webcc()
         val = "webcc::move(" + val + ")";
     }
 
+    std::string obj = object->to_webcc();
+    std::string result;
     if (compound_op.empty())
     {
-        return object->to_webcc() + "." + member + " = " + val + ";";
+        result = obj + "." + member + " = " + val + ";";
     }
     else
     {
-        std::string obj = object->to_webcc();
-        return obj + "." + member + " = " + obj + "." + member + " " + compound_op + " " + val + ";";
+        result = obj + "." + member + " = " + obj + "." + member + " " + compound_op + " " + val + ";";
     }
+
+    // Fast path: if assigning to a keyed HTML loop item member (e.g., task.status = ...),
+    // patch only that loop item instead of re-syncing the whole loop.
+    Expression *root = object.get();
+    while (auto member_acc = dynamic_cast<MemberAccess *>(root))
+    {
+        root = member_acc->object.get();
+    }
+    if (auto id = dynamic_cast<Identifier *>(root))
+    {
+        auto it = g_html_loop_var_infos.find(id->name);
+        if (it != g_html_loop_var_infos.end())
+        {
+            const auto &info = it->second;
+            std::string idx_var = "__coi_loop_idx_" + id->name;
+            result += "\n{\n";
+            result += "    int " + idx_var + " = -1;\n";
+            result += "    for (int __i = 0; __i < (int)" + info.iterable_expr + ".size(); __i++) {\n";
+            result += "        if (&" + info.iterable_expr + "[__i] == &" + id->name + ") { " + idx_var + " = __i; break; }\n";
+            result += "    }\n";
+            result += "    if (" + idx_var + " >= 0) _sync_loop_" + std::to_string(info.loop_id) + "_item(" + idx_var + ");\n";
+            result += "}";
+        }
+    }
+
+    return result;
 }
 
 void MemberAssignment::collect_dependencies(std::set<std::string> &deps)
@@ -468,6 +516,56 @@ std::string ExpressionStatement::to_webcc()
                     }
                     result += count_var + " = 0;\n";
                     result += arr_name + ".clear();\n";
+                    return result;
+                }
+            }
+
+            auto html_loop_it = g_array_loops.find(arr_name);
+            if (html_loop_it != g_array_loops.end())
+            {
+                const auto &info = html_loop_it->second;
+                std::string var = info.var_name;
+                std::string result;
+
+                if (method == "push" && call->args.size() == 1)
+                {
+                    std::string item_expr = call->args[0].value->to_webcc();
+                    std::string parent_var = info.parent_var;
+                    std::string count_var = "_loop_" + std::to_string(info.loop_id) + "_count";
+                    result = "{\n";
+                    result += arr_name + ".push_back(" + item_expr + ");\n";
+                    result += "if (" + parent_var + ".is_valid()) {\n";
+                    result += "    auto& " + var + " = " + arr_name + "[" + arr_name + ".size() - 1];\n";
+                    result += info.item_creation_code;
+                    if (!info.root_element_var.empty())
+                    {
+                        result += "    " + info.elements_vec_name + ".push_back(" + info.root_element_var + ");\n";
+                    }
+                    result += "    " + count_var + " = (int)" + arr_name + ".size();\n";
+                    result += "}\n";
+                    result += "}\n";
+                    return result;
+                }
+                else if (method == "pop" && call->args.empty())
+                {
+                    std::string count_var = "_loop_" + std::to_string(info.loop_id) + "_count";
+                    result = "if (!" + arr_name + ".empty()) {\n";
+                    result += "    if (!" + info.elements_vec_name + ".empty()) {\n";
+                    result += "        webcc::dom::remove_element(" + info.elements_vec_name + ".back());\n";
+                    result += "        " + info.elements_vec_name + ".pop_back();\n";
+                    result += "    }\n";
+                    result += "    " + arr_name + ".pop_back();\n";
+                    result += "    " + count_var + " = (int)" + arr_name + ".size();\n";
+                    result += "}\n";
+                    return result;
+                }
+                else if (method == "clear" && call->args.empty())
+                {
+                    std::string count_var = "_loop_" + std::to_string(info.loop_id) + "_count";
+                    result = "for (auto& _el : " + info.elements_vec_name + ") { webcc::dom::remove_element(_el); }\n";
+                    result += info.elements_vec_name + ".clear();\n";
+                    result += arr_name + ".clear();\n";
+                    result += count_var + " = 0;\n";
                     return result;
                 }
             }
@@ -646,7 +744,6 @@ void collect_mods_recursive(Statement *stmt, std::set<std::string> &mods)
                     std::string root_var = (split_pos != std::string::npos) 
                         ? obj_expr.substr(0, split_pos) 
                         : obj_expr;
-                    
                     mods.insert(root_var);
                 }
             }
@@ -674,5 +771,14 @@ void collect_mods_recursive(Statement *stmt, std::set<std::string> &mods)
     else if (auto forEach = dynamic_cast<ForEachStatement *>(stmt))
     {
         collect_mods_recursive(forEach->body.get(), mods);
+        // If the loop item variable was modified (e.g., task.status = ...),
+        // treat the iterable as modified too so parent-level reactive updates run.
+        if (mods.count(forEach->var_name))
+        {
+            if (auto id = dynamic_cast<Identifier *>(forEach->iterable.get()))
+            {
+                mods.insert(id->name);
+            }
+        }
     }
 }
