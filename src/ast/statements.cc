@@ -674,5 +674,14 @@ void collect_mods_recursive(Statement *stmt, std::set<std::string> &mods)
     else if (auto forEach = dynamic_cast<ForEachStatement *>(stmt))
     {
         collect_mods_recursive(forEach->body.get(), mods);
+        // If loop variable was modified (e.g., task.status = X), the underlying
+        // collection is also modified and needs reactive updates
+        if (mods.count(forEach->var_name))
+        {
+            if (auto id = dynamic_cast<Identifier *>(forEach->iterable.get()))
+            {
+                mods.insert(id->name);
+            }
+        }
     }
 }

@@ -1032,8 +1032,9 @@ std::string Component::to_webcc(CompilerSession &session)
                 
                 ss << "        int _new_count = (int)" << region.iterable_expr << ".size();\n";
 
-                // Remove all existing HTML elements
+                // Remove all existing HTML elements and cleanup dispatcher
                 ss << "        for (auto& _el : " << elements_vec << ") {\n";
+                ss << "            g_dispatcher.remove(_el);\n";
                 ss << "            webcc::dom::remove_element(_el);\n";
                 ss << "        }\n";
                 ss << "        " << elements_vec << ".clear();\n";
