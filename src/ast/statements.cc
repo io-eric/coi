@@ -336,13 +336,29 @@ void ReturnStatement::collect_dependencies(std::set<std::string> &deps)
 
 std::string TupleDestructuring::to_webcc()
 {
-    // Generate C++17 structured binding: auto [a, b] = func();
-    std::string result = "auto [";
+    // Generate internal structured binding, then user variables with per-element mutability.
+    // This avoids making all bindings mutable by default.
+    static size_t tuple_bind_counter = 0;
+    size_t bind_id = tuple_bind_counter++;
+
+    std::string result;
+    result += "auto [";
     for (size_t i = 0; i < elements.size(); i++) {
         if (i > 0) result += ", ";
-        result += elements[i].name;
+        result += "__coi_tuple_bind_" + std::to_string(bind_id) + "_" + std::to_string(i);
     }
-    result += "] = " + value->to_webcc() + ";";
+    result += "] = " + value->to_webcc() + "; ";
+
+    for (size_t i = 0; i < elements.size(); i++) {
+        const auto& elem = elements[i];
+        // Ignore internal placeholder bindings generated for unnamed tuple elements.
+        if (elem.name.rfind("__coi_ignore_tuple_", 0) == 0) {
+            continue;
+        }
+        result += (elem.is_mutable ? "auto " : "const auto ");
+        result += elem.name + " = __coi_tuple_bind_" + std::to_string(bind_id) + "_" + std::to_string(i) + "; ";
+    }
+
     return result;
 }
 

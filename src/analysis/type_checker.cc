@@ -1429,6 +1429,38 @@ void validate_types(const std::vector<Component> &components,
                 {
                     // Check expression for use of moved variables
                     check_moved_use(expr_stmt->expression.get(), expr_stmt->line);
+
+                    // Enforce mutability for increment/decrement on local variables
+                    if (auto postfix = dynamic_cast<PostfixOp *>(expr_stmt->expression.get()))
+                    {
+                        if ((postfix->op == "++" || postfix->op == "--") &&
+                            dynamic_cast<Identifier *>(postfix->operand.get()))
+                        {
+                            auto *id = dynamic_cast<Identifier *>(postfix->operand.get());
+                            if (id && !mutable_vars.count(id->name))
+                            {
+                                ErrorHandler::type_error(
+                                    "Cannot modify immutable variable '" + id->name + "'. Declare it as 'mut' to use " + postfix->op,
+                                    expr_stmt->line);
+                                exit(1);
+                            }
+                        }
+                    }
+                    else if (auto unary = dynamic_cast<UnaryOp *>(expr_stmt->expression.get()))
+                    {
+                        if ((unary->op == "++" || unary->op == "--") &&
+                            dynamic_cast<Identifier *>(unary->operand.get()))
+                        {
+                            auto *id = dynamic_cast<Identifier *>(unary->operand.get());
+                            if (id && !mutable_vars.count(id->name))
+                            {
+                                ErrorHandler::type_error(
+                                    "Cannot modify immutable variable '" + id->name + "'. Declare it as 'mut' to use " + unary->op,
+                                    expr_stmt->line);
+                                exit(1);
+                            }
+                        }
+                    }
                     
                     // Check for calling mutating methods on const component variables
                     if (auto call = dynamic_cast<FunctionCall *>(expr_stmt->expression.get()))
