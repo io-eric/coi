@@ -4,7 +4,7 @@
 # Coi
 
 [![CI](https://github.com/coi/coi/actions/workflows/verify-and-publish.yml/badge.svg)](https://github.com/coi/coi/actions/workflows/verify-and-publish.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289da?logo=discord&logoColor=white)](https://discord.gg/KSpWx78wuR)
 
@@ -232,4 +232,4 @@ See the [Editor Support & Tooling](docs/tooling.md) documentation for installati
 
 ## License
 
-MIT © [coi](https://github.com/coi)
+MIT © [coi](https://github.com/coi) - see [LICENSE](LICENSE)
