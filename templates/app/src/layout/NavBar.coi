@@ -62,7 +62,7 @@ component NavBar {
                 <span class="nav-link" onclick={navigateTo("/")}>Home</span>
                 <span class="nav-link" onclick={navigateTo("/about")}>About</span>
                 <span class="divider"></span>
-                <a href="https://github.com/io-eric/coi" target="_blank">GitHub</a>
+                <a href="https://github.com/coi/coi" target="_blank">GitHub</a>
                 <a href="https://discord.gg/KSpWx78wuR" target="_blank">Discord</a>
             </div>
         </nav>

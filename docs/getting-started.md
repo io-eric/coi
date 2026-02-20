@@ -13,7 +13,7 @@ Coi requires [WebCC](https://github.com/io-eric/webcc) to be installed. The buil
 To build the compiler and the toolchain, clone the repository and run the build script:
 
 ```bash
-git clone https://github.com/io-eric/coi.git
+git clone https://github.com/coi/coi.git
 cd coi
 ./build.sh
 ```
@@ -309,7 +309,7 @@ pub component Button { ... }
 
 ## Getting Help
 
-Getting stuck or need help? Join the [Coi Discord community](https://discord.gg/KSpWx78wuR) for fast support and discussions, or [open an issue](https://github.com/io-eric/coi/issues) on GitHub for bugs and feature requests.
+Getting stuck or need help? Join the [Coi Discord community](https://discord.gg/KSpWx78wuR) for fast support and discussions, or [open an issue](https://github.com/coi/coi/issues) on GitHub for bugs and feature requests.
 
 ## Next Steps
 
