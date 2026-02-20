@@ -25,7 +25,7 @@ void load_def_schema()
         {
             hint = "Could not determine executable location.\n"
                    "  If you see this error, please open an issue at:\n"
-                   "  https://github.com/io-eric/coi/issues\n"
+                   "  https://github.com/coi/coi/issues\n"
                    "  Include your OS, how you installed coi, and how you ran the command.";
         }
         else

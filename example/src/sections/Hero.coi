@@ -154,8 +154,8 @@ component Hero {
             <p class="subtitle">WebAssembly for the Modern Web</p>
             <p class="tagline">A component-based language for high-performance web apps.<br/>Fast. Minimal. Type-safe.</p>
             <div class="buttons">
-                <Button label="Get Started" type="primary" href="https://github.com/io-eric/coi/blob/main/docs/getting-started.md" />
-                <Button label="GitHub" type="secondary" href="https://github.com/io-eric/coi"/>
+                <Button label="Get Started" type="primary" href="https://github.com/coi/coi/blob/main/docs/getting-started.md" />
+                <Button label="GitHub" type="secondary" href="https://github.com/coi/coi"/>
             </div>
         </div>
     }

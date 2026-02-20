@@ -22,7 +22,7 @@ component Footer {
 
     view {
         <footer>
-            <p>Built with <a href="https://github.com/io-eric/coi" target="_blank">Coi</a> ✨</p>
+            <p>Built with <a href="https://github.com/coi/coi" target="_blank">Coi</a> ✨</p>
         </footer>
     }
 }

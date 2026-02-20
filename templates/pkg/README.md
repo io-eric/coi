@@ -57,10 +57,10 @@ coi dev
 
 This template includes `package.json` for publishing to the [Coi Registry](https://github.com/coi-lang/registry).
 
-See the [Publishing Guide](https://github.com/io-eric/coi/blob/main/docs/package-manager.md#publishing-to-the-registry) for step-by-step instructions.
+See the [Publishing Guide](https://github.com/coi/coi/blob/main/docs/package-manager.md#publishing-to-the-registry) for step-by-step instructions.
 
 ## Learn More
 
-- [Language Guide](https://github.com/io-eric/coi/blob/main/docs/language-guide.md)
-- [Components](https://github.com/io-eric/coi/blob/main/docs/components.md)
-- [Modules & Imports](https://github.com/io-eric/coi/blob/main/docs/language-guide.md#modules-and-imports)
+- [Language Guide](https://github.com/coi/coi/blob/main/docs/language-guide.md)
+- [Components](https://github.com/coi/coi/blob/main/docs/components.md)
+- [Modules & Imports](https://github.com/coi/coi/blob/main/docs/language-guide.md#modules-and-imports)

@@ -3,8 +3,8 @@
 
 # Coi
 
-[![CI](https://github.com/io-eric/coi/actions/workflows/verify-and-publish.yml/badge.svg)](https://github.com/io-eric/coi/actions/workflows/verify-and-publish.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/coi/coi/actions/workflows/verify-and-publish.yml/badge.svg)](https://github.com/coi/coi/actions/workflows/verify-and-publish.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289da?logo=discord&logoColor=white)](https://discord.gg/KSpWx78wuR)
 
@@ -144,7 +144,7 @@ In [benchmarks](benchmark/) comparing Coi, React, Vue, and Svelte, Coi delivers 
   - Fedora: `sudo dnf install clang`
 
 ```bash
-git clone https://github.com/io-eric/coi.git
+git clone https://github.com/coi/coi.git
 cd coi
 ./build.sh
 ```
@@ -232,4 +232,4 @@ See the [Editor Support & Tooling](docs/tooling.md) documentation for installati
 
 ## License
 
-MIT © [io-eric](https://github.com/io-eric)
+MIT © [coi](https://github.com/coi) - see [LICENSE](LICENSE)

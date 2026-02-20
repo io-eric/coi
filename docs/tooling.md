@@ -10,7 +10,7 @@ Coi has editor support for several popular code editors, providing syntax highli
 
 Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=coi-lang.coi-language) or search for "Coi" in the Extensions view.
 
-**Repository**: [vscode-extension/](https://github.com/io-eric/coi/tree/main/vscode-extension)
+**Repository**: [vscode-extension/](https://github.com/coi/coi/tree/main/vscode-extension)
 
 Search for "Coi" in the Extensions view or build manually from the repository.
 
