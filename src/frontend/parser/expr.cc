@@ -718,11 +718,8 @@ std::unique_ptr<Expression> Parser::parse_match()
         
         match_expr->arms.push_back(std::move(arm));
         
-        // Optional semicolon or comma between arms
-        if (current().type == TokenType::SEMICOLON || current().type == TokenType::COMMA)
-        {
-            advance();
-        }
+        // Require semicolon after each match arm (router-style consistency)
+        expect(TokenType::SEMICOLON, "Expected ';' after match arm");
     }
     
     expect(TokenType::RBRACE, "Expected '}' to close match expression");
