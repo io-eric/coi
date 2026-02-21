@@ -676,13 +676,12 @@ std::unique_ptr<Expression> Parser::parse_match()
         expect(TokenType::ARROW, "Expected '=>' after match pattern");
         
         // Parse the arm body.
-        // - Braced block requires explicit `yield` statements.
+        // - Braced block may contain statements and optional explicit `yield` statements.
         // - Non-braced form is shorthand expression arm.
         if (current().type == TokenType::LBRACE)
         {
             advance(); // skip '{'
             auto block = std::make_unique<BlockExpr>();
-            bool has_yield = false;
 
             while (current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE)
             {
@@ -701,7 +700,6 @@ std::unique_ptr<Expression> Parser::parse_match()
                     expect(TokenType::SEMICOLON, "Expected ';' after yield expression");
                     ret->line = yield_line;
                     block->statements.push_back(std::move(ret));
-                    has_yield = true;
                     continue;
                 }
 
@@ -709,13 +707,6 @@ std::unique_ptr<Expression> Parser::parse_match()
             }
 
             expect(TokenType::RBRACE, "Expected '}' after match arm body");
-
-            if (!has_yield)
-            {
-                ErrorHandler::compiler_error(
-                    "Match arm block requires explicit 'yield <expr>;' (use non-braced shorthand for simple expression arms)",
-                    arm.line);
-            }
 
             arm.body = std::move(block);
         }

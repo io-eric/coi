@@ -533,6 +533,14 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
             }
             else if (!is_compatible_type(arm_type, result_type) && !is_compatible_type(result_type, arm_type))
             {
+                if (arm_type == "void" || result_type == "void")
+                {
+                    ErrorHandler::type_error(
+                        "Match expression mixes value and non-value arms. "
+                        "Use 'yield <expr>;' inside block arms when the match result is used",
+                        arm.line);
+                    exit(1);
+                }
                 ErrorHandler::type_error("Match arm has incompatible type '" + arm_type + 
                     "' (expected '" + result_type + "')", arm.line);
                 exit(1);
