@@ -4,19 +4,19 @@ Coi has editor support for several popular code editors, providing syntax highli
 
 ---
 
-## VS Code
+## VS Code (Official)
 
 [![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=coi-lang.coi-language)
 
 Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=coi-lang.coi-language) or search for "Coi" in the Extensions view.
 
-**Repository**: [vscode-extension/](https://github.com/coi/coi/tree/main/vscode-extension)
+**Repository**: [coi/vscode](https://github.com/coi/vscode)
 
 Search for "Coi" in the Extensions view or build manually from the repository.
 
 ---
 
-## Sublime Text
+## Sublime Text (Community)
 
 [![Package Control](https://img.shields.io/badge/Package%20Control-available-success?logo=sublime-text)](https://packagecontrol.io/packages/Coi)
 [![GitHub](https://img.shields.io/github/stars/SublimeText/Coi?style=social)](https://github.com/SublimeText/Coi)
@@ -27,9 +27,8 @@ Install from [Package Control](https://packagecontrol.io/packages/Coi) or see th
 
 ---
 
-## Zed
+## Zed (Community)
 
-[![In Development](https://img.shields.io/badge/status-in%20development-yellow)](https://github.com/jturner/zed-coi)
 [![GitHub](https://img.shields.io/github/stars/jturner/zed-coi?style=social)](https://github.com/jturner/zed-coi)
 
 **Repository**: [jturner/zed-coi](https://github.com/jturner/zed-coi)
