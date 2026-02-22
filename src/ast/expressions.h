@@ -36,6 +36,7 @@ struct StringLiteral : Expression {
     std::vector<Part> parse();
     std::string to_webcc() override;
     bool is_static() override;
+    // Custom implementation needed for template string parsing
     void collect_dependencies(std::set<std::string>& deps) override;
     void collect_member_dependencies(std::set<MemberDependency>& member_deps) override;
 };
@@ -44,6 +45,7 @@ struct Identifier : Expression {
     std::string name;
     Identifier(const std::string& n) : name(n) {}
     std::string to_webcc() override;
+    // Custom: adds this identifier as a dependency
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -62,7 +64,7 @@ struct BinaryOp : Expression {
 
     BinaryOp(std::unique_ptr<Expression> l, const std::string& o, std::unique_ptr<Expression> r);
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override;
+    std::vector<Expression*> get_children() override { return {left.get(), right.get()}; }
 };
 
 // Unified argument for function calls and component construction
@@ -82,6 +84,8 @@ struct FunctionCall : Expression {
     FunctionCall(const std::string& n) : name(n){}
     std::string args_to_string();
     std::string to_webcc() override;
+    std::vector<Expression*> get_children() override;
+    // Custom: also handles object.method() dot notation
     void collect_dependencies(std::set<std::string>& deps) override;
 };
 
@@ -91,7 +95,8 @@ struct MemberAccess : Expression {
 
     MemberAccess(std::unique_ptr<Expression> obj, const std::string& mem);
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override;
+    std::vector<Expression*> get_children() override { return {object.get()}; }
+    // Custom: adds this as a member dependency (object.member)
     void collect_member_dependencies(std::set<MemberDependency>& member_deps) override;
 };
 
@@ -101,7 +106,7 @@ struct PostfixOp : Expression {
 
     PostfixOp(std::unique_ptr<Expression> expr, const std::string& o);
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override { operand->collect_dependencies(deps); }
+    std::vector<Expression*> get_children() override { return {operand.get()}; }
 };
 
 struct UnaryOp : Expression {
@@ -110,7 +115,7 @@ struct UnaryOp : Expression {
 
     UnaryOp(const std::string& o, std::unique_ptr<Expression> expr);
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override { operand->collect_dependencies(deps); }
+    std::vector<Expression*> get_children() override { return {operand.get()}; }
     bool is_static() override;
 };
 
@@ -120,7 +125,7 @@ struct ReferenceExpression : Expression {
 
     ReferenceExpression(std::unique_ptr<Expression> expr) : operand(std::move(expr)) {}
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override { operand->collect_dependencies(deps); }
+    std::vector<Expression*> get_children() override { return {operand.get()}; }
 };
 
 // Move expression: :expr - explicitly transfers ownership
@@ -129,7 +134,7 @@ struct MoveExpression : Expression {
 
     MoveExpression(std::unique_ptr<Expression> expr) : operand(std::move(expr)) {}
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override { operand->collect_dependencies(deps); }
+    std::vector<Expression*> get_children() override { return {operand.get()}; }
 };
 
 struct TernaryOp : Expression {
@@ -139,7 +144,7 @@ struct TernaryOp : Expression {
 
     TernaryOp(std::unique_ptr<Expression> cond, std::unique_ptr<Expression> t, std::unique_ptr<Expression> f);
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override;
+    std::vector<Expression*> get_children() override { return {condition.get(), true_expr.get(), false_expr.get()}; }
     bool is_static() override;
 };
 
@@ -149,7 +154,7 @@ struct ArrayLiteral : Expression {
 
     ArrayLiteral() = default;
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override;
+    std::vector<Expression*> get_children() override;
     bool is_static() override;
     
     // Propagate element type to anonymous struct literals (ComponentConstruction with empty name)
@@ -163,7 +168,7 @@ struct ArrayRepeatLiteral : Expression {
 
     ArrayRepeatLiteral() = default;
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override;
+    std::vector<Expression*> get_children() override { return {value.get(), count.get()}; }
     bool is_static() override;
 };
 
@@ -173,7 +178,7 @@ struct IndexAccess : Expression {
 
     IndexAccess(std::unique_ptr<Expression> arr, std::unique_ptr<Expression> idx);
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override;
+    std::vector<Expression*> get_children() override { return {array.get(), index.get()}; }
 };
 
 // Enum value access: Mode::Idle or App.Mode::Idle
@@ -199,7 +204,7 @@ struct ComponentConstruction : Expression {
 
     ComponentConstruction(const std::string& name) : component_name(name) {}
     std::string to_webcc() override;
-    void collect_dependencies(std::set<std::string>& deps) override;
+    std::vector<Expression*> get_children() override;
 };
 
 // Match pattern for pattern matching in match expressions
