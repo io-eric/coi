@@ -618,63 +618,10 @@ Component Parser::parse_component()
                 throw std::runtime_error("Missing return type for function '" + func.name + "'. Expected ':' followed by return type at line " + std::to_string(current().line));
             }
             expect(TokenType::COLON, "Expected ':' for return type");
-            
-            // Check for tuple return type: (Type name, Type name, ...)
-            if (current().type == TokenType::LPAREN)
-            {
-                advance(); // skip '('
-                size_t tuple_index = 0;
-                while (current().type != TokenType::RPAREN)
-                {
-                    TupleElement elem;
-                    elem.type = current().value;
-                    if (current().type == TokenType::INT || current().type == TokenType::FLOAT ||
-                        current().type == TokenType::FLOAT32 ||
-                        current().type == TokenType::STRING || current().type == TokenType::BOOL ||
-                        current().type == TokenType::IDENTIFIER)
-                    {
-                        advance();
-                        // Check for array type
-                        if (current().type == TokenType::LBRACKET)
-                        {
-                            advance();
-                            expect(TokenType::RBRACKET, "Expected ']' for array type");
-                            elem.type += "[]";
-                        }
-                    }
-                    else
-                    {
-                        throw std::runtime_error("Expected type in tuple return at line " + std::to_string(current().line));
-                    }
 
-                    // Tuple element name is optional in signatures:
-                    // (int, string) and (int a, string b) are both valid.
-                    if (is_identifier_token())
-                    {
-                        elem.name = current().value;
-                        advance();
-                    }
-                    else
-                    {
-                        elem.name = "_" + std::to_string(tuple_index);
-                    }
-                    
-                    func.tuple_returns.push_back(elem);
-                    tuple_index++;
-                    
-                    if (current().type == TokenType::COMMA)
-                    {
-                        advance();
-                    }
-                }
-                expect(TokenType::RPAREN, "Expected ')' after tuple return types");
-            }
-            else
-            {
-                // Single return type
-                func.return_type = current().value;
-                advance();
-            }
+            // Single return type
+            func.return_type = current().value;
+            advance();
             expect(TokenType::LBRACE, "Expected '{'");
 
             while (current().type != TokenType::RBRACE)

@@ -29,32 +29,6 @@ void generate_cpp_code(
     // Sort components topologically so dependencies come first
     auto sorted_components = topological_sort_components(all_components);
 
-    // Collect and emit tuple structs for all functions with tuple returns
-    {
-        std::set<std::string> emitted_tuples;
-        for (const auto &comp : all_components)
-        {
-            for (const auto &method : comp.methods)
-            {
-                if (method.returns_tuple())
-                {
-                    std::string struct_name = method.get_tuple_struct_name();
-                    if (emitted_tuples.find(struct_name) == emitted_tuples.end())
-                    {
-                        emitted_tuples.insert(struct_name);
-                        out << "struct " << struct_name << " { ";
-                        for (const auto& elem : method.tuple_returns)
-                        {
-                            out << convert_type(elem.type) << " " << elem.name << "; ";
-                        }
-                        out << "};\n";
-                    }
-                }
-            }
-        }
-        if (!emitted_tuples.empty()) out << "\n";
-    }
-
     // Emit JSON runtime helpers inline if Json.parse is used
     if (features.json)
     {
