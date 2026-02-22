@@ -479,8 +479,11 @@ HTTP requests with callback-based response handling. Returns a `FetchRequest` ha
 
 | Method | Description |
 |--------|-------------|
-| `FetchRequest.get(url, &onSuccess=..., &onError=...)` | Make a GET request (static) |
-| `FetchRequest.post(url, body, &onSuccess=..., &onError=...)` | Make a POST request (static) |
+| `FetchRequest.get(url, headers="", &onSuccess=..., &onError=...)` | Make a GET request (static) |
+| `FetchRequest.post(url, body, headers="", &onSuccess=..., &onError=...)` | Make a POST request (static) |
+| `FetchRequest.patch(url, body, headers="", &onSuccess=..., &onError=...)` | Make a PATCH request (static) |
+
+`headers` is a JSON object string (for example: `"{\"Authorization\":\"Bearer token\",\"Content-Type\":\"application/json\"}"`).
 
 ### Callback Signatures
 
@@ -544,6 +547,7 @@ component FormSubmit {
         FetchRequest.post(
             "https://api.example.com/submit",
             "{\"name\": \"test\"}",
+            "{\"Content-Type\":\"application/json\"}",
             &onSuccess = handleSuccess,
             &onError = handleError
         );
@@ -552,6 +556,39 @@ component FormSubmit {
     view {
         <div>
             <button onclick={submit}>Submit</button>
+            <p>{status}</p>
+        </div>
+    }
+}
+```
+
+### PATCH Example
+
+```tsx
+component ProfileUpdate {
+    mut string status = "";
+
+    def ok(string response) : void {
+        status = "Updated";
+    }
+
+    def fail(string error) : void {
+        status = "Failed: " + error;
+    }
+
+    def updateProfile() : void {
+        FetchRequest.patch(
+            "https://api.example.com/profile",
+            "{\"displayName\":\"Eric\"}",
+            "{\"Authorization\":\"Bearer token\",\"Content-Type\":\"application/json\"}",
+            &onSuccess = ok,
+            &onError = fail
+        );
+    }
+
+    view {
+        <div>
+            <button onclick={updateProfile}>Update</button>
             <p>{status}</p>
         </div>
     }
