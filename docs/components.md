@@ -212,6 +212,24 @@ component App {
 }
 ```
 
+### Intrinsic Calls with Mixed Arguments
+
+Some built-in APIs (intrinsics) combine regular value arguments with callback references.
+`fetch` methods are a common example:
+
+```tsx
+// get(url, headers?, &onSuccess?, &onError?)
+FetchRequest.get(
+    "/api/user",
+    "{\"Authorization\":\"Bearer token\",\"Content-Type\":\"application/json\"}",
+    &onSuccess={handleSuccess},
+    &onError={handleError}
+);
+
+// post(url, body, headers?, &onSuccess?, &onError?)
+FetchRequest.post("/api/user", bodyJson, "{\"Content-Type\":\"application/json\"}", &onSuccess={ok});
+```
+
 ## Component Lifecycle
 
 ```
