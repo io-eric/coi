@@ -1,0 +1,18 @@
+// Test: alternate callback variable syntax should fail
+// Unsupported: def (params) : ret name
+
+component TestFunctionVarAltSyntaxFail {
+    def handleNoop(string message) : void {
+    }
+
+    // Unsupported form
+    mut def (string) : void eventHandler = handleNoop;
+
+    view {
+        <div>bad</div>
+    }
+}
+
+app {
+    root = TestFunctionVarAltSyntaxFail;
+}

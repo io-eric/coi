@@ -1,0 +1,18 @@
+// Test: non-mut function-typed state variable form should fail
+// Only mutable state callback variables are supported in component body
+
+component TestFunctionVarStateMissingMutFail {
+    def handleNoop(string message) : void {
+    }
+
+    // Missing 'mut' should not be parsed as a state variable declaration
+    def eventHandler(string) : void = handleNoop;
+
+    view {
+        <div>bad</div>
+    }
+}
+
+app {
+    root = TestFunctionVarStateMissingMutFail;
+}
