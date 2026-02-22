@@ -38,6 +38,11 @@ static std::string extract_base_type(const std::string &type)
     return base;
 }
 
+static bool is_function_value_type(const std::string &type)
+{
+    return type.rfind("webcc::function<", 0) == 0;
+}
+
 static void validate_data_fields_no_copy(const std::vector<std::unique_ptr<DataDef>> &data_defs)
 {
     for (const auto &data_def : data_defs)
@@ -1048,6 +1053,25 @@ void validate_types(const std::vector<Component> &components,
 
             if (var->initializer)
             {
+                if (is_function_value_type(type))
+                {
+                    if (auto id = dynamic_cast<Identifier *>(var->initializer.get()))
+                    {
+                        auto it = scope.find(id->name);
+                        bool source_is_function_value =
+                            (it != scope.end()) && is_function_value_type(normalize_type(it->second));
+
+                        if (!source_is_function_value)
+                        {
+                            ErrorHandler::type_error(
+                                "Function variable '" + var->name + "' must use '&" + id->name +
+                                "' when assigning a function name."
+                            );
+                            exit(1);
+                        }
+                    }
+                }
+
                 // Check for move expression in initializer (:expr)
                 if (dynamic_cast<MoveExpression*>(var->initializer.get()))
                 {
@@ -1258,6 +1282,25 @@ void validate_types(const std::vector<Component> &components,
                     
                     if (decl->initializer)
                     {
+                        if (is_function_value_type(type))
+                        {
+                            if (auto id = dynamic_cast<Identifier *>(decl->initializer.get()))
+                            {
+                                auto it = current_scope.find(id->name);
+                                bool source_is_function_value =
+                                    (it != current_scope.end()) && is_function_value_type(normalize_type(it->second));
+
+                                if (!source_is_function_value)
+                                {
+                                    ErrorHandler::type_error(
+                                        "Function variable '" + decl->name + "' must use '&" + id->name +
+                                        "' when assigning a function name.",
+                                        decl->line);
+                                    exit(1);
+                                }
+                            }
+                        }
+
                         // Check initializer for use of moved variables
                         check_moved_use(decl->initializer.get(), decl->line);
                         
@@ -1318,6 +1361,25 @@ void validate_types(const std::vector<Component> &components,
                     }
                     
                     std::string var_type = current_scope.count(assign->name) ? current_scope.at(assign->name) : "unknown";
+
+                    if (is_function_value_type(normalize_type(var_type)))
+                    {
+                        if (auto id = dynamic_cast<Identifier *>(assign->value.get()))
+                        {
+                            auto it = current_scope.find(id->name);
+                            bool source_is_function_value =
+                                (it != current_scope.end()) && is_function_value_type(normalize_type(it->second));
+
+                            if (!source_is_function_value)
+                            {
+                                ErrorHandler::type_error(
+                                    "Function variable '" + assign->name + "' must use '&" + id->name +
+                                    "' when assigning a function name.",
+                                    assign->line);
+                                exit(1);
+                            }
+                        }
+                    }
                     
                     // Check value for use of moved variables
                     check_moved_use(assign->value.get(), assign->line);

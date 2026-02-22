@@ -1,0 +1,24 @@
+// Test: function variable assignment from function name requires '&' - should fail
+
+component TestFunctionVarMissingAmpFail {
+    mut def eventHandler(string) : void = &handleNoop;
+
+    def handleNoop(string message) : void {
+    }
+
+    def handleCustom(string message) : void {
+    }
+
+    init {
+        // Missing '&' should fail
+        eventHandler = handleCustom;
+    }
+
+    view {
+        <div>bad</div>
+    }
+}
+
+app {
+    root = TestFunctionVarMissingAmpFail;
+}

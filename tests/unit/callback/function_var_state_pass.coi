@@ -1,0 +1,24 @@
+// Test: mutable function-typed state variable declaration/assignment/invocation - should pass
+
+component TestFunctionVarStatePass {
+    mut def eventHandler(string) : void = &handleNoop;
+
+    def handleNoop(string message) : void {
+    }
+
+    def handleCustom(string message) : void {
+    }
+
+    init {
+        eventHandler = &handleCustom;
+        eventHandler("hello");
+    }
+
+    view {
+        <div>ok</div>
+    }
+}
+
+app {
+    root = TestFunctionVarStatePass;
+}

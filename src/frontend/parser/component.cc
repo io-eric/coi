@@ -428,63 +428,151 @@ Component Parser::parse_component()
         // Variable declaration (note: VOID not valid here, only in return types)
         if (current().type == TokenType::INT || current().type == TokenType::STRING ||
             current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
-            current().type == TokenType::BOOL || current().type == TokenType::IDENTIFIER)
+            current().type == TokenType::BOOL || current().type == TokenType::IDENTIFIER ||
+            (current().type == TokenType::DEF && is_mutable))
         {
             auto var_decl = std::make_unique<VarDeclaration>();
-            var_decl->type = current().value;
             var_decl->is_public = is_public;
-            advance();
-
-            // Handle Module::Type syntax for namespaced types
-            if (current().type == TokenType::DOUBLE_COLON)
+            if (current().type == TokenType::DEF)
             {
-                advance();
-                var_decl->type += "::" + current().value;
-                expect(TokenType::IDENTIFIER, "Expected type name after '::'");
-            }
+                // Function-typed variable declaration
+                // Supported syntax:
+                //   def name(type1, type2) : ret
+                advance(); // consume 'def'
 
-            // Handle Component.EnumName type syntax for shared enums
-            if (current().type == TokenType::DOT)
-            {
-                advance();
-                var_decl->type += "." + current().value;
-                expect(TokenType::IDENTIFIER, "Expected enum name after '.'");
-            }
+                std::string parsed_name;
+                std::vector<std::string> callback_params;
 
-            // Handle reference type
-            if (current().type == TokenType::AMPERSAND)
-            {
-                var_decl->is_reference = true;
-                advance();
-            }
-
-            if (current().type == TokenType::LBRACKET)
-            {
-                advance();
-                if (current().type == TokenType::INT_LITERAL)
+                if (is_identifier_token() && peek().type == TokenType::LPAREN)
                 {
-                    // Fixed-size array: Type[N]
-                    std::string size = current().value;
+                    parsed_name = current().value;
                     advance();
-                    expect(TokenType::RBRACKET, "Expected ']'");
-                    var_decl->type += "[" + size + "]";
                 }
                 else
                 {
-                    // Dynamic array: Type[]
-                    expect(TokenType::RBRACKET, "Expected ']'");
-                    var_decl->type += "[]";
+                    throw std::runtime_error("Expected function variable name after 'def'");
                 }
-            }
 
-            var_decl->name = current().value;
-            if (is_identifier_token())
-            {
-                advance();
+                expect(TokenType::LPAREN, "Expected '(' in function type declaration");
+                while (current().type != TokenType::RPAREN && current().type != TokenType::END_OF_FILE)
+                {
+                    std::string param_type = current().value;
+                    if (current().type == TokenType::INT || current().type == TokenType::STRING ||
+                        current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
+                        current().type == TokenType::BOOL || current().type == TokenType::IDENTIFIER ||
+                        current().type == TokenType::VOID)
+                    {
+                        advance();
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Expected parameter type in function type declaration");
+                    }
+
+                    // Handle array type
+                    if (current().type == TokenType::LBRACKET)
+                    {
+                        advance();
+                        expect(TokenType::RBRACKET, "Expected ']'");
+                        param_type += "[]";
+                    }
+
+                    // Skip optional parameter name
+                    if (is_identifier_token())
+                    {
+                        advance();
+                    }
+
+                    callback_params.push_back(param_type);
+
+                    if (current().type == TokenType::COMMA)
+                    {
+                        advance();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                expect(TokenType::RPAREN, "Expected ')' after function type parameters");
+                expect(TokenType::COLON, "Expected ':' in function type declaration");
+
+                std::string ret_type = current().value;
+                if (is_type_token())
+                {
+                    advance();
+                }
+                else
+                {
+                    throw std::runtime_error("Expected return type in function type declaration");
+                }
+
+                std::string params_str;
+                for (size_t i = 0; i < callback_params.size(); ++i)
+                {
+                    if (i > 0)
+                        params_str += ", ";
+                    params_str += convert_type(callback_params[i]);
+                }
+                var_decl->type = "webcc::function<" + convert_type(ret_type) + "(" + params_str + ")>";
+                var_decl->name = parsed_name;
             }
             else
             {
-                expect(TokenType::IDENTIFIER, "Expected variable name");
+                var_decl->type = current().value;
+                advance();
+
+                // Handle Module::Type syntax for namespaced types
+                if (current().type == TokenType::DOUBLE_COLON)
+                {
+                    advance();
+                    var_decl->type += "::" + current().value;
+                    expect(TokenType::IDENTIFIER, "Expected type name after '::'");
+                }
+
+                // Handle Component.EnumName type syntax for shared enums
+                if (current().type == TokenType::DOT)
+                {
+                    advance();
+                    var_decl->type += "." + current().value;
+                    expect(TokenType::IDENTIFIER, "Expected enum name after '.'");
+                }
+
+                // Handle reference type
+                if (current().type == TokenType::AMPERSAND)
+                {
+                    var_decl->is_reference = true;
+                    advance();
+                }
+
+                if (current().type == TokenType::LBRACKET)
+                {
+                    advance();
+                    if (current().type == TokenType::INT_LITERAL)
+                    {
+                        // Fixed-size array: Type[N]
+                        std::string size = current().value;
+                        advance();
+                        expect(TokenType::RBRACKET, "Expected ']'");
+                        var_decl->type += "[" + size + "]";
+                    }
+                    else
+                    {
+                        // Dynamic array: Type[]
+                        expect(TokenType::RBRACKET, "Expected ']'");
+                        var_decl->type += "[]";
+                    }
+                }
+
+                var_decl->name = current().value;
+                if (is_identifier_token())
+                {
+                    advance();
+                }
+                else
+                {
+                    expect(TokenType::IDENTIFIER, "Expected variable name");
+                }
             }
             var_decl->is_mutable = is_mutable;
 
@@ -567,44 +655,139 @@ Component Parser::parse_component()
                     advance();
                 }
 
-                std::string paramType = current().value;
-                if (current().type == TokenType::INT || current().type == TokenType::FLOAT ||
-                    current().type == TokenType::FLOAT32 ||
-                    current().type == TokenType::STRING || current().type == TokenType::BOOL ||
-                    current().type == TokenType::IDENTIFIER)
+                std::string paramType;
+                std::string paramName;
+                bool parsed_function_param = false;
+
+                if (current().type == TokenType::DEF)
                 {
-                    advance();
-                    // Check for array type: Type[]
-                    if (current().type == TokenType::LBRACKET)
+                    // Function-typed method parameter
+                    // Supported syntax:
+                    //   def handler(type1, type2) : ret
+                    parsed_function_param = true;
+                    advance(); // consume 'def'
+
+                    std::vector<std::string> callback_params;
+
+                    if (is_identifier_token() && peek().type == TokenType::LPAREN)
+                    {
+                        paramName = current().value;
+                        advance();
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Expected function parameter name after 'def'");
+                    }
+
+                    expect(TokenType::LPAREN, "Expected '(' in function parameter type");
+                    while (current().type != TokenType::RPAREN && current().type != TokenType::END_OF_FILE)
+                    {
+                        std::string callback_param_type = current().value;
+                        if (current().type == TokenType::INT || current().type == TokenType::FLOAT ||
+                            current().type == TokenType::FLOAT32 || current().type == TokenType::STRING ||
+                            current().type == TokenType::BOOL || current().type == TokenType::IDENTIFIER ||
+                            current().type == TokenType::VOID)
+                        {
+                            advance();
+                        }
+                        else
+                        {
+                            throw std::runtime_error("Expected parameter type in function parameter");
+                        }
+
+                        if (current().type == TokenType::LBRACKET)
+                        {
+                            advance();
+                            expect(TokenType::RBRACKET, "Expected ']' for array type");
+                            callback_param_type += "[]";
+                        }
+
+                        // Optional parameter name in callback signature
+                        if (is_identifier_token())
+                        {
+                            advance();
+                        }
+
+                        callback_params.push_back(callback_param_type);
+
+                        if (current().type == TokenType::COMMA)
+                        {
+                            advance();
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    expect(TokenType::RPAREN, "Expected ')' in function parameter type");
+                    expect(TokenType::COLON, "Expected ':' for function parameter return type");
+
+                    std::string retType = current().value;
+                    if (is_type_token())
                     {
                         advance();
-                        expect(TokenType::RBRACKET, "Expected ']' for array type");
-                        paramType += "[]";
                     }
+                    else
+                    {
+                        throw std::runtime_error("Expected return type in function parameter");
+                    }
+
+                    std::string params_str;
+                    for (size_t i = 0; i < callback_params.size(); ++i)
+                    {
+                        if (i > 0)
+                            params_str += ", ";
+                        params_str += convert_type(callback_params[i]);
+                    }
+                    paramType = "webcc::function<" + convert_type(retType) + "(" + params_str + ")>";
                 }
                 else
                 {
-                    throw std::runtime_error("Expected parameter type");
+                    paramType = current().value;
+                    if (current().type == TokenType::INT || current().type == TokenType::FLOAT ||
+                        current().type == TokenType::FLOAT32 ||
+                        current().type == TokenType::STRING || current().type == TokenType::BOOL ||
+                        current().type == TokenType::IDENTIFIER)
+                    {
+                        advance();
+                        // Check for array type: Type[]
+                        if (current().type == TokenType::LBRACKET)
+                        {
+                            advance();
+                            expect(TokenType::RBRACKET, "Expected ']' for array type");
+                            paramType += "[]";
+                        }
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Expected parameter type");
+                    }
+
+                    bool is_reference = false;
+                    if (current().type == TokenType::AMPERSAND)
+                    {
+                        is_reference = true;
+                        advance();
+                    }
+
+                    paramName = current().value;
+                    if (is_identifier_token())
+                    {
+                        advance();
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Expected parameter name at line " + std::to_string(current().line));
+                    }
+
+                    func.params.push_back({paramType, paramName, is_mutable_param, is_reference});
                 }
 
-                bool is_reference = false;
-                if (current().type == TokenType::AMPERSAND)
+                if (parsed_function_param)
                 {
-                    is_reference = true;
-                    advance();
+                    // Function parameters are not reference parameters in syntax today
+                    func.params.push_back({paramType, paramName, is_mutable_param, false});
                 }
-
-                std::string paramName = current().value;
-                if (is_identifier_token())
-                {
-                    advance();
-                }
-                else
-                {
-                    throw std::runtime_error("Expected parameter name at line " + std::to_string(current().line));
-                }
-
-                func.params.push_back({paramType, paramName, is_mutable_param, is_reference});
 
                 if (current().type == TokenType::COMMA)
                 {

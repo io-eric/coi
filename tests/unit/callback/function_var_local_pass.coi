@@ -1,0 +1,23 @@
+// Test: local function-typed variable declaration/assignment/invocation - should pass
+
+component TestFunctionVarLocalPass {
+    def handleMessage(string message) : void {
+    }
+
+    def run() : void {
+        def localHandler(string) : void = &handleMessage;
+        localHandler("msg");
+    }
+
+    init {
+        run();
+    }
+
+    view {
+        <div>ok</div>
+    }
+}
+
+app {
+    root = TestFunctionVarLocalPass;
+}

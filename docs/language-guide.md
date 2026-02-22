@@ -932,6 +932,61 @@ pub def reset() : void {
 }
 ```
 
+### Function References (Callbacks)
+
+You can store functions in variables using function types.
+
+**State variable syntax (component body):**
+
+```tsx
+component EventManager {
+    // Function-typed state variables must be mutable
+    mut def eventHandler(string) : void = &handleNoop;
+
+    def handleNoop(string msg) : void {
+    }
+}
+```
+
+**Local variable syntax (inside methods):**
+
+```tsx
+def run() : void {
+    def localHandler(string) : void = &handleMessage;
+    localHandler("hello");
+}
+```
+
+**Method parameter syntax:**
+
+```tsx
+pub def onEvent(def handler(string) : void) : void {
+    // No '&' needed here: handler is already a function value
+    eventHandler = handler;
+}
+```
+
+#### `&` Rule for Function Names
+
+When assigning a **function name** (method symbol) into a function-typed variable, use `&`:
+
+```tsx
+mut def handler(string) : void = &handleNoop;  // ✓
+handler = &handleCustom;                        // ✓
+
+mut def bad(string) : void = handleNoop;       // ✗ missing '&'
+handler = handleCustom;                        // ✗ missing '&'
+```
+
+When assigning a function-typed parameter/variable to another function-typed variable, do **not** use `&`.
+`next` is already a function value, so this is a value-to-value assignment:
+
+```tsx
+pub def setHandler(def next(string) : void) : void {
+    handler = next;   // ✓ copy function value
+}
+```
+
 ## Next Steps
 
 - [Components](components.md) — Component syntax, lifecycle, props
