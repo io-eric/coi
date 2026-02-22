@@ -839,7 +839,37 @@ std::string FunctionCall::to_webcc() {
 
         for(size_t i = 0; i < args.size(); i++){
             if (!first_arg) code += ", ";
-            code += args[i].value->to_webcc();
+            
+            // Check if this parameter expects a function type and the arg is a member function identifier
+            std::string arg_code;
+            bool wrapped = false;
+            if (i < map_method->params.size()) {
+                const std::string& param_type = map_method->params[i].type;
+                if (param_type.starts_with("function<")) {
+                    if (auto* id = dynamic_cast<Identifier*>(args[i].value.get())) {
+                        auto* sig = ComponentTypeContext::instance().get_method_signature(id->name);
+                        if (sig) {
+                            // Generate lambda wrapper for member function
+                            arg_code = "[this](";
+                            for (size_t j = 0; j < sig->param_types.size(); ++j) {
+                                if (j > 0) arg_code += ", ";
+                                arg_code += "const " + convert_type(sig->param_types[j]) + "& _arg" + std::to_string(j);
+                            }
+                            arg_code += ") { this->" + id->name + "(";
+                            for (size_t j = 0; j < sig->param_types.size(); ++j) {
+                                if (j > 0) arg_code += ", ";
+                                arg_code += "_arg" + std::to_string(j);
+                            }
+                            arg_code += "); }";
+                            wrapped = true;
+                        }
+                    }
+                }
+            }
+            if (!wrapped) {
+                arg_code = args[i].value->to_webcc();
+            }
+            code += arg_code;
             first_arg = false;
         }
         code += ")";
@@ -874,7 +904,33 @@ std::string FunctionCall::to_webcc() {
     std::string result = call_name + "(";
     for(size_t i = 0; i < args.size(); i++){
         if(i > 0) result += ", ";
-        result += args[i].value->to_webcc();
+        
+        // If this argument is passed by reference (&) and is an identifier that's a member function,
+        // generate a lambda wrapper for C++ compatibility
+        std::string arg_code;
+        if (args[i].is_reference) {
+            if (auto* id = dynamic_cast<Identifier*>(args[i].value.get())) {
+                auto* sig = ComponentTypeContext::instance().get_method_signature(id->name);
+                if (sig) {
+                    // Generate lambda wrapper for member function reference
+                    arg_code = "[this](";
+                    for (size_t j = 0; j < sig->param_types.size(); ++j) {
+                        if (j > 0) arg_code += ", ";
+                        arg_code += "const " + convert_type(sig->param_types[j]) + "& _arg" + std::to_string(j);
+                    }
+                    arg_code += ") { this->" + id->name + "(";
+                    for (size_t j = 0; j < sig->param_types.size(); ++j) {
+                        if (j > 0) arg_code += ", ";
+                        arg_code += "_arg" + std::to_string(j);
+                    }
+                    arg_code += "); }";
+                }
+            }
+        }
+        if (arg_code.empty()) {
+            arg_code = args[i].value->to_webcc();
+        }
+        result += arg_code;
     }
     result += ")";
     return result;
