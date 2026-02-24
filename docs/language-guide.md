@@ -12,6 +12,7 @@ Coi enforces naming conventions to distinguish between different constructs:
 | Pod types | `UpperCase` | `pod User` | ✓ Yes |
 | Enums | `UpperCase` | `enum Mode` | ✓ Yes |
 | Modules | `UpperCase` | `module MyLib` | ✓ Yes |
+| Generic type parameters | `UpperCase` | `def first<T>(...)` | ✓ Yes |
 | Methods | `lowerCase` | `def handleClick()` | ✓ Yes |
 | Variables | `lowerCase` | `mut int count` | Recommended |
 
@@ -406,6 +407,28 @@ component App {
     mut Config config;
 }
 ```
+
+### Generic Pod Types
+
+Pod types can be generic using one or more type parameters:
+
+```tsx
+pod Result<T> {
+    bool ok;
+    T value;
+    string error;
+}
+
+pod Pair<A, B> {
+    A first;
+    B second;
+}
+```
+
+**Rules:**
+- Type parameter names are required to start with an uppercase letter (for example: `T`, `A`, `B`)
+- You can use generic types as field types (for example: `Result<int>`, `Pair<string, int>`)
+- Arrays are supported with generics (for example: `Result<int[]>`)
 
 ### Field Rules
 
@@ -931,6 +954,33 @@ pub def reset() : void {
     count = 0;
 }
 ```
+
+### Generic Functions
+
+Functions can be generic using type parameters after the function name:
+
+```tsx
+def first<T>(T[] items) : T {
+    return items[0];
+}
+
+def clamp<T>(T val, T lo, T hi) : T {
+    return val < lo ? lo : val > hi ? hi : val;
+}
+```
+
+Type parameters can also be multiple:
+
+```tsx
+def makePair<A, B>(A first, B second) : Pair<A, B> {
+    return Pair<A, B>{first, second};
+}
+```
+
+**Rules:**
+- Generic function names still follow normal method naming (`lowerCase`)
+- Type parameter names are required to start with uppercase
+- Generic type arguments are written with angle brackets, like `Type<T>` or `Type<A, B>`
 
 ### Function References (Callbacks)
 

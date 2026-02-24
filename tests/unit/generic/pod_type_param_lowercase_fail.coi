@@ -1,0 +1,16 @@
+// Test: Generic pod type parameter must start with uppercase
+pod Result<t> {
+    bool ok;
+    t value;
+    string error;
+}
+
+component GenericPodTypeParamLowerFail {
+    view {
+        <div>fail</div>
+    }
+}
+
+app {
+    root = GenericPodTypeParamLowerFail;
+}

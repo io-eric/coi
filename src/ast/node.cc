@@ -6,6 +6,56 @@
 std::string convert_type(const std::string& type) {
     if (type == "string") return "coi::string";
     
+    // Handle generic types: Result<int>, Pair<A, B>
+    size_t lt_pos = type.find('<');
+    if (lt_pos != std::string::npos && type.back() == '>') {
+        std::string base = type.substr(0, lt_pos);
+        std::string args_str = type.substr(lt_pos + 1, type.length() - lt_pos - 2);
+        
+        // Parse and convert type arguments, handling nested generics
+        std::string converted_args;
+        std::string current_arg;
+        int depth = 0;
+        
+        for (size_t i = 0; i < args_str.length(); ++i) {
+            char c = args_str[i];
+            if (c == '<') {
+                depth++;
+                current_arg += c;
+            } else if (c == '>') {
+                depth--;
+                current_arg += c;
+            } else if (c == ',' && depth == 0) {
+                // Trim whitespace
+                size_t start = current_arg.find_first_not_of(" ");
+                size_t end = current_arg.find_last_not_of(" ");
+                if (start != std::string::npos) {
+                    current_arg = current_arg.substr(start, end - start + 1);
+                }
+                if (!converted_args.empty()) converted_args += ", ";
+                converted_args += convert_type(current_arg);
+                current_arg.clear();
+            } else {
+                current_arg += c;
+            }
+        }
+        
+        // Handle last argument
+        if (!current_arg.empty()) {
+            size_t start = current_arg.find_first_not_of(" ");
+            size_t end = current_arg.find_last_not_of(" ");
+            if (start != std::string::npos) {
+                current_arg = current_arg.substr(start, end - start + 1);
+            }
+            if (!converted_args.empty()) converted_args += ", ";
+            converted_args += convert_type(current_arg);
+        }
+        
+        // Convert the base type
+        std::string converted_base = convert_type(base);
+        return converted_base + "<" + converted_args + ">";
+    }
+    
     // Check if this is a component-local type and prefix it
     std::string resolved_local = ComponentTypeContext::instance().resolve(type);
     if (resolved_local != type) {

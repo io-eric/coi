@@ -1,0 +1,20 @@
+// Test: Generic function declarations compile
+component GenericFunctionBasic {
+    def first<T>(T[] items) : T {
+        return items[0];
+    }
+
+    def clamp<T>(T val, T lo, T hi) : T {
+        return val < lo ? lo : val > hi ? hi : val;
+    }
+
+    mut int[] ints = [10, 20, 30];
+
+    view {
+        <div>{first(ints)}</div>
+    }
+}
+
+app {
+    root = GenericFunctionBasic;
+}

@@ -7,6 +7,7 @@ struct FunctionDef {
     std::string name;
     std::string return_type;
     bool is_public = false;
+    std::vector<std::string> type_params;  // Generic type parameters (e.g., ["T"] or ["A", "B"])
     struct Param {
         std::string type;
         std::string name;
@@ -30,6 +31,7 @@ struct DataDef : ASTNode {
     std::string module_name;  // Module this type belongs to
     std::string source_file;  // Absolute path to the file this type is defined in
     bool is_public = false;   // Requires pub keyword to be importable
+    std::vector<std::string> type_params;  // Generic type parameters (e.g., ["T"] or ["A", "B"])
     std::vector<DataField> fields;
 
     std::string to_webcc() override;
