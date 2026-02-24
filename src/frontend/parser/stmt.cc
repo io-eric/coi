@@ -110,6 +110,7 @@ std::unique_ptr<Statement> Parser::parse_statement()
         // Distinguish between Variable Declaration and other statements starting with Identifier
         // Declaration: Type Name ... | Type[] Name ... | Type[N] Name ... | Type& Name ...
         //              Module::Type Name ... (namespaced type)
+        //              Type<Arg> Name ... | Type<A, B> Name ... (generic type instantiation)
         // Assignment:  Name = ... | Name[index] = ... | Name[index].member = ...
         // Call:        Name(...)
 
@@ -121,6 +122,32 @@ std::unique_ptr<Statement> Parser::parse_statement()
         else if (next.type == TokenType::AMPERSAND)
         {
             is_type = true; // "Type& Name"
+        }
+        else if (next.type == TokenType::LT)
+        {
+            // Check for generic type instantiation: Type<...> Name
+            // Need to scan past the <...> to see if followed by identifier
+            size_t saved_pos = pos;
+            int depth = 0;
+            bool found_name = false;
+            
+            // Skip to after Type
+            saved_pos++; // Type
+            saved_pos++; // <
+            depth = 1;
+            
+            while (depth > 0 && saved_pos < tokens.size())
+            {
+                if (tokens[saved_pos].type == TokenType::LT) depth++;
+                else if (tokens[saved_pos].type == TokenType::GT) depth--;
+                saved_pos++;
+            }
+            
+            // Check if followed by identifier (the variable name)
+            if (saved_pos < tokens.size() && tokens[saved_pos].type == TokenType::IDENTIFIER)
+            {
+                is_type = true; // Type<...> Name
+            }
         }
         else if (next.type == TokenType::DOUBLE_COLON)
         {
@@ -242,6 +269,51 @@ std::unique_ptr<Statement> Parser::parse_statement()
                 advance();
                 type += "::" + current().value;
                 expect(TokenType::IDENTIFIER, "Expected type name after '::'");
+            }
+
+            // Handle generic type arguments: Result<int>, Pair<A, B>
+            if (current().type == TokenType::LT)
+            {
+                type += "<";
+                advance(); // skip '<'
+                bool first = true;
+                int depth = 1;
+                while (depth > 0 && current().type != TokenType::END_OF_FILE)
+                {
+                    if (current().type == TokenType::LT)
+                    {
+                        type += "<";
+                        depth++;
+                        advance();
+                    }
+                    else if (current().type == TokenType::GT)
+                    {
+                        depth--;
+                        if (depth > 0) type += ">";
+                        advance();
+                    }
+                    else if (current().type == TokenType::COMMA)
+                    {
+                        type += ", ";
+                        advance();
+                    }
+                    else if (current().type == TokenType::LBRACKET)
+                    {
+                        advance();
+                        expect(TokenType::RBRACKET, "Expected ']' for array type argument");
+                        type += "[]";
+                    }
+                    else if (is_type_token() || current().type == TokenType::IDENTIFIER)
+                    {
+                        type += current().value;
+                        advance();
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Unexpected token in generic type arguments");
+                    }
+                }
+                type += ">";
             }
 
             // Handle reference type

@@ -17,10 +17,39 @@ std::unique_ptr<DataDef> Parser::parse_data()
         ErrorHandler::compiler_error("Pod type name '" + name + "' must start with an uppercase letter", name_line);
     }
 
-    expect(TokenType::LBRACE, "Expected '{'");
-
     auto def = std::make_unique<DataDef>();
     def->name = name;
+
+    // Parse generic type parameters: pod Result<T> { ... }
+    if (current().type == TokenType::LT)
+    {
+        advance(); // skip '<'
+        while (current().type != TokenType::GT && current().type != TokenType::END_OF_FILE)
+        {
+            std::string type_param = current().value;
+            expect(TokenType::IDENTIFIER, "Expected type parameter name");
+            
+            // Type parameter names must start with uppercase
+            if (!type_param.empty() && !std::isupper(type_param[0]))
+            {
+                ErrorHandler::compiler_error("Type parameter '" + type_param + "' must start with an uppercase letter", current().line);
+            }
+            
+            def->type_params.push_back(type_param);
+            
+            if (current().type == TokenType::COMMA)
+            {
+                advance();
+            }
+            else
+            {
+                break;
+            }
+        }
+        expect(TokenType::GT, "Expected '>' after type parameters");
+    }
+
+    expect(TokenType::LBRACE, "Expected '{'");
 
     while (current().type != TokenType::RBRACE && current().type != TokenType::END_OF_FILE)
     {
@@ -35,6 +64,59 @@ std::unique_ptr<DataDef> Parser::parse_data()
         else
         {
             ErrorHandler::compiler_error("Expected type in pod field", current().line);
+        }
+
+        // Handle generic type arguments: Result<int>, Pair<A, B>
+        if (current().type == TokenType::LT)
+        {
+            type += "<";
+            advance(); // skip '<'
+            bool first = true;
+            while (current().type != TokenType::GT && current().type != TokenType::END_OF_FILE)
+            {
+                if (!first) type += ", ";
+                first = false;
+                
+                std::string arg_type = current().value;
+                if (current().type == TokenType::INT || current().type == TokenType::STRING ||
+                    current().type == TokenType::FLOAT || current().type == TokenType::FLOAT32 ||
+                    current().type == TokenType::BOOL || current().type == TokenType::IDENTIFIER)
+                {
+                    advance();
+                }
+                else
+                {
+                    ErrorHandler::compiler_error("Expected type argument", current().line);
+                }
+                type += arg_type;
+                
+                // Handle array type as type argument: Result<int[]>
+                if (current().type == TokenType::LBRACKET)
+                {
+                    advance();
+                    expect(TokenType::RBRACKET, "Expected ']' for array type argument");
+                    type += "[]";
+                }
+                
+                if (current().type == TokenType::COMMA)
+                {
+                    advance();
+                }
+                else
+                {
+                    break;
+                }
+            }
+            expect(TokenType::GT, "Expected '>' after type arguments");
+            type += ">";
+        }
+
+        // Handle array suffix: T[]
+        if (current().type == TokenType::LBRACKET)
+        {
+            advance();
+            expect(TokenType::RBRACKET, "Expected ']' for array type");
+            type += "[]";
         }
 
         std::string fieldName = current().value;
@@ -530,6 +612,50 @@ Component Parser::parse_component()
                     expect(TokenType::IDENTIFIER, "Expected type name after '::'");
                 }
 
+                // Handle generic type arguments: Result<int>, Pair<A, B>
+                if (current().type == TokenType::LT)
+                {
+                    var_decl->type += "<";
+                    advance(); // skip '<'
+                    int depth = 1;
+                    while (depth > 0 && current().type != TokenType::END_OF_FILE)
+                    {
+                        if (current().type == TokenType::LT)
+                        {
+                            var_decl->type += "<";
+                            depth++;
+                            advance();
+                        }
+                        else if (current().type == TokenType::GT)
+                        {
+                            depth--;
+                            if (depth > 0) var_decl->type += ">";
+                            advance();
+                        }
+                        else if (current().type == TokenType::COMMA)
+                        {
+                            var_decl->type += ", ";
+                            advance();
+                        }
+                        else if (current().type == TokenType::LBRACKET)
+                        {
+                            advance();
+                            expect(TokenType::RBRACKET, "Expected ']' for array type argument");
+                            var_decl->type += "[]";
+                        }
+                        else if (is_type_token() || current().type == TokenType::IDENTIFIER)
+                        {
+                            var_decl->type += current().value;
+                            advance();
+                        }
+                        else
+                        {
+                            throw std::runtime_error("Unexpected token in generic type arguments");
+                        }
+                    }
+                    var_decl->type += ">";
+                }
+
                 // Handle Component.EnumName type syntax for shared enums
                 if (current().type == TokenType::DOT)
                 {
@@ -641,6 +767,35 @@ Component Parser::parse_component()
             if (!func.name.empty() && std::isupper(func.name[0]))
             {
                 ErrorHandler::compiler_error("Method name '" + func.name + "' must start with a lowercase letter", func_line);
+            }
+
+            // Parse generic type parameters: def first<T>(...) : T
+            if (current().type == TokenType::LT)
+            {
+                advance(); // skip '<'
+                while (current().type != TokenType::GT && current().type != TokenType::END_OF_FILE)
+                {
+                    std::string type_param = current().value;
+                    expect(TokenType::IDENTIFIER, "Expected type parameter name");
+                    
+                    // Type parameter names must start with uppercase
+                    if (!type_param.empty() && !std::isupper(type_param[0]))
+                    {
+                        ErrorHandler::compiler_error("Type parameter '" + type_param + "' must start with an uppercase letter", current().line);
+                    }
+                    
+                    func.type_params.push_back(type_param);
+                    
+                    if (current().type == TokenType::COMMA)
+                    {
+                        advance();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                expect(TokenType::GT, "Expected '>' after type parameters");
             }
 
             expect(TokenType::LPAREN, "Expected '('");

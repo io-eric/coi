@@ -1,0 +1,21 @@
+// Test: Generic pod declarations compile
+pod Result<T> {
+    bool ok;
+    T value;
+    string error;
+}
+
+pod Pair<A, B> {
+    A first;
+    B second;
+}
+
+component GenericPodBasic {
+    view {
+        <div>generic pods declared</div>
+    }
+}
+
+app {
+    root = GenericPodBasic;
+}

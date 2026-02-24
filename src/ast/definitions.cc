@@ -4,7 +4,19 @@
 std::string FunctionDef::to_webcc(const std::string& injected_code) {
     ComponentTypeContext::instance().begin_method_scope();
 
-    std::string result = convert_type(return_type) + " " + name + "(";
+    std::string result;
+    
+    // Generate template declaration for generic functions
+    if (!type_params.empty()) {
+        result += "template<";
+        for (size_t i = 0; i < type_params.size(); ++i) {
+            if (i > 0) result += ", ";
+            result += "typename " + type_params[i];
+        }
+        result += ">\n";
+    }
+    
+    result += convert_type(return_type) + " " + name + "(";
     
     for(size_t i = 0; i < params.size(); i++){
         if(i > 0) result += ", ";
@@ -36,6 +48,17 @@ void FunctionDef::collect_modifications(std::set<std::string>& mods) const {
 
 std::string DataDef::to_webcc() {
     std::stringstream ss;
+    
+    // Generate template declaration for generic types
+    if (!type_params.empty()) {
+        ss << "template<";
+        for (size_t i = 0; i < type_params.size(); ++i) {
+            if (i > 0) ss << ", ";
+            ss << "typename " << type_params[i];
+        }
+        ss << ">\n";
+    }
+    
     ss << "struct " << qualified_name(module_name, name) << " {\n";
     for(const auto& field : fields){
         ss << "    " << convert_type(field.type) << " " << field.name << ";\n";

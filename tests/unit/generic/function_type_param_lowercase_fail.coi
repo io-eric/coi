@@ -1,0 +1,14 @@
+// Test: Generic function type parameter must start with uppercase
+component GenericFunctionTypeParamLowerFail {
+    def first<t>(t[] items) : t {
+        return items[0];
+    }
+
+    view {
+        <div>fail</div>
+    }
+}
+
+app {
+    root = GenericFunctionTypeParamLowerFail;
+}
