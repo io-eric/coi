@@ -134,31 +134,77 @@ fi
 echo "[Coi] Running Ninja..."
 ninja
 
+resolve_install_dir() {
+    local candidates=()
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        candidates=("/opt/homebrew/bin" "/usr/local/bin")
+    else
+        candidates=("/usr/local/bin")
+    fi
+
+    # Prefer a directory that exists and is already in PATH
+    for dir in "${candidates[@]}"; do
+        if [ -d "$dir" ] && [[ ":$PATH:" == *":$dir:"* ]]; then
+            echo "$dir"
+            return
+        fi
+    done
+
+    # Fallback to first existing candidate
+    for dir in "${candidates[@]}"; do
+        if [ -d "$dir" ]; then
+            echo "$dir"
+            return
+        fi
+    done
+
+    # Last resort for user-local installs
+    echo "$HOME/.local/bin"
+}
+
 # Check if coi is already linked correctly
 if command -v coi >/dev/null 2>&1 && [ "$(command -v coi)" -ef "$PWD/coi" ]; then
     echo "coi is already configured in PATH."
     exit 0
 fi
 
-# Only offer install if /usr/local/bin exists (common on Linux/macOS)
-# And we are in an interactive terminal and not in CIs
-if [ -d "/usr/local/bin" ] && [ -t 0 ] && [ -z "$CI" ]; then
+# Only offer install in interactive terminals outside CI
+if [ -t 0 ] && [ -z "$CI" ]; then
+    INSTALL_DIR=$(resolve_install_dir)
+
+    if [ "$INSTALL_DIR" = "$HOME/.local/bin" ] && [ ! -d "$INSTALL_DIR" ]; then
+        mkdir -p "$INSTALL_DIR"
+    fi
+
     echo ""
     
     # Offer to install coi
     if ! command -v coi >/dev/null 2>&1 || [ ! "$(command -v coi)" -ef "$PWD/coi" ]; then
-        read -p "Would you like to create a symlink for 'coi' in /usr/local/bin? [y/N] " -n 1 -r
+        read -p "Would you like to create a symlink for 'coi' in $INSTALL_DIR? [y/N] " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            TARGET="/usr/local/bin/coi"
-            if [ -w /usr/local/bin ]; then
+            TARGET="$INSTALL_DIR/coi"
+            if [ -w "$INSTALL_DIR" ]; then
                 ln -sf "$PWD/coi" "$TARGET"
             else
-                echo "Need sudo access to write to /usr/local/bin"
+                echo "Need sudo access to write to $INSTALL_DIR"
                 sudo ln -sf "$PWD/coi" "$TARGET"
             fi
             echo "Symlink created: $TARGET -> $PWD/coi"
             echo "You can now use 'coi' command from any directory."
+
+            if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+                echo ""
+                echo "Note: $INSTALL_DIR is not currently in your PATH."
+                if [[ "$OSTYPE" == "darwin"* ]]; then
+                    echo "Add this to ~/.zshrc:"
+                    echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
+                else
+                    echo "Add this to your shell config (e.g. ~/.bashrc):"
+                    echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
+                fi
+            fi
         fi
     fi
 fi
