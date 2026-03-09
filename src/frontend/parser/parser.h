@@ -39,6 +39,10 @@ class Parser{
         bool is_identifier_token();              // IDENTIFIER, KEY, DATA (keywords usable as names)
         std::vector<CallArg> parse_call_args(TokenType end_token);  // Parse (args) or {args}
         
+        // Parse array/map type suffix after '[' has been consumed
+        // Returns "[]" for dynamic array, "[N]" for fixed-size array, "[KeyType]" for map
+        std::string parse_type_bracket_suffix();
+        
         // Parse callback signature: def name(types...) : returnType
         // Returns pair of (formatted_type_string, callback_name)
         // Assumes DEF token already consumed

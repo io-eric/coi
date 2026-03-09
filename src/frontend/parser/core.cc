@@ -67,6 +67,39 @@ bool Parser::is_identifier_token()
     return false;
 }
 
+// Parse array/map type suffix after '[' has been consumed
+// Returns "[]" for dynamic array, "[N]" for fixed-size array, "[KeyType]" for map
+std::string Parser::parse_type_bracket_suffix()
+{
+    if (current().type == TokenType::INT_LITERAL)
+    {
+        // Fixed-size array: Type[N]
+        std::string size = current().value;
+        advance();
+        expect(TokenType::RBRACKET, "Expected ']'");
+        return "[" + size + "]";
+    }
+    else if (current().type == TokenType::RBRACKET)
+    {
+        // Dynamic array: Type[]
+        advance();
+        return "[]";
+    }
+    else if (is_type_token())
+    {
+        // Map type: ValueType[KeyType]
+        std::string key_type = current().value;
+        advance();
+        expect(TokenType::RBRACKET, "Expected ']'");
+        return "[" + key_type + "]";
+    }
+    else
+    {
+        expect(TokenType::RBRACKET, "Expected ']', size, or key type");
+        return "[]"; // Unreachable, expect throws
+    }
+}
+
 // Parse comma-separated arguments until end_token (RPAREN or RBRACE)
 // Supports: positional, named (name = val), reference (&val or &name = val), move (:val or name := val)
 std::vector<CallArg> Parser::parse_call_args(TokenType end_token)

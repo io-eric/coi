@@ -114,15 +114,21 @@ std::string convert_type(const std::string& type) {
         std::string inner = type.substr(0, type.length() - 2);
         return "coi::vector<" + convert_type(inner) + ">";
     }
-    // Handle fixed-size arrays: T[N]
+    // Handle fixed-size arrays: T[N] and maps: V[K]
     size_t bracket_pos = type.rfind('[');
     if (bracket_pos != std::string::npos && type.back() == ']') {
-        std::string size_str = type.substr(bracket_pos + 1, type.length() - bracket_pos - 2);
+        std::string bracket_content = type.substr(bracket_pos + 1, type.length() - bracket_pos - 2);
         // Check if it's a number (fixed-size array)
-        bool is_number = !size_str.empty() && std::all_of(size_str.begin(), size_str.end(), ::isdigit);
+        bool is_number = !bracket_content.empty() && std::all_of(bracket_content.begin(), bracket_content.end(), ::isdigit);
         if (is_number) {
             std::string inner = type.substr(0, bracket_pos);
-            return "coi::array<" + convert_type(inner) + ", " + size_str + ">";
+            return "coi::array<" + convert_type(inner) + ", " + bracket_content + ">";
+        }
+        // Otherwise it's a map type: ValueType[KeyType]
+        if (!bracket_content.empty()) {
+            std::string value_type = type.substr(0, bracket_pos);
+            std::string key_type = bracket_content;
+            return "coi::map<" + convert_type(key_type) + ", " + convert_type(value_type) + ">";
         }
     }
     // Check if type is a webcc handle type and add prefix

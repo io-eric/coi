@@ -163,6 +163,25 @@ int[] zeros = [0; 100];      // Array of 100 zeros
 int[] tens = [10; 5];        // [10, 10, 10, 10, 10]
 ```
 
+### Maps
+
+Maps are key-value collections where values are accessed by key rather than index. The syntax is `ValueType[KeyType]`.
+
+```tsx
+// Map declarations - ValueType[KeyType]
+int[string] ageByName;           // string keys, int values
+string[int] nameById;            // int keys, string values
+mut float[string] scores;        // Mutable map
+
+// Setting values
+mut int[string] ages;
+ages["alice"] = 25;
+ages["bob"] = 30;
+
+// Getting values
+int aliceAge = ages["alice"];    // Returns 25
+```
+
 ### Dynamic Array Methods (T[])
 
 ```tsx
@@ -208,6 +227,37 @@ bool has = fixed.contains(3); // Check if value exists
 // Index access
 int first = fixed[0];
 fixed[0] = 100;               // Requires mut
+```
+
+### Map Methods (V[K])
+
+```tsx
+mut int[string] ages;
+
+// Add entries
+ages["alice"] = 25;
+ages["bob"] = 30;
+
+// Size and state
+int count = ages.size();      // Get number of entries
+bool empty = ages.empty();    // Check if empty
+
+// Search
+bool has = ages.contains("alice");  // Check if key exists
+
+// Removal (requires mut)
+ages.erase("bob");            // Remove entry by key
+ages.clear();                 // Remove all entries
+
+// Key access
+int age = ages["alice"];      // Get value by key
+ages["alice"] = 26;           // Set value by key (requires mut)
+
+// Iteration - iterates over keys
+for string name in ages {
+    System.log(name);       // Prints each key
+    System.log(ages[name]); // Access value via key
+}
 ```
 
 ### Strings

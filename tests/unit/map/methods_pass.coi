@@ -1,0 +1,34 @@
+// Test: map methods like size, empty, contains, erase, clear
+component MapMethodsTest {
+    mut int[string] scores;
+    
+    def testMethods() : void {
+        // Add some entries
+        scores["alice"] = 100;
+        scores["bob"] = 85;
+        
+        // Test size
+        int count = scores.size();
+        
+        // Test empty
+        bool isEmpty = scores.empty();
+        
+        // Test contains
+        bool hasAlice = scores.contains("alice");
+        bool hasCharlie = scores.contains("charlie");
+        
+        // Test erase
+        scores.erase("bob");
+        
+        // Test clear
+        scores.clear();
+    }
+    
+    view {
+        <div>Map methods test</div>
+    }
+}
+
+app {
+    root = MapMethodsTest;
+}

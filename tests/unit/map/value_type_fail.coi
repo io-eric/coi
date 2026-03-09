@@ -1,0 +1,16 @@
+// Test: map value type mismatch should fail
+component MapValueTypeFail {
+    mut int[string] ages;
+    
+    def badAssign() : void {
+        ages["alice"] = "twenty";  // Error: value type is int, not string
+    }
+    
+    view {
+        <div>test</div>
+    }
+}
+
+app {
+    root = MapValueTypeFail;
+}

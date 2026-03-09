@@ -300,8 +300,7 @@ std::unique_ptr<Statement> Parser::parse_statement()
                     else if (current().type == TokenType::LBRACKET)
                     {
                         advance();
-                        expect(TokenType::RBRACKET, "Expected ']' for array type argument");
-                        type += "[]";
+                        type += parse_type_bracket_suffix();
                     }
                     else if (is_type_token() || current().type == TokenType::IDENTIFIER)
                     {
@@ -323,24 +322,11 @@ std::unique_ptr<Statement> Parser::parse_statement()
                 advance();
             }
 
-            // Handle array type
+            // Handle array type or map type
             if (current().type == TokenType::LBRACKET)
             {
                 advance();
-                if (current().type == TokenType::INT_LITERAL)
-                {
-                    // Fixed-size array: Type[N]
-                    std::string size = current().value;
-                    advance();
-                    expect(TokenType::RBRACKET, "Expected ']'");
-                    type += "[" + size + "]";
-                }
-                else
-                {
-                    // Dynamic array: Type[]
-                    expect(TokenType::RBRACKET, "Expected ']'");
-                    type += "[]";
-                }
+                type += parse_type_bracket_suffix();
             }
 
             name = current().value;
@@ -552,6 +538,7 @@ std::unique_ptr<Statement> Parser::parse_statement()
     }
 
     // Member assignment: obj.member = value or obj.a.b = value
+    // Also handles: obj.member[index] = value (map/array index on member)
     if (current().type == TokenType::IDENTIFIER && peek().type == TokenType::DOT)
     {
         // Look ahead to find if this is a member assignment
@@ -565,6 +552,24 @@ std::unique_ptr<Statement> Parser::parse_statement()
             if (current().type != TokenType::IDENTIFIER)
                 break;
             advance(); // skip member name
+        }
+
+        // Check for index access after member chain: obj.member[index] = value
+        bool has_index = false;
+        if (current().type == TokenType::LBRACKET)
+        {
+            has_index = true;
+            advance(); // skip '['
+            // Skip to matching ']'
+            int bracket_depth = 1;
+            while (bracket_depth > 0 && current().type != TokenType::END_OF_FILE)
+            {
+                if (current().type == TokenType::LBRACKET)
+                    bracket_depth++;
+                else if (current().type == TokenType::RBRACKET)
+                    bracket_depth--;
+                advance();
+            }
         }
 
         // Check if followed by assignment operator
@@ -583,6 +588,67 @@ std::unique_ptr<Statement> Parser::parse_statement()
 
         // Restore position
         pos = saved_pos;
+
+        if (is_member_assign && has_index)
+        {
+            // obj.member[index] = value - build MemberAccess then index into it
+            std::unique_ptr<Expression> obj_expr = std::make_unique<Identifier>(current().value);
+            advance(); // skip first identifier
+            advance(); // skip first '.'
+
+            std::string member = current().value;
+            expect(TokenType::IDENTIFIER, "Expected member name");
+
+            // Handle chained member access
+            while (current().type == TokenType::DOT)
+            {
+                advance(); // skip '.'
+                obj_expr = std::make_unique<MemberAccess>(std::move(obj_expr), member);
+                member = current().value;
+                expect(TokenType::IDENTIFIER, "Expected member name");
+            }
+
+            // Build full member access expression
+            obj_expr = std::make_unique<MemberAccess>(std::move(obj_expr), member);
+
+            expect(TokenType::LBRACKET, "Expected '['");
+            auto index_expr = parse_expression();
+            expect(TokenType::RBRACKET, "Expected ']'");
+
+            TokenType opType = current().type;
+            advance(); // skip assignment operator
+
+            auto idx_assign = std::make_unique<IndexAssignment>();
+            idx_assign->array = std::move(obj_expr);
+            idx_assign->index = std::move(index_expr);
+            idx_assign->value = parse_expression();
+
+            if (opType == TokenType::MOVE_ASSIGN)
+                idx_assign->is_move = true;
+            if (opType == TokenType::PLUS_ASSIGN)
+                idx_assign->compound_op = "+";
+            else if (opType == TokenType::MINUS_ASSIGN)
+                idx_assign->compound_op = "-";
+            else if (opType == TokenType::STAR_ASSIGN)
+                idx_assign->compound_op = "*";
+            else if (opType == TokenType::SLASH_ASSIGN)
+                idx_assign->compound_op = "/";
+            else if (opType == TokenType::PERCENT_ASSIGN)
+                idx_assign->compound_op = "%";
+            else if (opType == TokenType::AMPERSAND_ASSIGN)
+                idx_assign->compound_op = "&";
+            else if (opType == TokenType::PIPE_ASSIGN)
+                idx_assign->compound_op = "|";
+            else if (opType == TokenType::CARET_ASSIGN)
+                idx_assign->compound_op = "^";
+            else if (opType == TokenType::LSHIFT_ASSIGN)
+                idx_assign->compound_op = "<<";
+            else if (opType == TokenType::RSHIFT_ASSIGN)
+                idx_assign->compound_op = ">>";
+
+            expect(TokenType::SEMICOLON, "Expected ';'");
+            return idx_assign;
+        }
 
         if (is_member_assign)
         {

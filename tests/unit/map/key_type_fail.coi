@@ -1,0 +1,16 @@
+// Test: map key type mismatch should fail
+component MapKeyTypeFail {
+    mut int[string] ages;
+    
+    def badAccess() : void {
+        ages[123] = 25;  // Error: key type is string, not int
+    }
+    
+    view {
+        <div>test</div>
+    }
+}
+
+app {
+    root = MapKeyTypeFail;
+}

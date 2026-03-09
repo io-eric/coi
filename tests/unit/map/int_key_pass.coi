@@ -1,0 +1,22 @@
+// Test: map with int key type
+component MapIntKeyTest {
+    mut string[int] names;
+    
+    init {
+        names[1] = "Alice";
+        names[2] = "Bob";
+        names[100] = "Charlie";
+    }
+    
+    def getName(int id) : string {
+        return names[id];
+    }
+    
+    view {
+        <div>Map int key test</div>
+    }
+}
+
+app {
+    root = MapIntKeyTest;
+}
