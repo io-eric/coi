@@ -1,0 +1,27 @@
+// Test: iterating over map keys with for-each
+component MapIterationTest {
+    mut int[string] ages;
+    mut int total = 0;
+    
+    init {
+        ages["alice"] = 25;
+        ages["bob"] = 30;
+        ages["charlie"] = 35;
+    }
+    
+    def sumAges() : int {
+        mut int sum = 0;
+        for name in ages {
+            sum = sum + ages[name];
+        }
+        return sum;
+    }
+    
+    view {
+        <div>Map iteration test</div>
+    }
+}
+
+app {
+    root = MapIterationTest;
+}

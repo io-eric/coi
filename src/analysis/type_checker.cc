@@ -11,6 +11,8 @@
 static std::set<std::string> g_enum_types;
 // Global map of known data types to their field names (for Meta.has(Type.field))
 static std::map<std::string, std::set<std::string>> g_data_type_fields;
+// Global map of known data types to their field types (for member access type inference)
+static std::map<std::string, std::map<std::string, std::string>> g_data_type_field_types;
 
 // Forward declarations
 std::string normalize_type(const std::string &type);
@@ -41,6 +43,32 @@ static std::string extract_base_type(const std::string &type)
 static bool is_function_value_type(const std::string &type)
 {
     return type.rfind("coi::function<", 0) == 0 || type.rfind("webcc::function<", 0) == 0;
+}
+
+// Check if type is a map type (ValueType[KeyType]) and extract key/value types
+// Returns {value_type, key_type} or {"", ""} if not a map
+static std::pair<std::string, std::string> extract_map_types(const std::string &type)
+{
+    // Not a map if it ends with [] (dynamic array)
+    if (type.ends_with("[]"))
+        return {"", ""};
+    
+    size_t bracket_pos = type.rfind('[');
+    if (bracket_pos == std::string::npos || type.back() != ']')
+        return {"", ""};
+    
+    std::string bracket_content = type.substr(bracket_pos + 1, type.length() - bracket_pos - 2);
+    
+    // If bracket content is all digits, it's a fixed-size array, not a map
+    bool is_number = !bracket_content.empty() && 
+        std::all_of(bracket_content.begin(), bracket_content.end(), ::isdigit);
+    if (is_number)
+        return {"", ""};
+    
+    // It's a map: ValueType[KeyType]
+    std::string value_type = type.substr(0, bracket_pos);
+    std::string key_type = bracket_content;
+    return {value_type, key_type};
 }
 
 static void validate_data_fields_no_copy(const std::vector<std::unique_ptr<DataDef>> &data_defs)
@@ -179,6 +207,32 @@ static bool has_data_field(const std::string& type_name, const std::string& fiel
     return false;
 }
 
+// Get the type of a field on a known data type (returns empty string if not found)
+static std::string get_data_field_type(const std::string& type_name, const std::string& field_name) {
+    auto it = g_data_type_field_types.find(type_name);
+    if (it != g_data_type_field_types.end()) {
+        auto fit = it->second.find(field_name);
+        if (fit != it->second.end()) {
+            return fit->second;
+        }
+    }
+
+    size_t dot_pos = type_name.find('.');
+    if (dot_pos != std::string::npos) {
+        std::string module_qualified = type_name;
+        std::replace(module_qualified.begin(), module_qualified.end(), '.', '_');
+        auto mit = g_data_type_field_types.find(module_qualified);
+        if (mit != g_data_type_field_types.end()) {
+            auto fit = mit->second.find(field_name);
+            if (fit != mit->second.end()) {
+                return fit->second;
+            }
+        }
+    }
+
+    return "";
+}
+
 // Convert normalized type back to user-friendly display name for error messages
 static std::string display_type_name(const std::string &normalized_type)
 {
@@ -208,16 +262,22 @@ std::string normalize_type(const std::string &type)
         std::string elem_type = type.substr(0, type.length() - 2);
         return normalize_type(elem_type) + "[]";
     }
-    // Handle fixed-size array types: T[N]
+    // Handle fixed-size array types: T[N] and map types: V[K]
     size_t bracket_pos = type.rfind('[');
     if (bracket_pos != std::string::npos && type.back() == ']')
     {
-        std::string size_str = type.substr(bracket_pos + 1, type.length() - bracket_pos - 2);
-        bool is_number = !size_str.empty() && std::all_of(size_str.begin(), size_str.end(), ::isdigit);
+        std::string bracket_content = type.substr(bracket_pos + 1, type.length() - bracket_pos - 2);
+        bool is_number = !bracket_content.empty() && std::all_of(bracket_content.begin(), bracket_content.end(), ::isdigit);
+        std::string elem_type = type.substr(0, bracket_pos);
         if (is_number)
         {
-            std::string elem_type = type.substr(0, bracket_pos);
-            return normalize_type(elem_type) + "[" + size_str + "]";
+            // Fixed-size array: int[10]
+            return normalize_type(elem_type) + "[" + bracket_content + "]";
+        }
+        else
+        {
+            // Map type: int[string] -> normalize both key and value types
+            return normalize_type(elem_type) + "[" + normalize_type(bracket_content) + "]";
         }
     }
     
@@ -263,6 +323,16 @@ bool is_compatible_type(const std::string &source, const std::string &target)
     // Allow unknown[] to match any array type (for empty array literals)
     if (source == "unknown[]" && target.ends_with("[]"))
         return true;
+
+    // Handle map type compatibility: V[K]
+    auto [src_map_val, src_map_key] = extract_map_types(source);
+    auto [tgt_map_val, tgt_map_key] = extract_map_types(target);
+    if (!src_map_val.empty() && !tgt_map_val.empty())
+    {
+        // Both are maps - check key and value types match
+        return is_compatible_type(src_map_key, tgt_map_key) &&
+               is_compatible_type(src_map_val, tgt_map_val);
+    }
 
     // Handle fixed-size array type compatibility: T[N]
     // Extract element type and size from both source and target
@@ -391,6 +461,12 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
         {
             return arr_type.substr(0, arr_type.length() - 2);
         }
+        // Check if it's a map type (e.g., int[string]), return the value type
+        auto [value_type, key_type] = extract_map_types(arr_type);
+        if (!value_type.empty())
+        {
+            return normalize_type(value_type);
+        }
         // If it's a fixed-size array type (e.g., int[100]), return the element type
         size_t bracket_pos = arr_type.rfind('[');
         if (bracket_pos != std::string::npos && arr_type.back() == ']')
@@ -448,6 +524,16 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
         std::string obj_type = infer_expression_type(member->object.get(), scope);
         if (obj_type == "unknown")
             return "unknown";
+
+        // Check if object type is a known data type and look up the field type
+        if (is_data_type(obj_type))
+        {
+            std::string field_type = get_data_field_type(obj_type, member->member);
+            if (!field_type.empty())
+            {
+                return normalize_type(field_type);
+            }
+        }
 
         // Check if it's a schema type with known fields/properties
         // For now, return unknown - could be extended to check schema for field types
@@ -914,6 +1000,7 @@ void validate_types(const std::vector<Component> &components,
     // Collect all enum type names (for enum <-> int conversion checking)
     g_enum_types.clear();
     g_data_type_fields.clear();
+    g_data_type_field_types.clear();
     
     // Add global enums
     for (const auto &e : global_enums)
@@ -942,14 +1029,18 @@ void validate_types(const std::vector<Component> &components,
     for (const auto &d : global_data)
     {
         std::set<std::string> fields;
+        std::map<std::string, std::string> field_types;
         for (const auto &f : d->fields)
         {
             fields.insert(f.name);
+            field_types[f.name] = f.type;
         }
         g_data_type_fields[d->name] = fields;
+        g_data_type_field_types[d->name] = field_types;
         if (!d->module_name.empty())
         {
             g_data_type_fields[d->module_name + "_" + d->name] = fields;
+            g_data_type_field_types[d->module_name + "_" + d->name] = field_types;
         }
     }
 
@@ -959,15 +1050,20 @@ void validate_types(const std::vector<Component> &components,
         for (const auto &d : comp.data)
         {
             std::set<std::string> fields;
+            std::map<std::string, std::string> field_types;
             for (const auto &f : d->fields)
             {
                 fields.insert(f.name);
+                field_types[f.name] = f.type;
             }
             g_data_type_fields[d->name] = fields;
             g_data_type_fields[comp.name + "_" + d->name] = fields;
+            g_data_type_field_types[d->name] = field_types;
+            g_data_type_field_types[comp.name + "_" + d->name] = field_types;
             if (!comp.module_name.empty())
             {
                 g_data_type_fields[comp.module_name + "_" + comp.name + "_" + d->name] = fields;
+                g_data_type_field_types[comp.module_name + "_" + comp.name + "_" + d->name] = field_types;
             }
         }
     }
@@ -1452,7 +1548,14 @@ void validate_types(const std::vector<Component> &components,
                     // Validate iterable and infer element type
                     std::string iterable_type = infer_expression_type(for_each->iterable.get(), current_scope);
                     std::map<std::string, std::string> loop_scope = current_scope;
-                    if (iterable_type.ends_with("[]"))
+                    
+                    // Check if it's a map type - loop var is the key type
+                    auto [map_value_type, map_key_type] = extract_map_types(iterable_type);
+                    if (!map_value_type.empty())
+                    {
+                        loop_scope[for_each->var_name] = normalize_type(map_key_type);
+                    }
+                    else if (iterable_type.ends_with("[]"))
                     {
                         loop_scope[for_each->var_name] = iterable_type.substr(0, iterable_type.length() - 2);
                     }
@@ -1478,12 +1581,22 @@ void validate_types(const std::vector<Component> &components,
                         }
                     }
                     
-                    // Type check index assignment: arr[i] = value
+                    // Type check index assignment: arr[i] = value or map[key] = value
                     std::string array_type = infer_expression_type(idx_assign->array.get(), current_scope);
                     std::string element_type = "unknown";
+                    std::string expected_key_type = "";
+                    bool is_map = false;
                     
+                    // Check if it's a map type first
+                    auto [map_value_type, map_key_type] = extract_map_types(array_type);
+                    if (!map_value_type.empty())
+                    {
+                        element_type = normalize_type(map_value_type);
+                        expected_key_type = normalize_type(map_key_type);
+                        is_map = true;
+                    }
                     // Extract element type from array type
-                    if (array_type.ends_with("[]"))
+                    else if (array_type.ends_with("[]"))
                     {
                         element_type = array_type.substr(0, array_type.length() - 2);
                     }
@@ -1502,14 +1615,25 @@ void validate_types(const std::vector<Component> &components,
                     if (element_type != "unknown" && !is_compatible_type(element_type, value_type))
                     {
                         ErrorHandler::type_error(
-                            "Cannot assign '" + value_type + "' to array element of type '" + element_type + "'",
+                            "Cannot assign '" + value_type + "' to " + (is_map ? "map" : "array") + " element of type '" + element_type + "'",
                             idx_assign->line);
                         exit(1);
                     }
                     
-                    // Also validate index is numeric
+                    // Validate index/key type
                     std::string index_type = infer_expression_type(idx_assign->index.get(), current_scope);
-                    if (index_type != "int32" && index_type != "float64" && index_type != "float32" && index_type != "unknown")
+                    if (is_map)
+                    {
+                        // Map key type must match
+                        if (!is_compatible_type(expected_key_type, index_type) && index_type != "unknown")
+                        {
+                            ErrorHandler::type_error(
+                                "Map key must be '" + expected_key_type + "', got '" + index_type + "'",
+                                idx_assign->line);
+                            exit(1);
+                        }
+                    }
+                    else if (index_type != "int32" && index_type != "float64" && index_type != "float32" && index_type != "unknown")
                     {
                         ErrorHandler::type_error("Array index must be numeric, got '" + index_type + "'", idx_assign->line);
                         exit(1);
@@ -2141,7 +2265,14 @@ void validate_view_hierarchy(const std::vector<Component> &components,
             // Add loop variable to scope with inferred type from iterable
             std::map<std::string, std::string> loop_scope = scope;
             std::string iterable_type = infer_expression_type(viewForEach->iterable.get(), scope);
-            if (iterable_type.ends_with("[]"))
+            
+            // Check if it's a map type - loop var is the key type
+            auto [map_value_type, map_key_type] = extract_map_types(iterable_type);
+            if (!map_value_type.empty())
+            {
+                loop_scope[viewForEach->var_name] = normalize_type(map_key_type);
+            }
+            else if (iterable_type.ends_with("[]"))
             {
                 loop_scope[viewForEach->var_name] = iterable_type.substr(0, iterable_type.size() - 2);
             }

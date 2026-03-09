@@ -1,0 +1,26 @@
+// Test: map index assignment and access
+component MapIndexAccessTest {
+    mut int[string] ages;
+
+    init {
+        ages["alice"] = 25;
+        ages["bob"] = 30;
+        ages["charlie"] = 35;
+    }
+    
+    def getAge(string name) : int {
+        return ages[name];
+    }
+    
+    def setAge(string name, int age) : void {
+        ages[name] = age;
+    }
+    
+    view {
+        <div>Map index access test</div>
+    }
+}
+
+app {
+    root = MapIndexAccessTest;
+}

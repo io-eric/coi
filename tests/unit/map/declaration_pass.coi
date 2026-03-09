@@ -1,0 +1,15 @@
+// Test: map type declaration with various key/value types
+component MapDeclarationTest {
+    int[string] ageByName;
+    string[int] nameById;
+    float[string] scores;
+    bool[string] flags;
+    
+    view {
+        <div>Map declaration test</div>
+    }
+}
+
+app {
+    root = MapDeclarationTest;
+}

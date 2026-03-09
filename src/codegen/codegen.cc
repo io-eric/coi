@@ -25,6 +25,7 @@ void generate_cpp_code(
     out << "#include \"webcc/core/string.h\"\n";
     out << "#include \"webcc/core/array.h\"\n";
     out << "#include \"webcc/core/vector.h\"\n";
+    out << "#include \"webcc/core/unordered_map.h\"\n";
     out << "#include \"webcc/core/random.h\"\n";
     out << "#include \"webcc/core/math.h\"\n";
     out << "\n";
@@ -33,6 +34,7 @@ void generate_cpp_code(
     out << "using string_view = webcc::string_view;\n";
     out << "template<typename T> using vector = webcc::vector<T>;\n";
     out << "template<typename T, size_t N> using array = webcc::array<T, N>;\n";
+    out << "template<typename K, typename V> using map = webcc::unordered_map<K, V>;\n";
     out << "template<typename Signature> using function = webcc::function<Signature>;\n";
     out << "using webcc::move;\n";
     out << "using webcc::malloc;\n";

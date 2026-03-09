@@ -1,0 +1,23 @@
+// Test: map as pod field type
+pod UserData {
+    string name;
+    int[string] attributes;
+}
+
+component MapInPodTest {
+    mut UserData user;
+    
+    init {
+        user.name = "Alice";
+        user.attributes["level"] = 10;
+        user.attributes["score"] = 100;
+    }
+    
+    view {
+        <div>Map in pod test</div>
+    }
+}
+
+app {
+    root = MapInPodTest;
+}

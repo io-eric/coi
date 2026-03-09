@@ -90,12 +90,11 @@ std::unique_ptr<DataDef> Parser::parse_data()
                 }
                 type += arg_type;
                 
-                // Handle array type as type argument: Result<int[]>
+                // Handle array type or map type as type argument: Result<int[]> or Result<int[string]>
                 if (current().type == TokenType::LBRACKET)
                 {
                     advance();
-                    expect(TokenType::RBRACKET, "Expected ']' for array type argument");
-                    type += "[]";
+                    type += parse_type_bracket_suffix();
                 }
                 
                 if (current().type == TokenType::COMMA)
@@ -111,12 +110,11 @@ std::unique_ptr<DataDef> Parser::parse_data()
             type += ">";
         }
 
-        // Handle array suffix: T[]
+        // Handle array suffix: T[] or map: V[K]
         if (current().type == TokenType::LBRACKET)
         {
             advance();
-            expect(TokenType::RBRACKET, "Expected ']' for array type");
-            type += "[]";
+            type += parse_type_bracket_suffix();
         }
 
         std::string fieldName = current().value;
@@ -370,12 +368,11 @@ Component Parser::parse_component()
                             throw std::runtime_error("Expected parameter type in callback definition");
                         }
 
-                        // Handle array type
+                        // Handle array type or map type
                         if (current().type == TokenType::LBRACKET)
                         {
                             advance();
-                            expect(TokenType::RBRACKET, "Expected ']'");
-                            param_type += "[]";
+                            param_type += parse_type_bracket_suffix();
                         }
 
                         // Skip optional parameter name (for documentation purposes)
@@ -440,12 +437,11 @@ Component Parser::parse_component()
                     advance();
                 }
 
-                // Handle array type
+                // Handle array type or map type
                 if (current().type == TokenType::LBRACKET)
                 {
                     advance();
-                    expect(TokenType::RBRACKET, "Expected ']'");
-                    param->type += "[]";
+                    param->type += parse_type_bracket_suffix();
                 }
 
                 param->name = current().value;
@@ -551,12 +547,11 @@ Component Parser::parse_component()
                         throw std::runtime_error("Expected parameter type in function type declaration");
                     }
 
-                    // Handle array type
+                    // Handle array type or map type
                     if (current().type == TokenType::LBRACKET)
                     {
                         advance();
-                        expect(TokenType::RBRACKET, "Expected ']'");
-                        param_type += "[]";
+                        param_type += parse_type_bracket_suffix();
                     }
 
                     // Skip optional parameter name
@@ -640,8 +635,7 @@ Component Parser::parse_component()
                         else if (current().type == TokenType::LBRACKET)
                         {
                             advance();
-                            expect(TokenType::RBRACKET, "Expected ']' for array type argument");
-                            var_decl->type += "[]";
+                            var_decl->type += parse_type_bracket_suffix();
                         }
                         else if (is_type_token() || current().type == TokenType::IDENTIFIER)
                         {
@@ -674,20 +668,7 @@ Component Parser::parse_component()
                 if (current().type == TokenType::LBRACKET)
                 {
                     advance();
-                    if (current().type == TokenType::INT_LITERAL)
-                    {
-                        // Fixed-size array: Type[N]
-                        std::string size = current().value;
-                        advance();
-                        expect(TokenType::RBRACKET, "Expected ']'");
-                        var_decl->type += "[" + size + "]";
-                    }
-                    else
-                    {
-                        // Dynamic array: Type[]
-                        expect(TokenType::RBRACKET, "Expected ']'");
-                        var_decl->type += "[]";
-                    }
+                    var_decl->type += parse_type_bracket_suffix();
                 }
 
                 var_decl->name = current().value;
@@ -853,8 +834,7 @@ Component Parser::parse_component()
                         if (current().type == TokenType::LBRACKET)
                         {
                             advance();
-                            expect(TokenType::RBRACKET, "Expected ']' for array type");
-                            callback_param_type += "[]";
+                            callback_param_type += parse_type_bracket_suffix();
                         }
 
                         // Optional parameter name in callback signature
@@ -905,12 +885,11 @@ Component Parser::parse_component()
                         current().type == TokenType::IDENTIFIER)
                     {
                         advance();
-                        // Check for array type: Type[]
+                        // Check for array/map type: Type[] or Type[N] or Type[KeyType]
                         if (current().type == TokenType::LBRACKET)
                         {
                             advance();
-                            expect(TokenType::RBRACKET, "Expected ']' for array type");
-                            paramType += "[]";
+                            paramType += parse_type_bracket_suffix();
                         }
                     }
                     else
@@ -1033,12 +1012,11 @@ Component Parser::parse_component()
                         current().type == TokenType::IDENTIFIER)
                     {
                         advance();
-                        // Check for array type: Type[]
+                        // Check for array/map type: Type[] or Type[N] or Type[KeyType]
                         if (current().type == TokenType::LBRACKET)
                         {
                             advance();
-                            expect(TokenType::RBRACKET, "Expected ']' for array type");
-                            paramType += "[]";
+                            paramType += parse_type_bracket_suffix();
                         }
                     }
                     else

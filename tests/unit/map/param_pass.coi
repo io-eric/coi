@@ -1,0 +1,21 @@
+// Test: map as function parameter
+component MapParamTest {
+    mut int[string] data;
+    
+    def processMap(int[string]& m) : int {
+        return m["key"];
+    }
+    
+    init {
+        data["key"] = 42;
+        int result = processMap(data);
+    }
+    
+    view {
+        <div>Map param test</div>
+    }
+}
+
+app {
+    root = MapParamTest;
+}
