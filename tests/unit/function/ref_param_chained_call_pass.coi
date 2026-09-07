@@ -1,0 +1,33 @@
+// Test: method chained onto a call on a reference parameter - should pass
+// `store.error(x).isEmpty()` arrives in codegen with its receiver already
+// stringified by the parser; the leading reference param must still be deref'd.
+
+component Store {
+    pub def error(string slot) : string { return ""; }
+    pub def data(string slot) : string { return "{}"; }
+}
+
+component Page(mut Store& store) {
+    mut string last = "";
+
+    def check() : void {
+        if (store.error("logs").isEmpty()) {
+            last = store.data("logs");
+        }
+    }
+
+    view {
+        <div onclick={check}>{last}</div>
+    }
+}
+
+component App {
+    mut Store store;
+    view {
+        <Page &store={store} />
+    }
+}
+
+app {
+    root = App;
+}
