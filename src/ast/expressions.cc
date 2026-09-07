@@ -737,6 +737,18 @@ std::string FunctionCall::to_webcc() {
     {
         resolved_receiver = "(*" + resolved_receiver + ")";
     }
+    else if (!resolved_receiver.empty())
+    {
+        // A chained call (`store.error(x).isEmpty()`) arrives with its receiver
+        // already stringified by the parser, before reference params were known:
+        // deref a leading reference param there too.
+        size_t k = 0;
+        while (k < resolved_receiver.size() && (std::isalnum(static_cast<unsigned char>(resolved_receiver[k])) || resolved_receiver[k] == '_')) k++;
+        if (k > 0 && k < resolved_receiver.size() && resolved_receiver[k] == '.' && g_ref_props.count(resolved_receiver.substr(0, k)))
+        {
+            resolved_receiver = "(*" + resolved_receiver.substr(0, k) + ")" + resolved_receiver.substr(k);
+        }
+    }
 
     // Try DefSchema lookup first (handles @intrinsic, @inline, @map)
     if (!type_or_obj.empty()) {
