@@ -206,7 +206,7 @@ void emit_feature_globals(std::ostream &out, const FeatureFlags &f)
     // DOM event dispatchers
     if (f.click)
     {
-        out << "Dispatcher<coi::function<void()>, 128> g_dispatcher;\n";
+        out << "Dispatcher<coi::function<void()>, 2048> g_dispatcher;\n";
     }
     if (f.input)
     {
@@ -241,6 +241,29 @@ void emit_feature_globals(std::ostream &out, const FeatureFlags &f)
         out << "Dispatcher<coi::function<void(const coi::string&)>> g_fetch_success_dispatcher;\n";
         out << "Dispatcher<coi::function<void(const coi::string&)>> g_fetch_error_dispatcher;\n";
     }
+
+    // Every handler and async callback is registered with its component as
+    // owner; _destroy() calls this so nothing can fire into freed memory and
+    // the dispatcher tables don't fill up with dead entries.
+    out << "inline void coi_forget_owner(const void* owner) {\n";
+    if (f.click) out << "    g_dispatcher.remove_owner(owner);\n";
+    if (f.input) out << "    g_input_dispatcher.remove_owner(owner);\n";
+    if (f.change) out << "    g_change_dispatcher.remove_owner(owner);\n";
+    if (f.keydown) out << "    g_keydown_dispatcher.remove_owner(owner);\n";
+    if (f.websocket)
+    {
+        out << "    g_ws_message_dispatcher.remove_owner(owner);\n";
+        out << "    g_ws_open_dispatcher.remove_owner(owner);\n";
+        out << "    g_ws_close_dispatcher.remove_owner(owner);\n";
+        out << "    g_ws_error_dispatcher.remove_owner(owner);\n";
+    }
+    if (f.fetch)
+    {
+        out << "    g_fetch_success_dispatcher.remove_owner(owner);\n";
+        out << "    g_fetch_error_dispatcher.remove_owner(owner);\n";
+    }
+    out << "    (void)owner;\n";
+    out << "}\n";
 }
 
 // Emit event handlers for enabled features

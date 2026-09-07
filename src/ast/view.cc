@@ -454,9 +454,9 @@ void HTMLElement::generate_code(ViewCodegenContext& ctx)
                 std::string capture = build_lambda_capture(ctx.loop_var_name);
                 std::string handler_code = attr.value->to_webcc();
                 if (is_call)
-                    ctx.ss << "        g_dispatcher.set(" << var << ", " << capture << "() { " << handler_code << "; });\n";
+                    ctx.ss << "        g_dispatcher.set(" << var << ", " << capture << "() { " << handler_code << "; }, this);\n";
                 else
-                    ctx.ss << "        g_dispatcher.set(" << var << ", " << capture << "() { " << handler_code << "(); });\n";
+                    ctx.ss << "        g_dispatcher.set(" << var << ", " << capture << "() { " << handler_code << "(); }, this);\n";
             }
             else
             {
@@ -472,9 +472,9 @@ void HTMLElement::generate_code(ViewCodegenContext& ctx)
                 std::string capture = build_lambda_capture(ctx.loop_var_name);
                 std::string handler_code = attr.value->to_webcc();
                 if (is_call)
-                    ctx.ss << "        g_input_dispatcher.set(" << var << ", " << capture << "(const coi::string& _value) { " << handler_code << "; });\n";
+                    ctx.ss << "        g_input_dispatcher.set(" << var << ", " << capture << "(const coi::string& _value) { " << handler_code << "; }, this);\n";
                 else
-                    ctx.ss << "        g_input_dispatcher.set(" << var << ", " << capture << "(const coi::string& _value) { " << handler_code << "(_value); });\n";
+                    ctx.ss << "        g_input_dispatcher.set(" << var << ", " << capture << "(const coi::string& _value) { " << handler_code << "(_value); }, this);\n";
             }
             else
             {
@@ -490,9 +490,9 @@ void HTMLElement::generate_code(ViewCodegenContext& ctx)
                 std::string capture = build_lambda_capture(ctx.loop_var_name);
                 std::string handler_code = attr.value->to_webcc();
                 if (is_call)
-                    ctx.ss << "        g_change_dispatcher.set(" << var << ", " << capture << "(const coi::string& _value) { " << handler_code << "; });\n";
+                    ctx.ss << "        g_change_dispatcher.set(" << var << ", " << capture << "(const coi::string& _value) { " << handler_code << "; }, this);\n";
                 else
-                    ctx.ss << "        g_change_dispatcher.set(" << var << ", " << capture << "(const coi::string& _value) { " << handler_code << "(_value); });\n";
+                    ctx.ss << "        g_change_dispatcher.set(" << var << ", " << capture << "(const coi::string& _value) { " << handler_code << "(_value); }, this);\n";
             }
             else
             {
@@ -508,9 +508,9 @@ void HTMLElement::generate_code(ViewCodegenContext& ctx)
                 std::string capture = build_lambda_capture(ctx.loop_var_name);
                 std::string handler_code = attr.value->to_webcc();
                 if (is_call)
-                    ctx.ss << "        g_keydown_dispatcher.set(" << var << ", " << capture << "(int _keycode) { " << handler_code << "; });\n";
+                    ctx.ss << "        g_keydown_dispatcher.set(" << var << ", " << capture << "(int _keycode) { " << handler_code << "; }, this);\n";
                 else
-                    ctx.ss << "        g_keydown_dispatcher.set(" << var << ", " << capture << "(int _keycode) { " << handler_code << "(_keycode); });\n";
+                    ctx.ss << "        g_keydown_dispatcher.set(" << var << ", " << capture << "(int _keycode) { " << handler_code << "(_keycode); }, this);\n";
             }
             else
             {

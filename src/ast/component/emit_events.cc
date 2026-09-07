@@ -149,7 +149,7 @@ void emit_event_registration(std::stringstream &ss,
     ss << "            switch(i) {\n";
     emit_handler_switch_cases(ss, handlers, event_type, call_suffix);
     ss << "            }\n";
-    ss << "        });\n";
+    ss << "        }, this);\n";
 }
 
 void emit_all_event_registrations(std::stringstream &ss,

@@ -689,6 +689,7 @@ std::string Component::to_webcc(CompilerSession &session)
 
     // Child component members
     emit_component_members(ss, component_members);
+    ss << "    bool _coi_alive = false; // view() mounted and _destroy() not yet run\n";
 
     // Vector members for components in loops
     emit_loop_vector_members(ss, loop_component_types);
@@ -1635,6 +1636,7 @@ std::string Component::to_webcc(CompilerSession &session)
     // An invalid handle appends (see dom INSERT_BEFORE: insertBefore(el, ref || null)).
     ss << "    void view(webcc::handle parent = webcc::dom::get_body(), webcc::handle _before = webcc::handle()) {\n";
     ss << "        g_view_depth++;\n";
+    ss << "        _coi_alive = true;\n";
 
     bool has_init = false;
     bool has_mount = false;
@@ -1711,7 +1713,7 @@ std::string Component::to_webcc(CompilerSession &session)
 
     emit_component_router_methods(ss, *this);
 
-    emit_component_lifecycle_methods(ss, session, *this, masks, if_regions, element_count, component_members);
+    emit_component_lifecycle_methods(ss, session, *this, masks, if_regions, element_count, component_members, loop_component_types);
 
     ss << "};\n";
 

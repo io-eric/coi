@@ -163,20 +163,35 @@ void generate_cpp_code(
     // Generic event dispatcher template (only if needed)
     if (needs_dispatcher(features))
     {
-        out << "template<typename Callback, int MaxListeners = 64>\n";
+        out << "template<typename Callback, int MaxListeners = 512>\n";
         out << "struct Dispatcher {\n";
         out << "    int32_t handles[MaxListeners];\n";
         out << "    Callback callbacks[MaxListeners];\n";
+        out << "    const void* owners[MaxListeners];\n";
         out << "    int count = 0;\n";
-        out << "    void set(webcc::handle h, Callback cb) {\n";
+        // owner: the component whose method the callback calls into; its
+        // _destroy() (coi_forget_owner) removes every entry it owns, so a late
+        // event never calls into freed memory and dead entries don't pile up
+        out << "    void set(webcc::handle h, Callback cb, const void* owner = nullptr) {\n";
         out << "        int32_t hid = (int32_t)h;\n";
         out << "        for (int i = 0; i < count; i++) {\n";
-        out << "            if (handles[i] == hid) { callbacks[i] = cb; return; }\n";
+        out << "            if (handles[i] == hid) { callbacks[i] = cb; owners[i] = owner; return; }\n";
         out << "        }\n";
         out << "        if (count < MaxListeners) {\n";
         out << "            handles[count] = hid;\n";
         out << "            callbacks[count] = cb;\n";
+        out << "            owners[count] = owner;\n";
         out << "            count++;\n";
+        out << "        }\n";
+        out << "    }\n";
+        out << "    void remove_owner(const void* owner) {\n";
+        out << "        for (int i = 0; i < count; ) {\n";
+        out << "            if (owners[i] == owner) {\n";
+        out << "                handles[i] = handles[count-1];\n";
+        out << "                callbacks[i] = callbacks[count-1];\n";
+        out << "                owners[i] = owners[count-1];\n";
+        out << "                count--;\n";
+        out << "            } else { i++; }\n";
         out << "        }\n";
         out << "    }\n";
         out << "    void remove(webcc::handle h) {\n";
@@ -185,6 +200,7 @@ void generate_cpp_code(
         out << "            if (handles[i] == hid) {\n";
         out << "                handles[i] = handles[count-1];\n";
         out << "                callbacks[i] = callbacks[count-1];\n";
+        out << "                owners[i] = owners[count-1];\n";
         out << "                count--;\n";
         out << "                return;\n";
         out << "            }\n";
