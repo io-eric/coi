@@ -213,6 +213,15 @@ std::string Assignment::to_webcc()
         return result;
     }
 
+    // A whole-array reassignment of an html <for> source re-renders that loop
+    // (push/pop/clear are handled inline by the method-call codegen, and the
+    // method epilogue deliberately skips these arrays).
+    auto hl = g_array_loops.find(name);
+    if (hl != g_array_loops.end())
+    {
+        return lhs + " = " + rhs + ";\n_sync_loop_" + std::to_string(hl->second.loop_id) + "();";
+    }
+
     return lhs + " = " + rhs + ";";
 }
 

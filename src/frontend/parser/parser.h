@@ -19,6 +19,11 @@ class Parser{
     private:
         std::vector<Token> tokens;
         size_t pos = 0;
+        // current()/peek() report END_OF_FILE from this index on; lets a view tag
+        // parse its condition with the full expression grammar without running
+        // past the tag's closing '>'
+        size_t hard_stop = static_cast<size_t>(-1);
+        size_t find_view_tag_close();
         bool allow_gt_comparison = true;  // When false, > is not treated as comparison op
         bool allow_brace_init = true;     // When false, Name{ is not treated as data literal
         

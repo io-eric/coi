@@ -1,0 +1,9 @@
+// Test: HTML entities and quotes in view text - should pass
+component Entities {
+    view {
+        <div>
+            <span>A&nbsp;B &amp; C &lt;tag&gt; "quoted" it&#39;s &rarr; &#x2022; done</span>
+        </div>
+    }
+}
+app { root = Entities; }

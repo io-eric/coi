@@ -1,0 +1,13 @@
+// Test: a <for> whose body is only an <if> - should fail with a clear error
+pod Row { int id; string kind; }
+component IfBody {
+    mut Row[] rows;
+    view {
+        <div>
+            <for r in rows key={r.id}>
+                <if r.kind == "a"><span>A</span></if>
+            </for>
+        </div>
+    }
+}
+app { root = IfBody; }

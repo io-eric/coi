@@ -789,7 +789,9 @@ std::string infer_expression_type(Expression *expr, const std::map<std::string, 
             bool is_simple_identifier = (obj_name.find('[') == std::string::npos) && 
                                        (obj_name.find('(') == std::string::npos);
             
-            if (is_simple_identifier && !obj_name.empty() && scope.find(obj_name) == scope.end())
+            // `r.servers.size()` on a local pod: the variable to look up is `r`
+            std::string obj_base = obj_name.substr(0, obj_name.find('.'));
+            if (is_simple_identifier && !obj_name.empty() && scope.find(obj_base) == scope.end())
             {
                 // Check if it's a handle type or enum - those are validated by schema lookup below
                 bool is_handle = DefSchema::instance().is_handle(obj_name);

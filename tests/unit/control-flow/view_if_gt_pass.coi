@@ -1,0 +1,18 @@
+// Test: '>' inside a view <if> condition - should pass
+pod Row { int id; string name; }
+component GtCond {
+    mut Row[] rows;
+    mut int a = 3;
+    mut int b = 2;
+    view {
+        <div>
+            <if rows.size() > 0><span>has rows</span></if>
+            <if a > b>
+                <span>a wins</span>
+            </if>
+            <if a >= b>bigger or same</if>
+            <if (a + 1) > (b * 2)>{a}</if>
+        </div>
+    }
+}
+app { root = GtCond; }
