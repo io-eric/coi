@@ -1,0 +1,14 @@
+// Test: a pod field array as a range-loop bound / call receiver - should pass
+pod Bundle { string version; string[] servers; }
+component Bounds {
+    mut Bundle[] bundles;
+    mut string joined = "";
+    def rebuild() : void {
+        for i in 0:bundles.size() {
+            Bundle b = bundles[i];
+            for k in 0:b.servers.size() { joined = joined + b.servers[k]; }
+        }
+    }
+    view { <div onclick={rebuild}>{joined}</div> }
+}
+app { root = Bounds; }

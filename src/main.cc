@@ -13,6 +13,7 @@
 #include "codegen/codegen.h"
 #include "codegen/css_generator.h"
 #include <iostream>
+#include <chrono>
 #include <fstream>
 #include <vector>
 #include <queue>
@@ -513,7 +514,10 @@ int main(int argc, char **argv)
         if (!cc_only)
         {
             // Generate HTML template in cache directory
-            fs::path template_path = cache_dir / "index.template.html";
+            // per-build name: two builds of one project (a `coi dev` watcher and a
+            // manual `coi build`) must not read each other's half-written template
+            const std::string template_name = "index.template." + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".html";
+            fs::path template_path = cache_dir / template_name;
             {
                 std::ofstream tmpl_out(template_path);
                 if (tmpl_out)
@@ -572,7 +576,7 @@ int main(int argc, char **argv)
             {
                 fs::remove(cache_dir / "app.cc");
             }
-            fs::remove(cache_dir / "index.template.html");
+            fs::remove(template_path);
 
             if (ret != 0)
             {

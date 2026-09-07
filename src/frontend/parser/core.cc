@@ -9,12 +9,37 @@ Parser::Parser(const std::vector<Token> &toks) : tokens(toks) {}
 
 Token Parser::current()
 {
-    return pos < tokens.size() ? tokens[pos] : tokens.back();
+    return (pos < tokens.size() && pos < hard_stop) ? tokens[pos] : tokens.back();
 }
 
 Token Parser::peek(int offset)
 {
-    return (pos + offset) < tokens.size() ? tokens[pos + offset] : tokens.back();
+    size_t i = pos + offset;
+    return (i < tokens.size() && i < hard_stop) ? tokens[i] : tokens.back();
+}
+
+// Index of the '>' that closes a view tag whose attribute expression may itself
+// contain '>' (`<if a > 0>`): the last top-level '>' before the tag's content
+// starts (a '<', a '{', or a token on a later line). npos if none is found.
+size_t Parser::find_view_tag_close()
+{
+    int depth = 0;
+    size_t candidate = static_cast<size_t>(-1);
+    int line = pos < tokens.size() ? tokens[pos].line : 0;
+    for (size_t i = pos; i < tokens.size(); ++i)
+    {
+        const Token &t = tokens[i];
+        if (t.type == TokenType::END_OF_FILE) break;
+        if (depth == 0)
+        {
+            if (t.type == TokenType::LT || t.type == TokenType::LBRACE) break;
+            if (t.line != line && candidate != static_cast<size_t>(-1)) break;
+            if (t.type == TokenType::GT) { candidate = i; continue; }
+        }
+        if (t.type == TokenType::LPAREN || t.type == TokenType::LBRACKET || t.type == TokenType::LBRACE) depth++;
+        else if (t.type == TokenType::RPAREN || t.type == TokenType::RBRACKET || t.type == TokenType::RBRACE) depth--;
+    }
+    return candidate;
 }
 
 void Parser::advance() { pos++; }

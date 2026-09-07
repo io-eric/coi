@@ -1,4 +1,5 @@
 #include "view.h"
+#include "../cli/error.h"
 #include "formatter.h"
 #include "../codegen/codegen_utils.h"
 
@@ -167,7 +168,63 @@ static void collect_member_refs(ASTNode* node, std::vector<std::string>& refs) {
     }
 }
 
-std::string TextNode::to_webcc() { return "\"" + text + "\""; }
+// View text is written as HTML, so decode the common entities (&nbsp; &amp;
+// &lt; &gt; &quot; &#39; &#NNN; &#xHH;) and escape the result as a C++ literal.
+static void append_utf8(std::string &out, unsigned cp)
+{
+    if (cp < 0x80) out += static_cast<char>(cp);
+    else if (cp < 0x800) { out += static_cast<char>(0xC0 | (cp >> 6)); out += static_cast<char>(0x80 | (cp & 0x3F)); }
+    else if (cp < 0x10000) { out += static_cast<char>(0xE0 | (cp >> 12)); out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F)); out += static_cast<char>(0x80 | (cp & 0x3F)); }
+    else { out += static_cast<char>(0xF0 | (cp >> 18)); out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F)); out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F)); out += static_cast<char>(0x80 | (cp & 0x3F)); }
+}
+
+static std::string decode_entities(const std::string &s)
+{
+    static const std::pair<const char *, unsigned> named[] = {
+        {"nbsp", 0xA0}, {"amp", '&'}, {"lt", '<'}, {"gt", '>'}, {"quot", '"'}, {"apos", '\''},
+        {"middot", 0xB7}, {"hellip", 0x2026}, {"mdash", 0x2014}, {"ndash", 0x2013}, {"rarr", 0x2192}, {"larr", 0x2190},
+        {"copy", 0xA9}, {"times", 0xD7}, {"bull", 0x2022}, {"deg", 0xB0}};
+    std::string out;
+    for (size_t i = 0; i < s.size(); ++i)
+    {
+        if (s[i] != '&') { out += s[i]; continue; }
+        size_t semi = s.find(';', i);
+        if (semi == std::string::npos || semi - i > 10) { out += s[i]; continue; }
+        std::string name = s.substr(i + 1, semi - i - 1);
+        unsigned cp = 0;
+        bool ok = false;
+        if (!name.empty() && name[0] == '#')
+        {
+            try { cp = (name.size() > 1 && (name[1] == 'x' || name[1] == 'X')) ? std::stoul(name.substr(2), nullptr, 16) : std::stoul(name.substr(1)); ok = true; }
+            catch (...) { ok = false; }
+        }
+        else
+        {
+            for (const auto &e : named) if (name == e.first) { cp = e.second; ok = true; break; }
+        }
+        if (!ok) { out += s[i]; continue; }
+        append_utf8(out, cp);
+        i = semi;
+    }
+    return out;
+}
+
+static std::string cpp_string_literal(const std::string &s)
+{
+    std::string out = "\"";
+    for (char c : s)
+    {
+        if (c == '\\') out += "\\\\";
+        else if (c == '"') out += "\\\"";
+        else if (c == '\n') out += "\\n";
+        else if (c == '\r') out += "\\r";
+        else if (c == '\t') out += "\\t";
+        else out += c;
+    }
+    return out + "\"";
+}
+
+std::string TextNode::to_webcc() { return cpp_string_literal(decode_entities(text)); }
 
 std::string ComponentInstantiation::to_webcc() { return ""; }
 
@@ -1056,6 +1113,18 @@ void ViewForRangeStatement::generate_code(ViewCodegenContext& ctx)
             break;
         }
     }
+    // a nested <for> as the body is supported; an <if> (or text only) is not
+    if (!loop_component && !loop_html_element)
+    {
+        bool has_if = false;
+        for (auto &child : children)
+            if (dynamic_cast<ViewIfStatement *>(child.get())) has_if = true;
+        if (has_if)
+        {
+            ErrorHandler::type_error("A <for> body cannot start with an <if>: wrap the loop body in an element (e.g. a <div>)", line);
+            exit(1);
+        }
+    }
 
     std::string loop_parent_var = "_loop_" + std::to_string(my_loop_id) + "_parent";
     std::stringstream item_ss;
@@ -1155,6 +1224,18 @@ void ViewForEachStatement::generate_code(ViewCodegenContext& ctx)
             loop_html_element = el;
             region.is_html_loop = true;
             break;
+        }
+    }
+    // a nested <for> as the body is supported; an <if> (or text only) is not
+    if (!loop_component && !loop_html_element)
+    {
+        bool has_if = false;
+        for (auto &child : children)
+            if (dynamic_cast<ViewIfStatement *>(child.get())) has_if = true;
+        if (has_if)
+        {
+            ErrorHandler::type_error("A <for> body cannot start with an <if>: wrap the loop body in an element (e.g. a <div>)", line);
+            exit(1);
         }
     }
 

@@ -1,0 +1,35 @@
+// Test: reassigning the array behind a nested <for> must re-render the rows
+// (a filter that rebuilds `shown` from `all`) - should pass
+
+pod Row { int id; string name; }
+
+component Filtered {
+    mut Row[] all;
+    mut Row[] shown;
+    mut string q = "";
+    mut bool open = true;
+
+    def setQ(string v) : void {
+        q = v;
+        mut Row[] out;
+        for i in 0:all.size() {
+            if (q.isEmpty() || all[i].name.contains(q)) { out.push(all[i]); }
+        }
+        shown = out;
+    }
+
+    view {
+        <div>
+            <input value={q} oninput={setQ} />
+            <if open>
+                <if shown.size() != 0>
+                    <for r in shown key={r.id}>
+                        <div>{r.name}</div>
+                    </for>
+                </if>
+            </if>
+        </div>
+    }
+}
+
+app { root = Filtered; }

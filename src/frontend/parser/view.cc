@@ -538,9 +538,20 @@ std::unique_ptr<ViewIfStatement> Parser::parse_view_if()
     expect(TokenType::LT, "Expected '<'");
     expect(TokenType::IF, "Expected 'if'");
 
-    // Parse condition (everything until '>')
-    // Use parse_expression_no_gt so > is not treated as comparison
-    viewIf->condition = parse_expression_no_gt();
+    // The condition may contain '>' itself (`<if a > 0>`): find the tag's real
+    // closing '>' and parse with the full grammar up to it.
+    size_t close = find_view_tag_close();
+    if (close != static_cast<size_t>(-1))
+    {
+        size_t old_stop = hard_stop;
+        hard_stop = close;
+        viewIf->condition = parse_expression();
+        hard_stop = old_stop;
+    }
+    else
+    {
+        viewIf->condition = parse_expression_no_gt();
+    }
     expect(TokenType::GT, "Expected '>'");
 
     // Helper lambdas for termination checks
