@@ -331,15 +331,15 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
             
             if (event_name == "onSuccess") {
                 if (param_count >= 1) {
-                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string& data) { this->" + callback + "(data); });\n";
+                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string& data) { this->" + callback + "(data); }, this);\n";
                 } else {
-                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); });\n";
+                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); }, this);\n";
                 }
             } else if (event_name == "onError") {
                 if (param_count >= 1) {
-                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string& error) { this->" + callback + "(error); });\n";
+                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string& error) { this->" + callback + "(error); }, this);\n";
                 } else {
-                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); });\n";
+                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); }, this);\n";
                 }
             } else {
                 ErrorHandler::compiler_error("Invalid callback name '" + event_name + "' for fetch.get (expected onSuccess or onError)");
@@ -397,15 +397,15 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
             
             if (event_name == "onSuccess") {
                 if (param_count >= 1) {
-                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string& data) { this->" + callback + "(data); });\n";
+                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string& data) { this->" + callback + "(data); }, this);\n";
                 } else {
-                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); });\n";
+                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); }, this);\n";
                 }
             } else if (event_name == "onError") {
                 if (param_count >= 1) {
-                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string& error) { this->" + callback + "(error); });\n";
+                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string& error) { this->" + callback + "(error); }, this);\n";
                 } else {
-                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); });\n";
+                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); }, this);\n";
                 }
             } else {
                 ErrorHandler::compiler_error("Invalid callback name '" + event_name + "' for fetch.post (expected onSuccess or onError)");
@@ -463,15 +463,15 @@ static std::string generate_intrinsic(const std::string& intrinsic_name,
 
             if (event_name == "onSuccess") {
                 if (param_count >= 1) {
-                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string& data) { this->" + callback + "(data); });\n";
+                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string& data) { this->" + callback + "(data); }, this);\n";
                 } else {
-                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); });\n";
+                    code += "            g_fetch_success_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); }, this);\n";
                 }
             } else if (event_name == "onError") {
                 if (param_count >= 1) {
-                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string& error) { this->" + callback + "(error); });\n";
+                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string& error) { this->" + callback + "(error); }, this);\n";
                 } else {
-                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); });\n";
+                    code += "            g_fetch_error_dispatcher.set(_req, [this](const coi::string&) { this->" + callback + "(); }, this);\n";
                 }
             } else {
                 ErrorHandler::compiler_error("Invalid callback name '" + event_name + "' for fetch.patch (expected onSuccess or onError)");

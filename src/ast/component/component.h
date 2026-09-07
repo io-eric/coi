@@ -128,7 +128,8 @@ void emit_component_lifecycle_methods(std::stringstream &ss,
                                       const EventMasks &masks,
                                       const std::vector<IfRegion> &if_regions,
                                       int element_count,
-                                      const std::map<std::string, int> &component_members);
+                                      const std::map<std::string, int> &component_members,
+                                      const std::set<std::string> &loop_component_types = {});
 
 EventMasks compute_event_masks(const std::vector<EventHandler> &handlers);
 std::set<int> get_elements_for_event(const std::vector<EventHandler> &handlers, const std::string &event_type);

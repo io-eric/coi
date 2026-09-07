@@ -26,7 +26,8 @@ void emit_component_lifecycle_methods(std::stringstream &ss,
                                       const EventMasks &masks,
                                       const std::vector<IfRegion> &if_regions,
                                       int element_count,
-                                      const std::map<std::string, int> &component_members)
+                                      const std::map<std::string, int> &component_members,
+                                      const std::set<std::string> &loop_component_types)
 {
     auto emit_listen_unregistration = [&]() {
         for (size_t i = 0; i < component.listen_entries.size(); ++i)
@@ -64,6 +65,33 @@ void emit_component_lifecycle_methods(std::stringstream &ss,
 
     // Destroy method
     ss << "    void _destroy() {\n";
+    // Idempotent: parents destroy every child they hold, whether or not that
+    // child was mounted (or was already torn down by an if-region toggle).
+    ss << "        if (!_coi_alive) return;\n";
+    ss << "        _coi_alive = false;\n";
+    // every handler / fetch callback this component registered
+    ss << "        coi_forget_owner(this);\n";
+    // children own their own entries: view children, loop items, mounted members
+    for (auto const &[comp_name, count] : component_members)
+        for (int i = 0; i < count; ++i)
+            ss << "        " << comp_name << "_" << i << "._destroy();\n";
+    for (const auto &comp_name : loop_component_types)
+        ss << "        for (int _i = 0; _i < (int)_loop_" << comp_name << "s.size(); _i++) _loop_" << comp_name << "s[_i]._destroy();\n";
+    for (const auto &var : component.state)
+    {
+        if (var->is_reference)
+            continue;
+        std::string t = var->type;
+        bool is_vec = t.size() > 2 && t.compare(t.size() - 2, 2, "[]") == 0;
+        if (is_vec)
+            t = t.substr(0, t.size() - 2);
+        if (resolve_component_qname(session, component.module_name, t).empty())
+            continue;
+        if (is_vec)
+            ss << "        for (int _i = 0; _i < (int)" << var->name << ".size(); _i++) " << var->name << "[_i]._destroy();\n";
+        else
+            ss << "        " << var->name << "._destroy();\n";
+    }
 
     // Collect all elements that are conditionally created in if/else regions
     std::set<int> conditional_els;
