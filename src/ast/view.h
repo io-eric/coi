@@ -30,8 +30,10 @@ struct Binding {
     std::set<std::string> dependencies;
     std::set<MemberDependency> member_dependencies;  // tracks object.member pairs
     Expression* expr = nullptr;
-    int if_region_id = -1;
+    int if_region_id = -1;          // innermost enclosing <if> region
     bool in_then_branch = true;
+    // every enclosing <if> region, innermost first: (region id, in then branch)
+    std::vector<std::pair<int, bool>> if_chain;
 };
 
 struct ComponentProp {
