@@ -8,3 +8,4 @@ match_arm_reactivity_click|tests/integration/web/scenes/match_arm_reactivity_cli
 router_params_click|tests/integration/web/scenes/router_params_click.coi|web
 member_tick_click|tests/integration/web/scenes/member_tick_click.coi|web
 
+nested_if_order_tick|tests/integration/web/scenes/nested_if_order_tick.coi|web

@@ -1,3 +1,5 @@
+#include <cctype>
+#include <set>
 #include "view.h"
 #include "../cli/error.h"
 #include "formatter.h"
@@ -47,16 +49,20 @@ static std::string build_forward_args(size_t count)
 // To:         webcc::dom::insert_before(_if_X_parent, el[N], _if_X_anchor);
 // Also rewrites child component renders (which append their roots internally)
 // to the anchor-aware form: X.view(_if_X_parent); -> X.view(_if_X_parent, _if_X_anchor);
-static std::string transform_to_insert_before(const std::string& code, const std::string& if_parent, const std::string& if_anchor) {
+// Nested regions that share this parent alias it (`_if_Y_parent = _if_X_parent;`)
+// and append through the alias; those appends must land before the anchor too,
+// otherwise a nested region that is already true when the outer one is
+// created ends up after every later sibling.
+static std::string rewrite_appends(const std::string& code, const std::string& parent, const std::string& if_anchor) {
     std::string result;
-    std::string search_pattern = "webcc::dom::append_child(" + if_parent + ", ";
+    std::string search_pattern = "webcc::dom::append_child(" + parent + ", ";
     size_t pos = 0;
     size_t last_pos = 0;
-    
+
     while ((pos = code.find(search_pattern, last_pos)) != std::string::npos) {
         // Copy everything up to this point
         result += code.substr(last_pos, pos - last_pos);
-        
+
         // Find the closing ");
         size_t end_pos = code.find(");", pos);
         if (end_pos == std::string::npos) {
@@ -64,14 +70,14 @@ static std::string transform_to_insert_before(const std::string& code, const std
             result += code.substr(pos);
             return result;
         }
-        
+
         // Extract the element being appended
         size_t elem_start = pos + search_pattern.length();
         std::string elem = code.substr(elem_start, end_pos - elem_start);
-        
+
         // Generate insert_before call
-        result += "webcc::dom::insert_before(" + if_parent + ", " + elem + ", " + if_anchor + ");";
-        
+        result += "webcc::dom::insert_before(" + parent + ", " + elem + ", " + if_anchor + ");";
+
         last_pos = end_pos + 2; // Skip past ");"
     }
 
@@ -80,12 +86,46 @@ static std::string transform_to_insert_before(const std::string& code, const std
 
     // Child components attach their own roots inside view(); pass the anchor
     // through so they keep their position too (an invalid anchor appends).
-    std::string view_pattern = ".view(" + if_parent + ");";
-    std::string view_replacement = ".view(" + if_parent + ", " + if_anchor + ");";
+    std::string view_pattern = ".view(" + parent + ");";
+    std::string view_replacement = ".view(" + parent + ", " + if_anchor + ");";
     size_t vpos = 0;
     while ((vpos = result.find(view_pattern, vpos)) != std::string::npos) {
         result.replace(vpos, view_pattern.length(), view_replacement);
         vpos += view_replacement.length();
+    }
+
+    return result;
+}
+
+static std::string transform_to_insert_before(const std::string& code, const std::string& if_parent, const std::string& if_anchor) {
+    std::string result = rewrite_appends(code, if_parent, if_anchor);
+
+    // Collect every `_if_N_parent = <known parent>;` alias, transitively.
+    std::set<std::string> parents{if_parent};
+    bool grew = true;
+    while (grew) {
+        grew = false;
+        size_t pos = 0;
+        while ((pos = result.find("_parent = ", pos)) != std::string::npos) {
+            size_t rhs_start = pos + 10;
+            size_t rhs_end = result.find(";", rhs_start);
+            if (rhs_end == std::string::npos) break;
+            // walk back over the region id to the `_if_` prefix
+            size_t id_start = pos;
+            while (id_start > 0 && std::isdigit((unsigned char)result[id_start - 1])) id_start--;
+            bool ok = id_start < pos && id_start >= 4 && result.compare(id_start - 4, 4, "_if_") == 0;
+            std::string alias = ok ? result.substr(id_start - 4, pos + 7 - (id_start - 4)) : "";
+            std::string rhs = result.substr(rhs_start, rhs_end - rhs_start);
+            if (ok && parents.count(rhs) && !parents.count(alias)) {
+                parents.insert(alias);
+                grew = true;
+            }
+            pos = rhs_end;
+        }
+    }
+    for (const auto& alias : parents) {
+        if (alias == if_parent) continue;
+        result = rewrite_appends(result, alias, if_anchor);
     }
 
     return result;
