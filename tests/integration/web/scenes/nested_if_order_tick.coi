@@ -1,0 +1,44 @@
+// Regression scene: an <if> region that is created while its parent region
+// is itself being created (outer flips first), then flips true later, must
+// land before its siblings, not at the end of the parent.
+
+component App {
+    mut int frames = 0;
+    mut bool outer = false;
+    mut bool inner = false;
+    mut bool late = false;
+
+    tick(float dt) {
+        frames++;
+        // inner is already true when outer is created (the broken path), and
+        // late is flipped afterwards (the anchor path)
+        if (frames == 5) { inner = true; }
+        if (frames == 10) { outer = true; }
+        if (frames == 25) { late = true; }
+    }
+
+    style {
+        html, body { margin: 0; padding: 0; background: #0f1117; color: #e8e8e8; font-family: system-ui, sans-serif; }
+        .row { padding: 8px; }
+    }
+
+    view {
+        <div class="root">
+            <if !outer>
+                <div class="row wait">waiting</div>
+            </if>
+            <if outer>
+                <div class="row first">first</div>
+                <if inner>
+                    <div class="row inner">inner</div>
+                </if>
+                <if late>
+                    <div class="row late">late</div>
+                </if>
+                <div class="row last">last</div>
+            </if>
+        </div>
+    }
+}
+
+app { root = App; }
