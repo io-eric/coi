@@ -1,3 +1,4 @@
+#include <functional>
 #include "component.h"
 #include "../codegen_state.h"
 #include "../formatter.h"
@@ -727,6 +728,21 @@ std::string Component::to_webcc(CompilerSession &session)
         std::string code;
         int if_region_id;
         bool in_then_branch;
+        std::string guard;  // "" outside <if> regions
+    };
+    // A binding inside nested <if>s must only update while every enclosing
+    // region is in the branch that owns it; the outer ones don't reset the
+    // inner state when they close.
+    auto guard_for = [](const Binding &b) {
+        std::string g;
+        for (const auto &[id, then_branch] : b.if_chain)
+        {
+            if (!g.empty()) g += " && ";
+            g += (then_branch ? "_if_" : "!_if_") + std::to_string(id) + "_state";
+        }
+        if (g.empty() && b.if_region_id >= 0)
+            g = (b.in_then_branch ? "_if_" : "!_if_") + std::to_string(b.if_region_id) + "_state";
+        return g;
     };
     std::map<std::string, std::vector<UpdateEntry>> var_update_entries;
 
@@ -755,6 +771,7 @@ std::string Component::to_webcc(CompilerSession &session)
         std::set<std::string> dependencies;
         std::set<MemberDependency> member_dependencies;
         std::string method_name;
+        std::string guard;
     };
 
     std::map<ElementAttrKey, ElementAttrBinding> element_attr_bindings;
@@ -832,6 +849,7 @@ std::string Component::to_webcc(CompilerSession &session)
         if (!update_line.empty())
         {
             element_attr_bindings[key].update_code = update_line;
+            element_attr_bindings[key].guard = guard_for(binding);
             for (const auto &dep : binding.dependencies)
             {
                 element_attr_bindings[key].dependencies.insert(dep);
@@ -870,6 +888,7 @@ std::string Component::to_webcc(CompilerSession &session)
             entry.code = method_name + "();";
             entry.if_region_id = key.if_region_id;
             entry.in_then_branch = key.in_then_branch;
+            entry.guard = binding.guard;
             var_update_entries[dep].push_back(entry);
         }
     }
@@ -888,24 +907,15 @@ std::string Component::to_webcc(CompilerSession &session)
     for (const auto &[key, binding] : element_attr_bindings)
     {
         ss << "    void " << binding.method_name << "() {\n";
-        if (key.if_region_id < 0)
+        if (binding.guard.empty())
         {
             ss << "        " << binding.update_code << "\n";
         }
         else
         {
-            if (key.in_then_branch)
-            {
-                ss << "        if (_if_" << key.if_region_id << "_state) {\n";
-                ss << "            " << binding.update_code << "\n";
-                ss << "        }\n";
-            }
-            else
-            {
-                ss << "        if (!_if_" << key.if_region_id << "_state) {\n";
-                ss << "            " << binding.update_code << "\n";
-                ss << "        }\n";
-            }
+            ss << "        if (" << binding.guard << ") {\n";
+            ss << "            " << binding.update_code << "\n";
+            ss << "        }\n";
         }
         ss << "    }\n";
 
@@ -933,59 +943,20 @@ std::string Component::to_webcc(CompilerSession &session)
                 ss << "        " << code << "\n";
             }
 
-            std::map<int, std::pair<std::set<std::string>, std::set<std::string>>> if_grouped;
+            std::map<std::string, std::set<std::string>> guarded;
             for (const auto &entry : entries)
             {
                 if (entry.if_region_id >= 0)
-                {
-                    if (entry.in_then_branch)
-                    {
-                        if_grouped[entry.if_region_id].first.insert(entry.code);
-                    }
-                    else
-                    {
-                        if_grouped[entry.if_region_id].second.insert(entry.code);
-                    }
-                }
+                    guarded[entry.guard].insert(entry.code);
             }
-
-            for (const auto &[if_id, branches] : if_grouped)
+            for (const auto &[guard, codes] : guarded)
             {
-                const auto &then_codes = branches.first;
-                const auto &else_codes = branches.second;
-
-                if (!then_codes.empty() && !else_codes.empty())
+                ss << "        if (" << guard << ") {\n";
+                for (const auto &code : codes)
                 {
-                    ss << "        if (_if_" << if_id << "_state) {\n";
-                    for (const auto &code : then_codes)
-                    {
-                        ss << "            " << code << "\n";
-                    }
-                    ss << "        } else {\n";
-                    for (const auto &code : else_codes)
-                    {
-                        ss << "            " << code << "\n";
-                    }
-                    ss << "        }\n";
+                    ss << "            " << code << "\n";
                 }
-                else if (!then_codes.empty())
-                {
-                    ss << "        if (_if_" << if_id << "_state) {\n";
-                    for (const auto &code : then_codes)
-                    {
-                        ss << "            " << code << "\n";
-                    }
-                    ss << "        }\n";
-                }
-                else if (!else_codes.empty())
-                {
-                    ss << "        if (!_if_" << if_id << "_state) {\n";
-                    for (const auto &code : else_codes)
-                    {
-                        ss << "            " << code << "\n";
-                    }
-                    ss << "        }\n";
-                }
+                ss << "        }\n";
             }
 
             // Call callback for pub mut state vars
@@ -1231,6 +1202,51 @@ std::string Component::to_webcc(CompilerSession &session)
         }
     }
 
+    // A loop that lives inside a region being hidden: drop its rows and mark it
+    // unmounted so a later _sync_loop() (array change while hidden) no-ops
+    // instead of inserting against a detached parent/anchor.
+    auto emit_loop_unmount = [&](int loop_id) {
+        for (const auto &lr : loop_regions)
+        {
+            if (lr.loop_id != loop_id) continue;
+            if (!lr.component_type.empty())
+            {
+                std::string vec_name = "_loop_" + lr.component_type + "s";
+                ss << "            while ((int)" << vec_name << ".size() > 0) {\n";
+                ss << "                " << vec_name << "[" << vec_name << ".size() - 1]._destroy();\n";
+                ss << "                " << vec_name << ".pop_back();\n";
+                ss << "            }\n";
+                ss << "            _loop_" << loop_id << "_count = 0;\n";
+            }
+            else if (lr.is_html_loop)
+            {
+                std::string vec_name = "_loop_" + std::to_string(loop_id) + "_elements";
+                ss << "            while ((int)" << vec_name << ".size() > 0) {\n";
+                ss << "                webcc::dom::remove_element(" << vec_name << "[" << vec_name << ".size() - 1]);\n";
+                ss << "                " << vec_name << ".pop_back();\n";
+                ss << "            }\n";
+                ss << "            _loop_" << loop_id << "_count = 0;\n";
+            }
+            ss << "            _loop_" << loop_id << "_parent = webcc::DOMElement();\n";
+            break;
+        }
+    };
+    // Same for a nested <if>: its parent handle points at an element the outer
+    // region just removed, so a sync while hidden (its own condition flipping)
+    // would insert into a dead parent. Recurses into what it contains.
+    std::function<void(int)> emit_if_unmount = [&](int nested_if_id) {
+        for (const auto &nr : if_regions)
+        {
+            if (nr.if_id != nested_if_id) continue;
+            for (int lid : nr.then_loop_ids) emit_loop_unmount(lid);
+            for (int lid : nr.else_loop_ids) emit_loop_unmount(lid);
+            for (int iid : nr.then_if_ids) emit_if_unmount(iid);
+            for (int iid : nr.else_if_ids) emit_if_unmount(iid);
+            ss << "            _if_" << nested_if_id << "_parent = webcc::DOMElement();\n";
+            break;
+        }
+    };
+
     // Generate _sync_if_X() methods
     for (const auto &region : if_regions)
     {
@@ -1362,6 +1378,7 @@ std::string Component::to_webcc(CompilerSession &session)
                         emit_remove_handlers_for_element(el_id, "!_if_" + std::to_string(nested_if_id) + "_state");
                         ss << "            if (!_if_" << nested_if_id << "_state) webcc::dom::remove_element(el[" << el_id << "]);\n";
                     }
+                    emit_if_unmount(nested_if_id);
                 }
             }
         }
@@ -1437,6 +1454,7 @@ std::string Component::to_webcc(CompilerSession &session)
                         emit_remove_handlers_for_element(el_id, "!_if_" + std::to_string(nested_if_id) + "_state");
                         ss << "            if (!_if_" << nested_if_id << "_state) webcc::dom::remove_element(el[" << el_id << "]);\n";
                     }
+                    emit_if_unmount(nested_if_id);
                 }
             }
         }

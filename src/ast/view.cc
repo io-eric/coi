@@ -937,16 +937,18 @@ void ViewIfStatement::generate_code(ViewCodegenContext& ctx)
     region.then_creation_code = transform_to_insert_before(then_ss.str(), if_parent, if_anchor);
     region.else_creation_code = transform_to_insert_before(else_ss.str(), if_parent, if_anchor);
 
+    // Nested regions run first, so the first region to claim a binding is the
+    // innermost one; outer regions only extend the chain.
     for (auto &b : then_bindings)
     {
-        b.if_region_id = my_if_id;
-        b.in_then_branch = true;
+        if (b.if_region_id < 0) { b.if_region_id = my_if_id; b.in_then_branch = true; }
+        b.if_chain.push_back({my_if_id, true});
         ctx.bindings.push_back(b);
     }
     for (auto &b : else_bindings)
     {
-        b.if_region_id = my_if_id;
-        b.in_then_branch = false;
+        if (b.if_region_id < 0) { b.if_region_id = my_if_id; b.in_then_branch = false; }
+        b.if_chain.push_back({my_if_id, false});
         ctx.bindings.push_back(b);
     }
 
